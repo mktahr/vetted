@@ -4,6 +4,15 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 export async function POST(request: NextRequest) {
+  // Check authentication
+  const secret = request.headers.get('x-ingest-secret');
+  if (secret !== process.env.INGEST_SECRET) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+
   try {
     const body = await request.json()
     const { linkedin_url, raw_json, canonical_json } = body
