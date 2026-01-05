@@ -11,6 +11,7 @@ export default function ProfileTable() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [filteredProfiles, setFilteredProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
@@ -32,10 +33,17 @@ export default function ProfileTable() {
           .select('*')
           .order('created_at', { ascending: false })
 
-        if (error) throw error
+        if (error) {
+          console.error('Supabase error:', error)
+          setError(`Database error: ${error.message}${error.code ? ` (Code: ${error.code})` : ''}`)
+          return
+        }
+
         setProfiles(data || [])
-      } catch (error) {
+        setError(null)
+      } catch (error: any) {
         console.error('Error fetching profiles:', error)
+        setError(error?.message || 'Failed to fetch profiles. Please check your connection and try again.')
       } finally {
         setLoading(false)
       }
@@ -146,6 +154,32 @@ export default function ProfileTable() {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="text-gray-500">Loading profiles...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <h1 className="text-3xl font-bold mb-6">Recruiting Database</h1>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <h2 className="text-red-800 font-semibold mb-2">Error Loading Profiles</h2>
+          <p className="text-red-700 text-sm mb-2">{error}</p>
+          <p className="text-red-600 text-xs">
+            Common issues:
+            <ul className="list-disc list-inside mt-2 space-y-1">
+              <li>Check if Row Level Security (RLS) policies allow SELECT on the profiles table</li>
+              <li>Verify your Supabase environment variables are set correctly</li>
+              <li>Check the browser console (F12) for detailed error messages</li>
+            </ul>
+          </p>
+        </div>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          Retry
+        </button>
       </div>
     )
   }
