@@ -19,3 +19,4 @@ export interface Profile {
 export type SortField = 'years_experience' | 'years_at_current_company' | null
 export type SortDirection = 'asc' | 'desc'
 
+
