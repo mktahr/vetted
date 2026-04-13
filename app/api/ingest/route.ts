@@ -196,6 +196,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'linkedin_url and full_name are required' }, { status: 400 });
   }
 
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    console.error('[ingest] Missing SUPABASE env vars');
+    return NextResponse.json({
+      success: false,
+      message: 'Server misconfiguration: missing database credentials',
+    }, { status: 500 });
+  }
+
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   const canonical = payload.canonical_json || {};
 
