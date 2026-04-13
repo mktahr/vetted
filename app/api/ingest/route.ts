@@ -147,6 +147,35 @@ function inferCareerStage(yearsExperience: number | null | undefined): string | 
   return 'senior_career';
 }
 
+/**
+ * Parse a human-readable date string (e.g. "Jan 2020", "2020") into YYYY-MM-DD.
+ * Returns null if unparseable — Postgres DATE columns reject free-form text.
+ */
+function toDateString(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const s = raw.trim();
+
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  const months: Record<string, string> = {
+    jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',
+    jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12',
+  };
+
+  // "Jan 2020" or "January 2020"
+  const monthYear = s.match(/^(\w+)\s+(\d{4})$/i);
+  if (monthYear) {
+    const m = months[monthYear[1].slice(0, 3).toLowerCase()];
+    if (m) return `${monthYear[2]}-${m}-01`;
+  }
+
+  // Just "2020"
+  if (/^\d{4}$/.test(s)) return `${s}-01-01`;
+
+  return null;
+}
+
 // ─── Main Handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -171,6 +200,8 @@ export async function POST(req: NextRequest) {
   const canonical = payload.canonical_json || {};
 
   console.log('[ingest] Processing:', payload.linkedin_url);
+
+  try {
 
   // ── Step 1: Existing ingest path (PRESERVED) ────────────────────────────
   // This calls the existing upsert_profile_from_snapshot function.
@@ -272,8 +303,8 @@ export async function POST(req: NextRequest) {
       specialty_normalized: expTitleData?.specialty_normalized || null,
       seniority_normalized: expTitleData?.seniority_normalized || null,
       employment_type_normalized: employmentType,
-      start_date: exp.start_date || null,
-      end_date: exp.end_date || null,
+      start_date: toDateString(exp.start_date),
+      end_date: toDateString(exp.end_date),
       is_current: exp.is_current || false,
       duration_months: exp.duration_months || null,
       description_raw: exp.description || null,
@@ -391,4 +422,12 @@ export async function POST(req: NextRequest) {
     legacy_ok: !legacyError,
     message: 'Profile ingested and normalized successfully',
   });
+
+  } catch (err) {
+    console.error('[ingest] Unhandled error:', err);
+    return NextResponse.json({
+      success: false,
+      message: err instanceof Error ? err.message : 'Internal server error',
+    }, { status: 500 });
+  }
 }
