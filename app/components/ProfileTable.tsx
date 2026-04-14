@@ -3,157 +3,204 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Profile, SortField, SortDirection } from '../types'
+import { Person, SortField, SortDirection, CandidateBucket } from '../types'
 import ProfileDrawer from './ProfileDrawer'
+
+/** Strip employment type from company name: "Acme · Full-time" → "Acme" */
+function cleanCompanyName(name: string | null | undefined): string | null {
+  if (!name) return null
+  return name.split('·')[0].split('•')[0].trim() || null
+}
+
+const BUCKET_STYLES: Record<CandidateBucket, { label: string; className: string }> = {
+  vetted_talent:    { label: 'Vetted Talent',    className: 'bg-emerald-100 text-emerald-800 border border-emerald-300' },
+  high_potential:   { label: 'High Potential',   className: 'bg-blue-100 text-blue-800 border border-blue-300' },
+  silver_medalist:  { label: 'Silver Medalist',  className: 'bg-slate-200 text-slate-800 border border-slate-300' },
+  non_vetted:       { label: 'Non-Vetted',       className: 'bg-gray-100 text-gray-600 border border-gray-300' },
+  needs_review:     { label: 'Needs Review',     className: 'bg-amber-100 text-amber-800 border border-amber-300' },
+}
+
+function BucketChip({ bucket }: { bucket: CandidateBucket | null | undefined }) {
+  if (!bucket) return <span className="text-xs text-gray-400">Unscored</span>
+  const s = BUCKET_STYLES[bucket]
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${s.className}`}>
+      {s.label}
+    </span>
+  )
+}
+
+const BUCKET_OPTIONS: Array<{ value: CandidateBucket; label: string }> = [
+  { value: 'vetted_talent',   label: 'Vetted Talent' },
+  { value: 'high_potential',  label: 'High Potential' },
+  { value: 'silver_medalist', label: 'Silver Medalist' },
+  { value: 'non_vetted',      label: 'Non-Vetted' },
+  { value: 'needs_review',    label: 'Needs Review' },
+]
+
+const STAGE_OPTIONS = [
+  { value: 'pre_career',    label: 'Pre-Career' },
+  { value: 'early_career',  label: 'Early Career' },
+  { value: 'mid_career',    label: 'Mid Career' },
+  { value: 'senior_career', label: 'Senior Career' },
+]
 
 export default function ProfileTable() {
   const router = useRouter()
-  const [profiles, setProfiles] = useState<Profile[]>([])
-  const [filteredProfiles, setFilteredProfiles] = useState<Profile[]>([])
+  const [people, setPeople] = useState<Person[]>([])
+  const [filteredPeople, setFilteredPeople] = useState<Person[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null)
+  const [selectedPerson, setSelectedPerson] = useState<Person | null>(null)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [sortField, setSortField] = useState<SortField>(null)
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
-  
-  // Tag filters
-  const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set())
-  const [selectedFocusAreas, setSelectedFocusAreas] = useState<Set<string>>(new Set())
-  const [selectedExcellence, setSelectedExcellence] = useState<Set<string>>(new Set())
-  const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set())
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
 
-  // Fetch all profiles
+  // Facet filters
+  const [bucketFilter, setBucketFilter] = useState<string>('')
+  const [stageFilter, setStageFilter] = useState<string>('')
+  const [functionFilter, setFunctionFilter] = useState<string>('')
+  const [seniorityFilter, setSeniorityFilter] = useState<string>('')
+
+  // Dropdown option sources (fetched from dictionaries)
+  const [functionOptions, setFunctionOptions] = useState<string[]>([])
+  const [seniorityOptions, setSeniorityOptions] = useState<string[]>([])
+
   useEffect(() => {
-    async function fetchProfiles() {
+    async function fetchPeople() {
       try {
+        // Query people table with company name join
         const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
+          .from('people')
+          .select(`
+            *,
+            companies:current_company_id ( company_name )
+          `)
           .order('created_at', { ascending: false })
 
         if (error) {
           console.error('Supabase error:', error)
-          setError(`Database error: ${error.message}${error.code ? ` (Code: ${error.code})` : ''}`)
+          setError(`Database error: ${error.message}`)
           return
         }
 
-        setProfiles(data || [])
+        // Fetch latest bucket assignments for all people in parallel
+        const { data: bucketData } = await supabase
+          .from('candidate_bucket_assignments')
+          .select('person_id, candidate_bucket, assignment_reason, effective_at')
+          .order('effective_at', { ascending: false })
+
+        // Keep only the most recent per person
+        const latestBucketByPerson: Record<string, { bucket: CandidateBucket; reason: string | null }> = {}
+        for (const row of bucketData || []) {
+          if (!latestBucketByPerson[row.person_id]) {
+            latestBucketByPerson[row.person_id] = {
+              bucket: row.candidate_bucket as CandidateBucket,
+              reason: row.assignment_reason,
+            }
+          }
+        }
+
+        const rows: Person[] = (data || []).map((row: any) => ({
+          ...row,
+          current_company_name: row.companies?.company_name || null,
+          latest_bucket: latestBucketByPerson[row.person_id]?.bucket ?? null,
+          latest_bucket_reason: latestBucketByPerson[row.person_id]?.reason ?? null,
+        }))
+
+        setPeople(rows)
         setError(null)
-      } catch (error: any) {
-        console.error('Error fetching profiles:', error)
-        setError(error?.message || 'Failed to fetch profiles. Please check your connection and try again.')
+      } catch (err: any) {
+        console.error('Error fetching people:', err)
+        setError(err?.message || 'Failed to fetch people.')
       } finally {
         setLoading(false)
       }
     }
-    fetchProfiles()
+    fetchPeople()
   }, [])
 
-  // Get all unique tags for filters
-  const allSkills = Array.from(
-    new Set(profiles.flatMap(p => p.skills_tags || []))
-  ).sort()
-  const allFocusAreas = Array.from(
-    new Set(profiles.flatMap(p => p.focus_area_tags || []))
-  ).sort()
-  const allExcellence = Array.from(
-    new Set(profiles.flatMap(p => p.excellence_tags || []))
-  ).sort()
-  const allDomains = Array.from(
-    new Set(profiles.flatMap(p => p.domain_tags || []))
-  ).sort()
-
-  // Filter and sort profiles
+  // Load filter option sources once
   useEffect(() => {
-    let filtered = [...profiles]
+    async function loadOptions() {
+      const { data: fns } = await supabase
+        .from('function_dictionary')
+        .select('function_normalized')
+        .eq('active', true)
+        .order('function_normalized')
+      setFunctionOptions((fns || []).map(f => f.function_normalized))
 
-    // Search filter
+      const { data: srs } = await supabase
+        .from('seniority_dictionary')
+        .select('seniority_normalized, rank_order')
+        .eq('active', true)
+        .order('rank_order')
+      setSeniorityOptions((srs || []).map(s => s.seniority_normalized))
+    }
+    loadOptions()
+  }, [])
+
+  // Filter + sort
+  useEffect(() => {
+    let filtered = [...people]
+
     if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(p => 
-        (p.full_name?.toLowerCase().includes(query)) ||
-        (p.current_company?.toLowerCase().includes(query)) ||
-        (p.current_title?.toLowerCase().includes(query)) ||
-        (p.location_resolved?.toLowerCase().includes(query))
+      const q = searchQuery.toLowerCase()
+      filtered = filtered.filter(p =>
+        p.full_name?.toLowerCase().includes(q) ||
+        p.current_company_name?.toLowerCase().includes(q) ||
+        p.current_title_raw?.toLowerCase().includes(q) ||
+        p.location_name?.toLowerCase().includes(q)
       )
     }
 
-    // Tag filters
-    if (selectedSkills.size > 0) {
-      filtered = filtered.filter(p => 
-        p.skills_tags?.some(tag => selectedSkills.has(tag))
-      )
+    if (bucketFilter) {
+      filtered = filtered.filter(p => p.latest_bucket === bucketFilter)
     }
-    if (selectedFocusAreas.size > 0) {
-      filtered = filtered.filter(p => 
-        p.focus_area_tags?.some(tag => selectedFocusAreas.has(tag))
-      )
+    if (stageFilter) {
+      filtered = filtered.filter(p => p.career_stage_assigned === stageFilter)
     }
-    if (selectedExcellence.size > 0) {
-      filtered = filtered.filter(p => 
-        p.excellence_tags?.some(tag => selectedExcellence.has(tag))
-      )
+    if (functionFilter) {
+      filtered = filtered.filter(p => p.current_function_normalized === functionFilter)
     }
-    if (selectedDomains.size > 0) {
-      filtered = filtered.filter(p => 
-        p.domain_tags?.some(tag => selectedDomains.has(tag))
-      )
+    if (seniorityFilter) {
+      filtered = filtered.filter(p => p.highest_seniority_reached === seniorityFilter)
     }
 
-    // Sorting
     if (sortField) {
       filtered.sort((a, b) => {
-        const aVal = a[sortField] ?? 0
-        const bVal = b[sortField] ?? 0
-        if (sortDirection === 'asc') {
-          return (aVal as number) - (bVal as number)
-        } else {
-          return (bVal as number) - (aVal as number)
-        }
+        const aVal = (a[sortField] as number) ?? -1
+        const bVal = (b[sortField] as number) ?? -1
+        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal
       })
     }
 
-    setFilteredProfiles(filtered)
-  }, [profiles, searchQuery, selectedSkills, selectedFocusAreas, selectedExcellence, selectedDomains, sortField, sortDirection])
+    setFilteredPeople(filtered)
+  }, [people, searchQuery, bucketFilter, stageFilter, functionFilter, seniorityFilter, sortField, sortDirection])
+
+  const activeFilterCount = [bucketFilter, stageFilter, functionFilter, seniorityFilter].filter(Boolean).length
+  const clearAllFilters = () => {
+    setSearchQuery('')
+    setBucketFilter('')
+    setStageFilter('')
+    setFunctionFilter('')
+    setSeniorityFilter('')
+  }
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'))
     } else {
       setSortField(field)
-      setSortDirection('asc')
+      setSortDirection('desc')
     }
-  }
-
-  const toggleTagFilter = (
-    tag: string,
-    setter: React.Dispatch<React.SetStateAction<Set<string>>>
-  ) => {
-    setter(prev => {
-      const next = new Set(prev)
-      if (next.has(tag)) {
-        next.delete(tag)
-      } else {
-        next.add(tag)
-      }
-      return next
-    })
-  }
-
-  const clearAllFilters = () => {
-    setSearchQuery('')
-    setSelectedSkills(new Set())
-    setSelectedFocusAreas(new Set())
-    setSelectedExcellence(new Set())
-    setSelectedDomains(new Set())
   }
 
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="text-gray-500">Loading profiles...</div>
+        <div className="text-gray-500">Loading people...</div>
       </div>
     )
   }
@@ -161,18 +208,10 @@ export default function ProfileTable() {
   if (error) {
     return (
       <div className="p-6">
-        <h1 className="text-3xl font-bold mb-6">Recruiting Database</h1>
+        <h1 className="text-3xl font-bold mb-6">Vetted Database</h1>
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-          <h2 className="text-red-800 font-semibold mb-2">Error Loading Profiles</h2>
-          <p className="text-red-700 text-sm mb-2">{error}</p>
-          <p className="text-red-600 text-xs">
-            Common issues:
-            <ul className="list-disc list-inside mt-2 space-y-1">
-              <li>Check if Row Level Security (RLS) policies allow SELECT on the profiles table</li>
-              <li>Verify your Supabase environment variables are set correctly</li>
-              <li>Check the browser console (F12) for detailed error messages</li>
-            </ul>
-          </p>
+          <h2 className="text-red-800 font-semibold mb-2">Error Loading Data</h2>
+          <p className="text-red-700 text-sm">{error}</p>
         </div>
         <button
           onClick={() => window.location.reload()}
@@ -186,120 +225,99 @@ export default function ProfileTable() {
 
   return (
     <div className="p-6">
-      <h1 className="text-3xl font-bold mb-6">Recruiting Database</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">Vetted Database</h1>
+        <a
+          href="/admin/companies"
+          className="text-sm text-blue-600 hover:text-blue-800 underline"
+        >
+          Manage companies →
+        </a>
+      </div>
 
-      {/* Search and Filters */}
-      <div className="mb-6 space-y-4">
-        <div className="flex gap-4">
-          <input
-            type="text"
-            placeholder="Search by name, company, title, or location..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          {(searchQuery || selectedSkills.size > 0 || selectedFocusAreas.size > 0 || 
-            selectedExcellence.size > 0 || selectedDomains.size > 0) && (
-            <button
-              onClick={clearAllFilters}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-            >
-              Clear Filters
-            </button>
-          )}
+      {/* Search */}
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="Search by name, company, title, or location..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      {/* Faceted filters */}
+      <div className="mb-6 flex flex-wrap gap-3 items-end">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Bucket</label>
+          <select
+            value={bucketFilter}
+            onChange={(e) => setBucketFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All buckets</option>
+            {BUCKET_OPTIONS.map(b => (
+              <option key={b.value} value={b.value}>{b.label}</option>
+            ))}
+          </select>
         </div>
 
-        {/* Tag Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {allSkills.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Skills ({selectedSkills.size} selected)
-              </label>
-              <div className="max-h-32 overflow-y-auto border border-gray-200 rounded p-2">
-                {allSkills.map(tag => (
-                  <label key={tag} className="flex items-center space-x-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedSkills.has(tag)}
-                      onChange={() => toggleTagFilter(tag, setSelectedSkills)}
-                      className="rounded"
-                    />
-                    <span>{tag}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {allFocusAreas.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Focus Areas ({selectedFocusAreas.size} selected)
-              </label>
-              <div className="max-h-32 overflow-y-auto border border-gray-200 rounded p-2">
-                {allFocusAreas.map(tag => (
-                  <label key={tag} className="flex items-center space-x-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedFocusAreas.has(tag)}
-                      onChange={() => toggleTagFilter(tag, setSelectedFocusAreas)}
-                      className="rounded"
-                    />
-                    <span>{tag}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {allExcellence.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Excellence ({selectedExcellence.size} selected)
-              </label>
-              <div className="max-h-32 overflow-y-auto border border-gray-200 rounded p-2">
-                {allExcellence.map(tag => (
-                  <label key={tag} className="flex items-center space-x-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedExcellence.has(tag)}
-                      onChange={() => toggleTagFilter(tag, setSelectedExcellence)}
-                      className="rounded"
-                    />
-                    <span>{tag}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {allDomains.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Domains ({selectedDomains.size} selected)
-              </label>
-              <div className="max-h-32 overflow-y-auto border border-gray-200 rounded p-2">
-                {allDomains.map(tag => (
-                  <label key={tag} className="flex items-center space-x-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedDomains.has(tag)}
-                      onChange={() => toggleTagFilter(tag, setSelectedDomains)}
-                      className="rounded"
-                    />
-                    <span>{tag}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Career Stage</label>
+          <select
+            value={stageFilter}
+            onChange={(e) => setStageFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All stages</option>
+            {STAGE_OPTIONS.map(s => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
         </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Function</label>
+          <select
+            value={functionFilter}
+            onChange={(e) => setFunctionFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All functions</option>
+            {functionOptions.map(f => (
+              <option key={f} value={f}>{f.replace(/_/g, ' ')}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Highest Seniority</label>
+          <select
+            value={seniorityFilter}
+            onChange={(e) => setSeniorityFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All seniorities</option>
+            {seniorityOptions.map(s => (
+              <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+            ))}
+          </select>
+        </div>
+
+        {(activeFilterCount > 0 || searchQuery) && (
+          <button
+            onClick={clearAllFilters}
+            className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg bg-white hover:bg-gray-50"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {/* Results count */}
       <div className="mb-4 text-sm text-gray-600">
-        Showing {filteredProfiles.length} of {profiles.length} profiles
+        Showing {filteredPeople.length} of {people.length} people
+        {activeFilterCount > 0 && ` (${activeFilterCount} filter${activeFilterCount > 1 ? 's' : ''} active)`}
       </div>
 
       {/* Table */}
@@ -308,82 +326,85 @@ export default function ProfileTable() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Bucket
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Location
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Company
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Title
                 </th>
-                <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleSort('years_experience')}
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('years_experience_estimate')}
                 >
-                  Years Exp {sortField === 'years_experience' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  Yrs {sortField === 'years_experience_estimate' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
-                <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleSort('years_at_current_company')}
-                >
-                  Years @ Co {sortField === 'years_at_current_company' && (sortDirection === 'asc' ? '↑' : '↓')}
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Stage
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   LinkedIn
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredProfiles.length === 0 ? (
+              {filteredPeople.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
-                    No profiles found
+                  <td colSpan={8} className="px-4 py-4 text-center text-gray-500">
+                    No people found
                   </td>
                 </tr>
               ) : (
-                filteredProfiles.map((profile) => (
+                filteredPeople.map((person) => (
                   <tr
-                    key={profile.id}
+                    key={person.person_id}
                     className="hover:bg-gray-50 cursor-pointer"
                     onClick={() => {
-                      setSelectedProfile(profile)
+                      setSelectedPerson(person)
                       setIsDrawerOpen(true)
                     }}
                   >
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          router.push(`/profile/${profile.id}`)
+                          router.push(`/profile/${person.person_id}`)
                         }}
                         className="text-blue-600 hover:text-blue-800 font-medium"
                       >
-                        {profile.full_name || 'N/A'}
+                        {person.full_name || 'N/A'}
                       </button>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {profile.location_resolved || 'N/A'}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <BucketChip bucket={person.latest_bucket} />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {profile.current_company || 'N/A'}
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {person.location_name || '—'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {profile.current_title || 'N/A'}
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {cleanCompanyName(person.current_company_name) || '—'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {profile.years_experience ?? 'N/A'}
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {person.current_title_normalized || person.current_title_raw || '—'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {profile.years_at_current_company ?? 'N/A'}
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {person.years_experience_estimate ?? '—'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {profile.linkedin_url ? (
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {person.career_stage_assigned?.replace(/_/g, ' ') || '—'}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm">
+                      {person.linkedin_url ? (
                         <a
-                          href={profile.linkedin_url}
+                          href={person.linkedin_url}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
@@ -392,7 +413,7 @@ export default function ProfileTable() {
                           View
                         </a>
                       ) : (
-                        'N/A'
+                        '—'
                       )}
                     </td>
                   </tr>
@@ -404,14 +425,13 @@ export default function ProfileTable() {
       </div>
 
       <ProfileDrawer
-        profile={selectedProfile}
+        person={selectedPerson}
         isOpen={isDrawerOpen}
         onClose={() => {
           setIsDrawerOpen(false)
-          setSelectedProfile(null)
+          setSelectedPerson(null)
         }}
       />
     </div>
   )
 }
-
