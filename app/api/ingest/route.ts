@@ -40,6 +40,8 @@ interface IngestPayload {
 interface CanonicalProfile {
   full_name?: string;
   location_resolved?: string | null;
+  headline_raw?: string | null;
+  summary_raw?: string | null;
   current_company?: string | null;
   current_title?: string | null;
   years_experience?: number | null;
@@ -248,6 +250,8 @@ export async function POST(req: NextRequest) {
     full_name: payload.full_name,
     linkedin_url: payload.linkedin_url,
     location_name: canonical.location_resolved || null,
+    headline_raw: canonical.headline_raw || null,
+    summary_raw: canonical.summary_raw || null,
     current_company_id: currentCompanyId,
     current_title_raw: canonical.current_title || null,
     current_title_normalized: titleData?.title_normalized || null,
