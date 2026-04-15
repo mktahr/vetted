@@ -580,6 +580,44 @@ export async function scoreCandidate(
 
 // ─── Write bucket assignment back to DB ───────────────────────────────────
 
+/**
+ * Shape persisted in candidate_bucket_assignments.score_breakdown.
+ * Everything the expandable score-breakdown UI needs to render.
+ */
+export interface ScoreBreakdown {
+  components: ScoreComponent[]
+  core_score: number
+  bonus_score: number
+  penalty_score: number
+  total_score: number
+  scoring_stage: ScoringStage
+  years_experience: number | null
+  function_normalized: string | null
+  applied_recruiting_override: boolean
+  career_progression: CareerProgression
+  highest_seniority_reached: string | null
+  has_early_stage_experience: boolean
+  has_hypergrowth_experience: boolean
+}
+
+function buildBreakdown(result: ScoreResult): ScoreBreakdown {
+  return {
+    components: result.components,
+    core_score: result.core_score,
+    bonus_score: result.bonus_score,
+    penalty_score: result.penalty_score,
+    total_score: result.total_score,
+    scoring_stage: result.scoring_stage,
+    years_experience: result.years_experience,
+    function_normalized: result.function_normalized,
+    applied_recruiting_override: result.applied_recruiting_override,
+    career_progression: result.career_progression,
+    highest_seniority_reached: result.highest_seniority_reached,
+    has_early_stage_experience: result.has_early_stage_experience,
+    has_hypergrowth_experience: result.has_hypergrowth_experience,
+  };
+}
+
 export async function writeBucketAssignment(
   supabase: SupabaseClient,
   result: ScoreResult,
@@ -591,6 +629,7 @@ export async function writeBucketAssignment(
       candidate_bucket: result.bucket,
       assigned_by: 'system',
       assignment_reason: result.reasoning,
+      score_breakdown: buildBreakdown(result),
     });
   if (error) throw new Error(`Failed to write bucket: ${error.message}`);
 }

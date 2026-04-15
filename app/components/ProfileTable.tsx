@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Person, SortField, SortDirection, CandidateBucket } from '../types'
 import ProfileDrawer from './ProfileDrawer'
+import { MultiSelect, MultiSelectOption } from './MultiSelect'
 
 /** Strip employment type from company name: "Acme · Full-time" → "Acme" */
 function cleanCompanyName(name: string | null | undefined): string | null {
@@ -30,7 +31,9 @@ function BucketChip({ bucket }: { bucket: CandidateBucket | null | undefined }) 
   )
 }
 
-const BUCKET_OPTIONS: Array<{ value: CandidateBucket; label: string }> = [
+// ─── Static option sets ────────────────────────────────────────────────────
+
+const BUCKET_OPTIONS: MultiSelectOption[] = [
   { value: 'vetted_talent',   label: 'Vetted Talent' },
   { value: 'high_potential',  label: 'High Potential' },
   { value: 'silver_medalist', label: 'Silver Medalist' },
@@ -38,17 +41,25 @@ const BUCKET_OPTIONS: Array<{ value: CandidateBucket; label: string }> = [
   { value: 'needs_review',    label: 'Needs Review' },
 ]
 
-const STAGE_OPTIONS = [
+const STAGE_OPTIONS: MultiSelectOption[] = [
   { value: 'pre_career',    label: 'Pre-Career' },
   { value: 'early_career',  label: 'Early Career' },
   { value: 'mid_career',    label: 'Mid Career' },
   { value: 'senior_career', label: 'Senior Career' },
 ]
 
+// ─── Enriched person record (people table + filter lookup sets) ────────────
+
+interface PersonWithFilters extends Person {
+  company_ids_all: Set<string>
+  school_ids_all: Set<string>
+}
+
+// ─── Component ─────────────────────────────────────────────────────────────
+
 export default function ProfileTable() {
   const router = useRouter()
-  const [people, setPeople] = useState<Person[]>([])
-  const [filteredPeople, setFilteredPeople] = useState<Person[]>([])
+  const [people, setPeople] = useState<PersonWithFilters[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -57,41 +68,61 @@ export default function ProfileTable() {
   const [sortField, setSortField] = useState<SortField>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
 
-  // Facet filters
-  const [bucketFilter, setBucketFilter] = useState<string>('')
-  const [stageFilter, setStageFilter] = useState<string>('')
-  const [functionFilter, setFunctionFilter] = useState<string>('')
-  const [seniorityFilter, setSeniorityFilter] = useState<string>('')
+  // Multi-select filters (all ANDed together; within a field, values OR)
+  const [bucketSel, setBucketSel] = useState<string[]>([])
+  const [stageSel, setStageSel] = useState<string[]>([])
+  const [functionSel, setFunctionSel] = useState<string[]>([])
+  const [senioritySel, setSenioritySel] = useState<string[]>([])
+  const [companySel, setCompanySel] = useState<string[]>([])     // company_id values
+  const [schoolSel, setSchoolSel] = useState<string[]>([])       // school_id values
+  const [locationSel, setLocationSel] = useState<string[]>([])   // location_name values
 
-  // Dropdown option sources (fetched from dictionaries)
-  const [functionOptions, setFunctionOptions] = useState<string[]>([])
-  const [seniorityOptions, setSeniorityOptions] = useState<string[]>([])
+  // Years-of-experience range (min/max inclusive)
+  const [yearsMin, setYearsMin] = useState<string>('')
+  const [yearsMax, setYearsMax] = useState<string>('')
 
+  // Dropdown option sources (loaded from dictionaries + data)
+  const [functionOptions, setFunctionOptions] = useState<MultiSelectOption[]>([])
+  const [seniorityOptions, setSeniorityOptions] = useState<MultiSelectOption[]>([])
+  const [companyOptions, setCompanyOptions] = useState<MultiSelectOption[]>([])
+  const [schoolOptions, setSchoolOptions] = useState<MultiSelectOption[]>([])
+  const [locationOptions, setLocationOptions] = useState<MultiSelectOption[]>([])
+
+  // ─── Fetch everything in parallel ────────────────────────────────────────
   useEffect(() => {
-    async function fetchPeople() {
+    async function fetchAll() {
       try {
-        // Query people table with company name join
-        const { data, error } = await supabase
-          .from('people')
-          .select(`
+        const [
+          { data: peopleData, error: peopleErr },
+          { data: bucketData },
+          { data: expData },
+          { data: eduData },
+          { data: fns },
+          { data: srs },
+          { data: companies },
+          { data: schools },
+        ] = await Promise.all([
+          supabase.from('people').select(`
             *,
             companies:current_company_id ( company_name )
-          `)
-          .order('created_at', { ascending: false })
+          `).order('created_at', { ascending: false }),
+          supabase.from('candidate_bucket_assignments')
+            .select('person_id, candidate_bucket, assignment_reason, effective_at')
+            .order('effective_at', { ascending: false }),
+          supabase.from('person_experiences').select('person_id, company_id'),
+          supabase.from('person_education').select('person_id, school_id'),
+          supabase.from('function_dictionary').select('function_normalized').eq('active', true).order('function_normalized'),
+          supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
+          supabase.from('companies').select('company_id, company_name, primary_industry_tag').order('company_name'),
+          supabase.from('schools').select('school_id, school_name, is_foreign').order('school_name'),
+        ])
 
-        if (error) {
-          console.error('Supabase error:', error)
-          setError(`Database error: ${error.message}`)
+        if (peopleErr) {
+          setError(`Database error: ${peopleErr.message}`)
           return
         }
 
-        // Fetch latest bucket assignments for all people in parallel
-        const { data: bucketData } = await supabase
-          .from('candidate_bucket_assignments')
-          .select('person_id, candidate_bucket, assignment_reason, effective_at')
-          .order('effective_at', { ascending: false })
-
-        // Keep only the most recent per person
+        // Latest bucket per person (bucketData already sorted desc)
         const latestBucketByPerson: Record<string, { bucket: CandidateBucket; reason: string | null }> = {}
         for (const row of bucketData || []) {
           if (!latestBucketByPerson[row.person_id]) {
@@ -102,14 +133,61 @@ export default function ProfileTable() {
           }
         }
 
-        const rows: Person[] = (data || []).map((row: any) => ({
+        // company_ids per person (for "ever worked at" filter)
+        const companyIdsByPerson: Record<string, Set<string>> = {}
+        for (const row of expData || []) {
+          if (!row.company_id) continue
+          if (!companyIdsByPerson[row.person_id]) companyIdsByPerson[row.person_id] = new Set()
+          companyIdsByPerson[row.person_id].add(row.company_id)
+        }
+
+        // school_ids per person (for "ever studied at" filter)
+        const schoolIdsByPerson: Record<string, Set<string>> = {}
+        for (const row of eduData || []) {
+          if (!row.school_id) continue
+          if (!schoolIdsByPerson[row.person_id]) schoolIdsByPerson[row.person_id] = new Set()
+          schoolIdsByPerson[row.person_id].add(row.school_id)
+        }
+
+        const rows: PersonWithFilters[] = (peopleData || []).map((row: any) => ({
           ...row,
           current_company_name: row.companies?.company_name || null,
           latest_bucket: latestBucketByPerson[row.person_id]?.bucket ?? null,
           latest_bucket_reason: latestBucketByPerson[row.person_id]?.reason ?? null,
+          company_ids_all: companyIdsByPerson[row.person_id] || new Set(),
+          school_ids_all: schoolIdsByPerson[row.person_id] || new Set(),
         }))
 
         setPeople(rows)
+
+        // Dropdown options
+        setFunctionOptions((fns || []).map(f => ({
+          value: f.function_normalized,
+          label: f.function_normalized.replace(/_/g, ' '),
+        })))
+        setSeniorityOptions((srs || []).map(s => ({
+          value: s.seniority_normalized,
+          label: s.seniority_normalized.replace(/_/g, ' '),
+        })))
+        setCompanyOptions((companies || []).map((c: any) => ({
+          value: c.company_id,
+          label: c.company_name,
+          sublabel: c.primary_industry_tag || undefined,
+        })))
+        setSchoolOptions((schools || []).map((s: any) => ({
+          value: s.school_id,
+          label: s.school_name,
+          sublabel: s.is_foreign ? 'Int’l' : undefined,
+        })))
+
+        // Unique location_name values from people table (not a dictionary,
+        // so we extract from what's actually stored)
+        const locs = new Set<string>()
+        for (const r of peopleData || []) if (r.location_name) locs.add(r.location_name)
+        setLocationOptions(
+          Array.from(locs).sort().map(l => ({ value: l, label: l }))
+        )
+
         setError(null)
       } catch (err: any) {
         console.error('Error fetching people:', err)
@@ -118,36 +196,18 @@ export default function ProfileTable() {
         setLoading(false)
       }
     }
-    fetchPeople()
+    fetchAll()
   }, [])
 
-  // Load filter option sources once
-  useEffect(() => {
-    async function loadOptions() {
-      const { data: fns } = await supabase
-        .from('function_dictionary')
-        .select('function_normalized')
-        .eq('active', true)
-        .order('function_normalized')
-      setFunctionOptions((fns || []).map(f => f.function_normalized))
+  // ─── Filter + sort ──────────────────────────────────────────────────────
 
-      const { data: srs } = await supabase
-        .from('seniority_dictionary')
-        .select('seniority_normalized, rank_order')
-        .eq('active', true)
-        .order('rank_order')
-      setSeniorityOptions((srs || []).map(s => s.seniority_normalized))
-    }
-    loadOptions()
-  }, [])
+  const filteredPeople = useMemo(() => {
+    let rows: PersonWithFilters[] = [...people]
 
-  // Filter + sort
-  useEffect(() => {
-    let filtered = [...people]
-
+    // Free-text search on name/current-company/title/location
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
-      filtered = filtered.filter(p =>
+      rows = rows.filter(p =>
         p.full_name?.toLowerCase().includes(q) ||
         p.current_company_name?.toLowerCase().includes(q) ||
         p.current_title_raw?.toLowerCase().includes(q) ||
@@ -155,37 +215,90 @@ export default function ProfileTable() {
       )
     }
 
-    if (bucketFilter) {
-      filtered = filtered.filter(p => p.latest_bucket === bucketFilter)
+    // Multi-select: bucket
+    if (bucketSel.length > 0) {
+      const s = new Set(bucketSel)
+      rows = rows.filter(p => p.latest_bucket && s.has(p.latest_bucket))
     }
-    if (stageFilter) {
-      filtered = filtered.filter(p => p.career_stage_assigned === stageFilter)
+
+    // Multi-select: career stage
+    if (stageSel.length > 0) {
+      const s = new Set(stageSel)
+      rows = rows.filter(p => p.career_stage_assigned && s.has(p.career_stage_assigned))
     }
-    if (functionFilter) {
-      filtered = filtered.filter(p => p.current_function_normalized === functionFilter)
+
+    // Multi-select: function
+    if (functionSel.length > 0) {
+      const s = new Set(functionSel)
+      rows = rows.filter(p => p.current_function_normalized && s.has(p.current_function_normalized))
     }
-    if (seniorityFilter) {
-      filtered = filtered.filter(p => p.highest_seniority_reached === seniorityFilter)
+
+    // Multi-select: seniority (highest_seniority_reached)
+    if (senioritySel.length > 0) {
+      const s = new Set(senioritySel)
+      rows = rows.filter(p => p.highest_seniority_reached && s.has(p.highest_seniority_reached))
+    }
+
+    // Multi-select: company (ANY of the person's experience companies matches)
+    if (companySel.length > 0) {
+      const s = new Set(companySel)
+      rows = rows.filter(p => Array.from(p.company_ids_all).some(id => s.has(id)))
+    }
+
+    // Multi-select: school
+    if (schoolSel.length > 0) {
+      const s = new Set(schoolSel)
+      rows = rows.filter(p => Array.from(p.school_ids_all).some(id => s.has(id)))
+    }
+
+    // Multi-select: location
+    if (locationSel.length > 0) {
+      const s = new Set(locationSel)
+      rows = rows.filter(p => p.location_name && s.has(p.location_name))
+    }
+
+    // Years-of-experience range
+    const minN = yearsMin === '' ? null : parseFloat(yearsMin)
+    const maxN = yearsMax === '' ? null : parseFloat(yearsMax)
+    if (minN !== null && !isNaN(minN)) {
+      rows = rows.filter(p => p.years_experience_estimate != null && p.years_experience_estimate >= minN)
+    }
+    if (maxN !== null && !isNaN(maxN)) {
+      rows = rows.filter(p => p.years_experience_estimate != null && p.years_experience_estimate <= maxN)
     }
 
     if (sortField) {
-      filtered.sort((a, b) => {
+      rows.sort((a, b) => {
         const aVal = (a[sortField] as number) ?? -1
         const bVal = (b[sortField] as number) ?? -1
         return sortDirection === 'asc' ? aVal - bVal : bVal - aVal
       })
     }
 
-    setFilteredPeople(filtered)
-  }, [people, searchQuery, bucketFilter, stageFilter, functionFilter, seniorityFilter, sortField, sortDirection])
+    return rows
+  }, [people, searchQuery, bucketSel, stageSel, functionSel, senioritySel, companySel, schoolSel, locationSel, yearsMin, yearsMax, sortField, sortDirection])
 
-  const activeFilterCount = [bucketFilter, stageFilter, functionFilter, seniorityFilter].filter(Boolean).length
+  const activeFilterCount =
+    (bucketSel.length > 0 ? 1 : 0) +
+    (stageSel.length > 0 ? 1 : 0) +
+    (functionSel.length > 0 ? 1 : 0) +
+    (senioritySel.length > 0 ? 1 : 0) +
+    (companySel.length > 0 ? 1 : 0) +
+    (schoolSel.length > 0 ? 1 : 0) +
+    (locationSel.length > 0 ? 1 : 0) +
+    (yearsMin !== '' || yearsMax !== '' ? 1 : 0)
+
   const clearAllFilters = () => {
     setSearchQuery('')
-    setBucketFilter('')
-    setStageFilter('')
-    setFunctionFilter('')
-    setSeniorityFilter('')
+    setBucketSel([])
+    setStageSel([])
+    setFunctionSel([])
+    setSenioritySel([])
+    setCompanySel([])
+    setSchoolSel([])
+    setLocationSel([])
+    setYearsMin('')
+    setYearsMax('')
   }
 
   const handleSort = (field: SortField) => {
@@ -196,6 +309,8 @@ export default function ProfileTable() {
       setSortDirection('desc')
     }
   }
+
+  // ─── Render ──────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -248,78 +363,105 @@ export default function ProfileTable() {
         />
       </div>
 
-      {/* Faceted filters */}
-      <div className="mb-6 flex flex-wrap gap-3 items-end">
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Bucket</label>
-          <select
-            value={bucketFilter}
-            onChange={(e) => setBucketFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All buckets</option>
-            {BUCKET_OPTIONS.map(b => (
-              <option key={b.value} value={b.value}>{b.label}</option>
-            ))}
-          </select>
-        </div>
+      {/* Filters */}
+      <div className="mb-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 items-end">
+        <MultiSelect
+          label="Bucket"
+          options={BUCKET_OPTIONS}
+          selected={bucketSel}
+          onChange={setBucketSel}
+          placeholder="Any bucket"
+        />
+        <MultiSelect
+          label="Career Stage"
+          options={STAGE_OPTIONS}
+          selected={stageSel}
+          onChange={setStageSel}
+          placeholder="Any stage"
+        />
+        <MultiSelect
+          label="Function"
+          options={functionOptions}
+          selected={functionSel}
+          onChange={setFunctionSel}
+          placeholder="Any function"
+        />
+        <MultiSelect
+          label="Seniority"
+          options={seniorityOptions}
+          selected={senioritySel}
+          onChange={setSenioritySel}
+          placeholder="Any seniority"
+        />
+        <MultiSelect
+          label="Company"
+          options={companyOptions}
+          selected={companySel}
+          onChange={setCompanySel}
+          placeholder="Any company"
+          emptyMessage="No companies match"
+        />
+        <MultiSelect
+          label="School"
+          options={schoolOptions}
+          selected={schoolSel}
+          onChange={setSchoolSel}
+          placeholder="Any school"
+          emptyMessage="No schools match"
+        />
+        <MultiSelect
+          label="Location"
+          options={locationOptions}
+          selected={locationSel}
+          onChange={setLocationSel}
+          placeholder="Any location"
+          emptyMessage="No locations match"
+        />
 
+        {/* Years of experience range */}
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Career Stage</label>
-          <select
-            value={stageFilter}
-            onChange={(e) => setStageFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All stages</option>
-            {STAGE_OPTIONS.map(s => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Years of Experience</label>
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={yearsMin}
+              onChange={e => setYearsMin(e.target.value)}
+              placeholder="min"
+              className="w-20 px-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="text-gray-400">–</span>
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={yearsMax}
+              onChange={e => setYearsMax(e.target.value)}
+              placeholder="max"
+              className="w-20 px-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
         </div>
+      </div>
 
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Function</label>
-          <select
-            value={functionFilter}
-            onChange={(e) => setFunctionFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All functions</option>
-            {functionOptions.map(f => (
-              <option key={f} value={f}>{f.replace(/_/g, ' ')}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Highest Seniority</label>
-          <select
-            value={seniorityFilter}
-            onChange={(e) => setSeniorityFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All seniorities</option>
-            {seniorityOptions.map(s => (
-              <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
-            ))}
-          </select>
-        </div>
-
+      {/* Count + clear */}
+      <div className="mb-4 flex items-center justify-between text-sm text-gray-600">
+        <span>
+          <span className="font-semibold text-gray-900">{filteredPeople.length}</span>
+          {' '}of{' '}
+          <span className="text-gray-500">{people.length}</span>
+          {' '}candidate{filteredPeople.length !== 1 ? 's' : ''}
+          {activeFilterCount > 0 && <span className="ml-2 text-gray-500">({activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} active)</span>}
+        </span>
         {(activeFilterCount > 0 || searchQuery) && (
           <button
             onClick={clearAllFilters}
-            className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg bg-white hover:bg-gray-50"
+            className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg bg-white hover:bg-gray-50"
           >
-            Clear filters
+            Clear all filters
           </button>
         )}
-      </div>
-
-      {/* Results count */}
-      <div className="mb-4 text-sm text-gray-600">
-        Showing {filteredPeople.length} of {people.length} people
-        {activeFilterCount > 0 && ` (${activeFilterCount} filter${activeFilterCount > 1 ? 's' : ''} active)`}
       </div>
 
       {/* Table */}
@@ -328,40 +470,26 @@ export default function ProfileTable() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Bucket
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Location
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Company
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Title
-                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bucket</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
                 <th
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('years_experience_estimate')}
                 >
                   Yrs {sortField === 'years_experience_estimate' && (sortDirection === 'asc' ? '↑' : '↓')}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Stage
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  LinkedIn
-                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stage</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">LinkedIn</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredPeople.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-4 text-center text-gray-500">
-                    No people found
+                    No candidates match these filters
                   </td>
                 </tr>
               ) : (

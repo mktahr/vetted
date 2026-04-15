@@ -7,6 +7,7 @@ export type {
   CandidateBucket,
   ScoreComponent,
   ScoreResult,
+  ScoreBreakdown,
 } from './score-candidate';
 
 export { computeDerivedFields, computeAndWriteDerivedFields } from './compute-derived';

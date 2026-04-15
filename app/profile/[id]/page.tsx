@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Person, Experience, Education, BucketAssignment, CandidateBucket } from '../../types'
+import { Person, Experience, Education, BucketAssignment, CandidateBucket, ScoreComponent } from '../../types'
 
 function cleanCompanyName(name: string | null | undefined): string | null {
   if (!name) return null
@@ -40,6 +40,7 @@ export default function ProfilePage() {
   const [experiences, setExperiences] = useState<Experience[]>([])
   const [education, setEducation] = useState<Education[]>([])
   const [bucket, setBucket] = useState<BucketAssignment | null>(null)
+  const [breakdownOpen, setBreakdownOpen] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -183,12 +184,31 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Score breakdown */}
+        {/* Score breakdown — one-line summary + expandable itemized view */}
         {bucket?.assignment_reason && (
           <div className="mb-8 p-4 bg-gray-50 rounded-lg">
             <p className="text-xs text-gray-500 uppercase mb-1">Score breakdown</p>
             <p className="text-sm font-mono text-gray-700 whitespace-pre-wrap">{bucket.assignment_reason}</p>
-            <p className="text-xs text-gray-400 mt-2">
+
+            {bucket.score_breakdown ? (
+              <>
+                <button
+                  onClick={() => setBreakdownOpen(o => !o)}
+                  className="mt-3 inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+                  aria-expanded={breakdownOpen}
+                >
+                  <span className="inline-block w-3">{breakdownOpen ? '▾' : '▸'}</span>
+                  {breakdownOpen ? 'Hide per-signal breakdown' : 'Show per-signal breakdown'}
+                </button>
+                {breakdownOpen && <ScoreBreakdownTable bucket={bucket} />}
+              </>
+            ) : (
+              <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 inline-block">
+                No itemized breakdown on this assignment row — run batch rescore to populate.
+              </p>
+            )}
+
+            <p className="text-xs text-gray-400 mt-3">
               Assigned by {bucket.assigned_by} on {new Date(bucket.effective_at).toLocaleString()}
             </p>
           </div>
@@ -322,6 +342,97 @@ export default function ProfilePage() {
           <p>Updated: {new Date(person.updated_at).toLocaleString()}</p>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── Score breakdown table ────────────────────────────────────────────────
+// Renders each ScoreComponent (core / bonus / penalty) from the stored
+// score_breakdown jsonb. Field names match lib/scoring/score-candidate.ts
+// exactly — no invented labels.
+
+const CATEGORY_STYLE: Record<ScoreComponent['category'], { label: string; cls: string }> = {
+  core:    { label: 'Core',    cls: 'bg-slate-100 text-slate-700 border-slate-300' },
+  bonus:   { label: 'Bonus',   cls: 'bg-indigo-50 text-indigo-800 border-indigo-200' },
+  penalty: { label: 'Penalty', cls: 'bg-red-50 text-red-800 border-red-200' },
+}
+
+function ScoreBreakdownTable({ bucket }: { bucket: BucketAssignment }) {
+  const b = bucket.score_breakdown
+  if (!b) return null
+
+  // Stable ordering: core first, then bonus, then penalty.
+  // Within a category, preserve the engine's emission order.
+  const order: ScoreComponent['category'][] = ['core', 'bonus', 'penalty']
+  const rows: ScoreComponent[] = []
+  for (const cat of order) {
+    for (const c of b.components) if (c.category === cat) rows.push(c)
+  }
+
+  const fmtRaw = (r: number | null) => r === null ? '—' : r.toFixed(3)
+  const fmtPts = (p: number) => (p >= 0 ? '+' : '') + p.toFixed(2)
+
+  return (
+    <div className="mt-4 border border-gray-200 rounded-lg bg-white overflow-hidden">
+      <table className="w-full text-xs">
+        <thead className="bg-gray-50 border-b border-gray-200">
+          <tr className="text-gray-500 uppercase tracking-wide">
+            <th className="text-left px-3 py-2 w-20">Category</th>
+            <th className="text-left px-3 py-2">Signal</th>
+            <th className="text-right px-3 py-2 w-16">Weight</th>
+            <th className="text-right px-3 py-2 w-20">Raw</th>
+            <th className="text-right px-3 py-2 w-20">Points</th>
+            <th className="text-left px-3 py-2">Note</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {rows.map((c, i) => {
+            const unsourced = c.category === 'bonus' && c.raw === null
+            const style = CATEGORY_STYLE[c.category]
+            return (
+              <tr key={i} className={unsourced ? 'text-gray-400' : 'text-gray-800'}>
+                <td className="px-3 py-2">
+                  <span className={`inline-block px-2 py-0.5 rounded border text-[10px] font-medium ${style.cls}`}>
+                    {style.label}
+                  </span>
+                </td>
+                <td className="px-3 py-2 font-mono">{c.name}</td>
+                <td className="px-3 py-2 text-right font-mono">{c.weight}</td>
+                <td className="px-3 py-2 text-right font-mono">{fmtRaw(c.raw)}</td>
+                <td className={`px-3 py-2 text-right font-mono font-semibold ${c.points < 0 ? 'text-red-600' : c.points > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
+                  {fmtPts(c.points)}
+                </td>
+                <td className="px-3 py-2 text-gray-500">{c.note || ''}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+        <tfoot className="bg-gray-50 border-t border-gray-200 font-medium">
+          <tr>
+            <td colSpan={4} className="px-3 py-2 text-right text-gray-500">Core</td>
+            <td className="px-3 py-2 text-right font-mono">{b.core_score.toFixed(2)}</td>
+            <td />
+          </tr>
+          <tr>
+            <td colSpan={4} className="px-3 py-2 text-right text-gray-500">Bonus</td>
+            <td className="px-3 py-2 text-right font-mono">{(b.bonus_score >= 0 ? '+' : '') + b.bonus_score.toFixed(2)}</td>
+            <td />
+          </tr>
+          <tr>
+            <td colSpan={4} className="px-3 py-2 text-right text-gray-500">Penalty</td>
+            <td className="px-3 py-2 text-right font-mono">{b.penalty_score.toFixed(2)}</td>
+            <td />
+          </tr>
+          <tr className="border-t border-gray-300">
+            <td colSpan={4} className="px-3 py-2 text-right font-semibold">Total</td>
+            <td className="px-3 py-2 text-right font-mono font-semibold">{b.total_score.toFixed(2)}</td>
+            <td className="px-3 py-2 text-gray-500">
+              stage: {b.scoring_stage}
+              {b.applied_recruiting_override && <span className="ml-2 text-indigo-600">[recruiting override]</span>}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   )
 }

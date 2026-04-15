@@ -7,6 +7,31 @@ export type CandidateBucket =
   | 'non_vetted'
   | 'needs_review'
 
+export interface ScoreComponent {
+  name: string
+  category: 'core' | 'bonus' | 'penalty'
+  weight: number
+  raw: number | null
+  points: number
+  note?: string
+}
+
+export interface ScoreBreakdown {
+  components: ScoreComponent[]
+  core_score: number
+  bonus_score: number
+  penalty_score: number
+  total_score: number
+  scoring_stage: 'pre_career' | 'early_career' | 'mid_career' | 'senior_career'
+  years_experience: number | null
+  function_normalized: string | null
+  applied_recruiting_override: boolean
+  career_progression: 'upward' | 'lateral' | 'unclear' | null
+  highest_seniority_reached: string | null
+  has_early_stage_experience: boolean
+  has_hypergrowth_experience: boolean
+}
+
 export interface BucketAssignment {
   bucket_assignment_id: string
   person_id: string
@@ -16,6 +41,7 @@ export interface BucketAssignment {
   confidence: number | null
   effective_at: string
   created_at: string
+  score_breakdown: ScoreBreakdown | null
 }
 
 export interface Person {
