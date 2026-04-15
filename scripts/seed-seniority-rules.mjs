@@ -36,6 +36,17 @@ const RULES = [
   { pattern: 'marketing manager',       match_type: 'exact',    seniority: 'individual_contributor', priority: 1 },
   { pattern: 'community manager',       match_type: 'exact',    seniority: 'individual_contributor', priority: 1 },
   { pattern: 'office manager',          match_type: 'exact',    seniority: 'individual_contributor', priority: 1 },
+  // "Founding member" / "founding team" — title-only signal, usually an early IC
+  { pattern: 'founding member',         match_type: 'contains', seniority: 'individual_contributor', priority: 1 },
+  { pattern: 'founding team',           match_type: 'contains', seniority: 'individual_contributor', priority: 1 },
+  // Plain "Founder" / "Co-Founder" with no C-level qualifier → IC override.
+  // Reasoning: a bare-title founder without an explicit CxO could be a
+  // solo founder, a founding engineer, a non-operating founder, or an
+  // advisory-style role. Defaulting to IC is conservative; explicit
+  // founder+CxO combos are handled at priority 2 (Executive).
+  { pattern: 'founder',                 match_type: 'exact',    seniority: 'individual_contributor', priority: 1 },
+  { pattern: 'co-founder',              match_type: 'exact',    seniority: 'individual_contributor', priority: 1 },
+  { pattern: 'cofounder',               match_type: 'exact',    seniority: 'individual_contributor', priority: 1 },
 
   // ─── Priority 2: Executive ───────────────────────────────────────────
   { pattern: 'chief',                   match_type: 'starts_with', seniority: 'executive', priority: 2, notes: 'Chief X Officer etc.' },
@@ -50,9 +61,22 @@ const RULES = [
   { pattern: 'cbo',                     match_type: 'exact',       seniority: 'executive', priority: 2 },
   { pattern: 'clo',                     match_type: 'exact',       seniority: 'executive', priority: 2 },
   { pattern: 'chro',                    match_type: 'exact',       seniority: 'executive', priority: 2 },
-  { pattern: 'founder',                 match_type: 'contains',    seniority: 'executive', priority: 2 },
-  { pattern: 'co-founder',              match_type: 'contains',    seniority: 'executive', priority: 2 },
-  { pattern: 'cofounder',               match_type: 'exact',       seniority: 'executive', priority: 2 },
+  // Founder + C-level combos count as executive. Plain "Founder" / "Co-Founder"
+  // is ambiguous (could be a non-operating founder or founding engineer) —
+  // handled as Manager at priority 5 unless the title explicitly names a
+  // C-level role.
+  { pattern: 'founder & ceo',           match_type: 'contains',    seniority: 'executive', priority: 2 },
+  { pattern: 'founder/ceo',             match_type: 'contains',    seniority: 'executive', priority: 2 },
+  { pattern: 'founder and ceo',         match_type: 'contains',    seniority: 'executive', priority: 2 },
+  { pattern: 'co-founder & ceo',        match_type: 'contains',    seniority: 'executive', priority: 2 },
+  { pattern: 'co-founder/ceo',          match_type: 'contains',    seniority: 'executive', priority: 2 },
+  { pattern: 'founding ceo',            match_type: 'contains',    seniority: 'executive', priority: 2 },
+  { pattern: 'founder & cto',           match_type: 'contains',    seniority: 'executive', priority: 2 },
+  { pattern: 'founder/cto',             match_type: 'contains',    seniority: 'executive', priority: 2 },
+  { pattern: 'co-founder & cto',        match_type: 'contains',    seniority: 'executive', priority: 2 },
+  { pattern: 'founding cto',            match_type: 'contains',    seniority: 'executive', priority: 2 },
+  { pattern: 'founder & coo',           match_type: 'contains',    seniority: 'executive', priority: 2 },
+  { pattern: 'co-founder & coo',        match_type: 'contains',    seniority: 'executive', priority: 2 },
   { pattern: 'managing director',       match_type: 'contains',    seniority: 'executive', priority: 2 },
   { pattern: 'general partner',         match_type: 'contains',    seniority: 'executive', priority: 2 },
   { pattern: 'managing partner',        match_type: 'contains',    seniority: 'executive', priority: 2 },
@@ -64,6 +88,7 @@ const RULES = [
   { pattern: 'principal',               match_type: 'contains',      seniority: 'lead', priority: 3 },
   { pattern: 'architect',               match_type: 'contains',      seniority: 'lead', priority: 3 },
   { pattern: 'distinguished engineer',  match_type: 'contains',      seniority: 'lead', priority: 3 },
+  { pattern: 'founding engineer',       match_type: 'contains',      seniority: 'lead', priority: 3, notes: 'Founding engineer is a lead-level IC role' },
   { pattern: 'tech lead manager',       match_type: 'contains',      seniority: 'lead', priority: 3, notes: 'TLMs are tech leads, not managers' },
   { pattern: 'tech lead',               match_type: 'contains',      seniority: 'lead', priority: 3 },
   { pattern: 'technical lead',          match_type: 'contains',      seniority: 'lead', priority: 3 },

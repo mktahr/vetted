@@ -1,8 +1,10 @@
 // scripts/backfill-seniority.mjs
 //
 // Re-evaluates seniority for every person_experience using the new
-// seniority_rules engine. Also re-computes highest_seniority_reached
-// on each person row.
+// seniority_rules engine. Also re-computes:
+//   - highest_seniority_reached on each person
+//   - years_experience_estimate (post-graduation, non-internship span)
+//   - career_stage_assigned (derived from years_experience_estimate)
 //
 // Safe to re-run. Idempotent.
 
@@ -74,6 +76,21 @@ function resolveSeniority(ctx) {
   return 'individual_contributor'
 }
 
+function isInternshipTitle(t) {
+  if (!t) return false
+  return /\bintern\b|\binternship\b|\bco-?op\b/i.test(t)
+}
+
+// career_stage thresholds match app/api/ingest/route.ts inferCareerStage()
+// (0/4/10) — the scoring engine re-derives its own stage at scoring time.
+function inferCareerStage(years) {
+  if (years === null || years === undefined) return null
+  if (years <= 0) return 'pre_career'
+  if (years < 4) return 'early_career'
+  if (years < 10) return 'mid_career'
+  return 'senior_career'
+}
+
 // ─── Fetch all people and their experiences + education ──────────────
 
 const { data: people } = await supabase.from('people').select('person_id, full_name')
@@ -92,16 +109,32 @@ for (const person of people || []) {
 
   const { data: edus } = await supabase
     .from('person_education')
-    .select('end_year')
+    .select('end_year, degree_raw, degree_normalized, degree_level')
     .eq('person_id', person.person_id)
 
-  // Determine graduation date: EARLIEST end_year (see lib/normalize/seniority.ts
-  // for rationale — avoids flagging founder roles as "student" when the person
-  // later picked up an MBA).
+  // Graduation date = earliest POST-SECONDARY end_year. Skip high school,
+  // certificates, and coursework so we don't anchor graduation at ~18 and
+  // count undergrad-era student jobs as real experience.
+  // Matches lib/normalize/seniority.ts graduationDateFromEducation().
+  const isHighSchoolOrLower = (e) => {
+    const lvl = (e.degree_level || '').toLowerCase()
+    if (lvl === 'high_school' || lvl === 'certificate' || lvl === 'coursework') return true
+    const name = ((e.degree_raw || e.degree_normalized) || '').toLowerCase()
+    return /high school|secondary school|\bged\b/.test(name)
+  }
+
   let earliest = null
   for (const e of edus || []) {
     if (!e.end_year) continue
+    if (isHighSchoolOrLower(e)) continue
     if (earliest === null || e.end_year < earliest) earliest = e.end_year
+  }
+  // Fallback: no post-secondary — use earliest overall
+  if (earliest === null) {
+    for (const e of edus || []) {
+      if (!e.end_year) continue
+      if (earliest === null || e.end_year < earliest) earliest = e.end_year
+    }
   }
   const gradDate = earliest !== null ? new Date(earliest, 11, 31) : null
 
@@ -130,10 +163,11 @@ for (const person of people || []) {
     expUpdated++
   }
 
-  // Re-compute highest_seniority_reached from (possibly updated) experiences
+  // Re-compute highest_seniority_reached + years_experience_estimate + career_stage
+  // from the refreshed experience data (now includes the seniority updates above).
   const { data: refreshed } = await supabase
     .from('person_experiences')
-    .select('seniority_normalized')
+    .select('seniority_normalized, title_raw, start_date, employment_type_normalized')
     .eq('person_id', person.person_id)
 
   let maxRank = 0
@@ -146,19 +180,45 @@ for (const person of people || []) {
     }
   }
 
+  // Years of experience: span from earliest post-graduation, non-student,
+  // non-internship role start to now. Matches lib/ingest/mappers/crust.ts
+  // computeYearsSpan() — we skip:
+  //   - student-level roles (by our updated seniority_normalized)
+  //   - internship titles
+  //   - roles that started before gradDate
+  let earliestPostGrad = null
+  for (const e of refreshed || []) {
+    if (!e.start_date) continue
+    if (e.seniority_normalized === 'student') continue
+    if (isInternshipTitle(e.title_raw)) continue
+    const start = new Date(e.start_date)
+    if (isNaN(start.getTime())) continue
+    if (gradDate && start < gradDate) continue
+    if (earliestPostGrad === null || start < earliestPostGrad) earliestPostGrad = start
+  }
+
+  const yearsExp = earliestPostGrad
+    ? Math.max(0, Math.round(((Date.now() - earliestPostGrad.getTime()) / (1000 * 60 * 60 * 24 * 365.25)) * 10) / 10)
+    : null
+  const careerStage = inferCareerStage(yearsExp)
+
   const { error: updErr } = await supabase
     .from('people')
-    .update({ highest_seniority_reached: highest })
+    .update({
+      highest_seniority_reached: highest,
+      years_experience_estimate: yearsExp,
+      career_stage_assigned: careerStage,
+    })
     .eq('person_id', person.person_id)
   if (updErr) {
     errors++
-    console.error(`  ✗ ${person.full_name}: update highest_seniority:`, updErr.message)
+    console.error(`  ✗ ${person.full_name}: update person:`, updErr.message)
   } else {
     peopleUpdated++
   }
 
   const changeCount = changedTitles.length
-  console.log(`  ${person.full_name.padEnd(30)} | highest=${(highest || '—').padEnd(22)} | ${changeCount} change${changeCount !== 1 ? 's' : ''}`)
+  console.log(`  ${person.full_name.padEnd(30)} | highest=${(highest || '—').padEnd(22)} | yrs=${String(yearsExp ?? '—').padStart(4)} | stage=${(careerStage || '—').padEnd(14)} | ${changeCount} seniority change${changeCount !== 1 ? 's' : ''}`)
   for (const t of changedTitles) console.log(`      · ${t}`)
 }
 

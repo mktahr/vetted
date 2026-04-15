@@ -144,23 +144,61 @@ export async function resolveSeniority(
 /**
  * Helper: derive a person's graduation date from their education entries.
  *
- * Returns the EARLIEST end_year as a Date (Dec 31 of that year). Rationale:
- * the spec's student-override is meant to catch roles held during someone's
- * schooling era (undergrad or earlier). Using the LATEST end_year breaks on
- * people who later pick up an MBA or executive-ed program — it would flag
- * their entire pre-MBA career as "student". Earliest end_year is the
- * conservative proxy for "when they stopped being a full-time student".
+ * Returns the EARLIEST post-secondary end_year as a Date (Dec 31 of that
+ * year). Rationale:
  *
+ *   • LATEST end_year breaks on people who later pick up an MBA or
+ *     executive-ed program — it would flag their entire pre-MBA career as
+ *     "student" and inflate the student-role filter.
+ *   • EARLIEST end_year across ALL education breaks on people who have a
+ *     high-school entry in their LinkedIn. We'd anchor graduation to high
+ *     school (age ~18) and count their undergrad years of internships and
+ *     student jobs as "real experience".
+ *
+ * So we exclude high school, certificate, and coursework entries and take
+ * the earliest end_year among the remaining (bachelor / master / MBA / PhD
+ * / JD / MD / associate).
+ *
+ * Filter heuristic: skip entries where
+ *   - degree_level is 'high_school', 'certificate', or 'coursework', OR
+ *   - degree string matches /high school|secondary|ged\b/i
+ *
+ * Falls back to the overall earliest end_year if no post-secondary entry
+ * qualifies (e.g. a person whose only listed education IS high school).
  * Returns null if no education has an end_year.
  */
 export function graduationDateFromEducation(
-  education: Array<{ end_year?: number | null }>,
+  education: Array<{
+    end_year?: number | null
+    degree?: string | null
+    degree_raw?: string | null
+    degree_level?: string | null
+  }>,
 ): Date | null {
-  let earliest: number | null = null
+  const isHighSchoolOrLower = (e: { degree?: string | null; degree_raw?: string | null; degree_level?: string | null }) => {
+    const lvl = (e.degree_level || '').toLowerCase()
+    if (lvl === 'high_school' || lvl === 'certificate' || lvl === 'coursework') return true
+    const name = ((e.degree || e.degree_raw) || '').toLowerCase()
+    return /high school|secondary school|\bged\b/.test(name)
+  }
+
+  // Prefer earliest post-secondary end_year
+  let earliestPostSecondary: number | null = null
   for (const edu of education) {
     if (!edu.end_year) continue
-    if (earliest === null || edu.end_year < earliest) earliest = edu.end_year
+    if (isHighSchoolOrLower(edu)) continue
+    if (earliestPostSecondary === null || edu.end_year < earliestPostSecondary) {
+      earliestPostSecondary = edu.end_year
+    }
   }
-  if (earliest === null) return null
-  return new Date(earliest, 11, 31) // Dec 31 of that year
+  if (earliestPostSecondary !== null) return new Date(earliestPostSecondary, 11, 31)
+
+  // Fallback: no post-secondary entries — use earliest overall
+  let earliestOverall: number | null = null
+  for (const edu of education) {
+    if (!edu.end_year) continue
+    if (earliestOverall === null || edu.end_year < earliestOverall) earliestOverall = edu.end_year
+  }
+  if (earliestOverall === null) return null
+  return new Date(earliestOverall, 11, 31)
 }

@@ -239,19 +239,69 @@ function mapEducation(e: CrustEducationEntry): RawEducation {
   }
 }
 
-/** Fallback years_experience: span from earliest non-internship start. */
-function computeYearsSpan(experiences: RawExperience[]): number | null {
+/**
+ * Years of experience = span from earliest POST-GRADUATION non-internship
+ * role start to now.
+ *
+ * Crust's own `years_of_experience_raw` counts pre-graduation student jobs
+ * (e.g. summer Quant roles, undergraduate RA positions, on-campus engineering
+ * work), which inflates the total. We explicitly skip:
+ *
+ *   • Any role with an internship/co-op in the title
+ *   • Any role that started before the earliest education end_year
+ *     (i.e. before the person left full-time schooling for the first time)
+ *
+ * `graduationDate` is the earliest education end_year as a Date (Dec 31 of
+ * that year), matching the same heuristic used by resolveSeniority.
+ */
+function computeYearsSpan(
+  experiences: RawExperience[],
+  graduationDate: Date | null,
+): number | null {
   let earliest: Date | null = null
   for (const e of experiences) {
     if (isInternshipTitle(e.title)) continue
     if (!e.start_date) continue
     const d = new Date(e.start_date)
     if (isNaN(d.getTime())) continue
+    // Skip roles that started before graduation — those were student jobs
+    if (graduationDate && d < graduationDate) continue
     if (earliest === null || d < earliest) earliest = d
   }
   if (!earliest) return null
   const years = (Date.now() - earliest.getTime()) / (1000 * 60 * 60 * 24 * 365.25)
-  return Math.round(years * 10) / 10
+  return Math.max(0, Math.round(years * 10) / 10)
+}
+
+/**
+ * Earliest post-secondary education end_year as Dec 31 Date.
+ * Mirrors lib/normalize/seniority.ts graduationDateFromEducation() —
+ * excludes high school / certificate / coursework so we don't anchor
+ * graduation at age ~18 and count undergrad years as real experience.
+ */
+function graduationDateFromEducation(
+  education: Array<{ end_year?: number | null | undefined; degree?: string }>,
+): Date | null {
+  const isHighSchoolOrLower = (e: { degree?: string }) => {
+    const name = (e.degree || '').toLowerCase()
+    return /high school|secondary school|\bged\b/.test(name)
+  }
+
+  let earliest: number | null = null
+  for (const edu of education) {
+    if (!edu.end_year) continue
+    if (isHighSchoolOrLower(edu)) continue
+    if (earliest === null || edu.end_year < earliest) earliest = edu.end_year
+  }
+  if (earliest !== null) return new Date(earliest, 11, 31)
+
+  // Fallback: no post-secondary — use earliest overall
+  for (const edu of education) {
+    if (!edu.end_year) continue
+    if (earliest === null || edu.end_year < earliest) earliest = edu.end_year
+  }
+  if (earliest === null) return null
+  return new Date(earliest, 11, 31)
 }
 
 // ─── Main mapper ────────────────────────────────────────────────────────────
@@ -278,11 +328,12 @@ export function mapCrustToCanonical(record: CrustPerson): IngestPayload | null {
     .map(mapEducation)
     .filter(e => e.school_name)
 
-  // Years experience: use Crust's own number if present, else fall back to span.
-  const yearsExperience =
-    typeof record.years_of_experience_raw === 'number' && record.years_of_experience_raw >= 0
-      ? record.years_of_experience_raw
-      : computeYearsSpan(experiences)
+  // Years experience = post-graduation, non-internship span only.
+  // We intentionally ignore Crust's `years_of_experience_raw` because it
+  // includes pre-graduation student work (summer jobs, research assistant
+  // gigs, on-campus engineering roles) which inflates the total.
+  const graduationDate = graduationDateFromEducation(education)
+  const yearsExperience = computeYearsSpan(experiences, graduationDate)
 
   // Years at current company: use Crust's years_at_company_raw on the primary
   // current role if available; otherwise compute from start_date.
