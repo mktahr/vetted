@@ -296,7 +296,7 @@ async function scoreCandidate(personId) {
 
   // Bonus components
   if (weights.bonus?.career_slope !== undefined) {
-    const up = person.career_progression === 'upward';
+    const up = person.career_progression === 'rising';
     push('career_slope', 'bonus', weights.bonus.career_slope,
       up ? 1 : 0, up ? weights.bonus.career_slope : 0,
       `progression=${person.career_progression ?? 'none'}`);

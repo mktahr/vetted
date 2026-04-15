@@ -245,7 +245,7 @@ Each career stage has three buckets of signals:
 - **education** — max `schools.school_score` across the candidate's education entries, with lookups going `schools.school_name` → `school_aliases.alias_name` → no match → 0. Whitespace and trailing `.`/`,` stripped before matching. Normalized /4.
 - **degree_relevance** — dictionary lookup by function (see below). Normalized /1.
 - **internships** — avg `company_year_scores.company_score` across all internship experiences. Quality-based, *not* count-based. Normalized /5.
-- **career_slope** (BONUS only) — if `people.career_progression = 'upward'`, full bonus points. `lateral`/`unclear`/null → 0. **Never subtracts.**
+- **career_slope** (BONUS only) — if `people.career_progression = 'rising'`, full bonus points. `flat`/`declining`/`insufficient_data`/null → 0. **Never subtracts.**
 - All other bonus signals (hackathons, clubs, labs, publications, open_source, fellowships, biz_unit, company_function_quality) — not yet sourced; they're declared with weights but contribute 0 until data arrives.
 
 ### Degree relevance dictionary (by function)
@@ -274,6 +274,30 @@ When `current_function_normalized = 'recruiting'`, all stage weights are replace
 
 Total max = 100 core + 20 bonus.
 
+### Executive override
+
+When `highest_seniority_reached = 'executive'` AND the recruiting override does **not** apply, all stage weights are replaced. Education is deprioritized; company quality and role scope dominate.
+
+- company_quality_recent: **55**
+- company_quality_average: **30**
+- role_scope: **10**
+- degree_relevance: **3**
+- education: **2**
+- career_slope (bonus): **10**
+- biz_unit (bonus): **25**
+- publications (bonus): **10**
+
+Total max = 100 core + 45 bonus.
+
+**Override priority:** `recruiting > executive > stage-default`. A head-of-talent with executive seniority is still scored as a recruiter.
+
+**`role_scope` component** — executive-only core signal read directly from `highest_seniority_reached`:
+- `executive` → 1.0
+- `manager` → 0.7
+- `lead` → 0.5
+- `individual_contributor` → 0.3
+- anything else → 0
+
 ### Bucket assignment thresholds
 
 | Stage | vetted_talent | high_potential | silver_medalist | non_vetted |
@@ -299,7 +323,7 @@ All are **searchable filter tags** — never direct inputs to the score, except 
 
 | Column | Type | Meaning |
 |---|---|---|
-| `career_progression` | text | `'upward'` (last scored FT > first), `'lateral'` (equal or only 1 scored role), `'unclear'` (last < first). Null if no scored FT roles. Only `'upward'` triggers the career_slope bonus. |
+| `career_progression` | text | Trajectory of the last 2-3 scored full-time roles. With ≥3 scored roles, compares newest to mean of the prior two; with exactly 2, compares newest to previous. Threshold ±0.3 on the 0–5 company-score scale. Values: `'rising'` (diff > 0.3), `'flat'` (|diff| ≤ 0.3), `'declining'` (diff < -0.3), `'insufficient_data'` (fewer than 2 scored FT roles). Only `'rising'` triggers the career_slope bonus. |
 | `highest_seniority_reached` | `seniority_level` enum | Max `seniority_normalized` across all experiences, by `seniority_dictionary.rank_order`. |
 | `has_early_stage_experience` | boolean | TRUE if any experience started within 4 years of the company's `founding_year`. |
 | `early_stage_companies_count` | smallint | How many such companies. |

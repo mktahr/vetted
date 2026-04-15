@@ -6,7 +6,9 @@
 // one person_id so it can run inline during the ingest pipeline. Writes
 // the following columns on `people`:
 //
-//   career_progression           'upward' | 'lateral' | 'unclear' | null
+//   career_progression           'rising' | 'flat' | 'declining' | 'insufficient_data' | null
+//                                Trajectory of the last 2-3 scored full-time roles.
+//                                Only 'rising' triggers the career_slope scoring bonus.
 //   highest_seniority_reached    seniority_level enum (max rank across experiences)
 //   has_early_stage_experience   TRUE if any experience started within 4 yrs
 //                                of the company's founding_year
@@ -20,7 +22,7 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
 export interface DerivedFields {
-  career_progression: 'upward' | 'lateral' | 'unclear' | null
+  career_progression: 'rising' | 'flat' | 'declining' | 'insufficient_data' | null
   highest_seniority_reached: string | null
   has_early_stage_experience: boolean
   early_stage_companies_count: number
@@ -122,20 +124,27 @@ export async function computeDerivedFields(
   const seniorityRank: Record<string, number> = {}
   for (const s of seniorityDict || []) seniorityRank[s.seniority_normalized] = s.rank_order
 
-  // 3. career_progression — compare first scored FT vs most-recent scored FT
+  // 3. career_progression — trajectory of the last 2-3 scored full-time roles.
+  //    Experiences are ordered oldest→newest above; scoredFT preserves that order.
+  //    With 3+ scored roles: compare newest vs mean of the prior two.
+  //    With exactly 2: compare newest vs previous.
+  //    With <2: insufficient_data (null on the column isn't distinguishable from
+  //    "not yet computed", so we use an explicit enum value here).
+  //    Threshold of 0.3 on a 0-5 company_score scale keeps tiny fluctuations as 'flat'.
   const scoredFT = fullTimeExps
     .map(e => ({ e, score: experienceCompanyScore(e, yearScores) }))
     .filter(x => x.score !== null) as Array<{ e: ExperienceRow; score: number }>
 
-  let careerProgression: DerivedFields['career_progression'] = null
+  let careerProgression: DerivedFields['career_progression'] = 'insufficient_data'
   if (scoredFT.length >= 2) {
-    const first = scoredFT[0].score
-    const last = scoredFT[scoredFT.length - 1].score
-    if (last > first) careerProgression = 'upward'
-    else if (last === first) careerProgression = 'lateral'
-    else careerProgression = 'unclear'
-  } else if (scoredFT.length === 1) {
-    careerProgression = 'lateral'
+    const newest = scoredFT[scoredFT.length - 1].score
+    const baseline = scoredFT.length >= 3
+      ? (scoredFT[scoredFT.length - 2].score + scoredFT[scoredFT.length - 3].score) / 2
+      : scoredFT[scoredFT.length - 2].score
+    const diff = newest - baseline
+    if (diff > 0.3) careerProgression = 'rising'
+    else if (diff < -0.3) careerProgression = 'declining'
+    else careerProgression = 'flat'
   }
 
   // 4. highest_seniority_reached — max rank across experiences

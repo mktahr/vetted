@@ -35,7 +35,7 @@ export type CandidateBucket =
   | 'non_vetted'
   | 'needs_review';
 
-export type CareerProgression = 'upward' | 'lateral' | 'unclear' | null;
+export type CareerProgression = 'rising' | 'flat' | 'declining' | 'insufficient_data' | null;
 
 export interface ScoreComponent {
   name: string;
@@ -53,6 +53,7 @@ export interface ScoreResult {
   years_experience: number | null;
   function_normalized: string | null;
   applied_recruiting_override: boolean;
+  applied_executive_override: boolean;
   components: ScoreComponent[];
   core_score: number;
   bonus_score: number;
@@ -95,10 +96,30 @@ const STAGE_WEIGHTS: Record<ScoringStage, StageWeights> = {
   },
 };
 
-// Recruiting function override — applied regardless of career stage
+// Recruiting function override — applied regardless of career stage.
+// Priority: recruiting > executive > stage. Recruiters are evaluated purely
+// on where they've worked; education is near-zero-signal for this function.
 const RECRUITING_OVERRIDE: StageWeights = {
   core:  { company_quality_recent: 70, education: 5, degree_relevance: 5 },
   bonus: { career_slope: 20 },
+};
+
+// Executive override — applied when highest_seniority_reached='executive'
+// AND the recruiting override does not apply. Education is heavily
+// deprioritized; role scope (how high they've climbed) and company quality
+// dominate. 'role_scope' is an exec-only core component sourced from
+// highest_seniority_reached: executive=1.0, manager=0.7, lead=0.5, IC=0.3.
+const EXECUTIVE_OVERRIDE: StageWeights = {
+  core:  { company_quality_recent: 55, company_quality_average: 30, role_scope: 10, degree_relevance: 3, education: 2 },
+  bonus: { career_slope: 10, biz_unit: 25, publications: 10 },
+};
+
+// role_scope points by highest_seniority_reached
+const ROLE_SCOPE_BY_SENIORITY: Record<string, number> = {
+  executive: 1.0,
+  manager: 0.7,
+  lead: 0.5,
+  individual_contributor: 0.3,
 };
 
 // ─── Bucket thresholds ────────────────────────────────────────────────────
@@ -370,8 +391,16 @@ export async function scoreCandidate(
   }
 
   // ── Determine which weight set to use ───────────────────────────────────
+  // Priority: recruiting > executive > stage-default. At most one override
+  // applies; recruiting wins if both would otherwise fire (a head of talent
+  // with executive seniority is still scored as a recruiter).
   const applyRecruiting = functionName === 'recruiting';
-  const weights: StageWeights = applyRecruiting ? RECRUITING_OVERRIDE : STAGE_WEIGHTS[stage];
+  const applyExecutive = !applyRecruiting && person.highest_seniority_reached === 'executive';
+  const weights: StageWeights = applyRecruiting
+    ? RECRUITING_OVERRIDE
+    : applyExecutive
+      ? EXECUTIVE_OVERRIDE
+      : STAGE_WEIGHTS[stage];
 
   const components: ScoreComponent[] = [];
 
@@ -415,6 +444,22 @@ export async function scoreCandidate(
       raw: avg / 5,
       points: (avg / 5) * weights.core.company_quality_average,
       note: `Avg ${avg.toFixed(2)} across ${fullTime.length} full-time role(s)`,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // CORE: role_scope (executive override only) — reads highest_seniority_reached.
+  // ─────────────────────────────────────────────────────────────────────
+  if ('role_scope' in weights.core) {
+    const seniority = person.highest_seniority_reached ?? '';
+    const raw = ROLE_SCOPE_BY_SENIORITY[seniority] ?? 0;
+    components.push({
+      name: 'role_scope',
+      category: 'core',
+      weight: weights.core.role_scope,
+      raw,
+      points: raw * weights.core.role_scope,
+      note: `highest_seniority=${seniority || 'none'}`,
     });
   }
 
@@ -489,16 +534,16 @@ export async function scoreCandidate(
   }
 
   // ─────────────────────────────────────────────────────────────────────
-  // BONUS: career_slope — only adds if progression = 'upward'
+  // BONUS: career_slope — only adds if progression = 'rising'
   // ─────────────────────────────────────────────────────────────────────
   if ('career_slope' in (weights.bonus || {})) {
-    const isUpward = person.career_progression === 'upward';
+    const isRising = person.career_progression === 'rising';
     components.push({
       name: 'career_slope',
       category: 'bonus',
       weight: weights.bonus!.career_slope,
-      raw: isUpward ? 1.0 : 0,
-      points: isUpward ? weights.bonus!.career_slope : 0,
+      raw: isRising ? 1.0 : 0,
+      points: isRising ? weights.bonus!.career_slope : 0,
       note: `progression=${person.career_progression ?? 'none'}`,
     });
   }
@@ -555,7 +600,8 @@ export async function scoreCandidate(
   // ── Bucket (recruiting override uses same stage-based thresholds) ──
   const bucket = assignBucket(stage, total);
 
-  const reasoning = `${stage.replace('_', ' ')} (${years ?? '?'}y) core=${coreScore.toFixed(1)} bonus=${bonusScore.toFixed(1)} penalty=${penaltyScore.toFixed(1)} → ${Math.round(total * 100) / 100}/${bucket}${applyRecruiting ? ' [recruiting override]' : ''}`;
+  const overrideTag = applyRecruiting ? ' [recruiting override]' : applyExecutive ? ' [executive override]' : '';
+  const reasoning = `${stage.replace('_', ' ')} (${years ?? '?'}y) core=${coreScore.toFixed(1)} bonus=${bonusScore.toFixed(1)} penalty=${penaltyScore.toFixed(1)} → ${Math.round(total * 100) / 100}/${bucket}${overrideTag}`;
 
   return {
     person_id: person.person_id,
@@ -564,6 +610,7 @@ export async function scoreCandidate(
     years_experience: years,
     function_normalized: functionName,
     applied_recruiting_override: applyRecruiting,
+    applied_executive_override: applyExecutive,
     components,
     core_score: Math.round(coreScore * 100) / 100,
     bonus_score: Math.round(bonusScore * 100) / 100,
@@ -594,6 +641,7 @@ export interface ScoreBreakdown {
   years_experience: number | null
   function_normalized: string | null
   applied_recruiting_override: boolean
+  applied_executive_override: boolean
   career_progression: CareerProgression
   highest_seniority_reached: string | null
   has_early_stage_experience: boolean
@@ -611,6 +659,7 @@ function buildBreakdown(result: ScoreResult): ScoreBreakdown {
     years_experience: result.years_experience,
     function_normalized: result.function_normalized,
     applied_recruiting_override: result.applied_recruiting_override,
+    applied_executive_override: result.applied_executive_override,
     career_progression: result.career_progression,
     highest_seniority_reached: result.highest_seniority_reached,
     has_early_stage_experience: result.has_early_stage_experience,

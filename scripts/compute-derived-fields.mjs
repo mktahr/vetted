@@ -1,6 +1,6 @@
 // scripts/compute-derived-fields.mjs
 // Computes Phase 2 derived signals for every person and writes them back:
-//   - career_progression (upward / lateral / unclear)
+//   - career_progression (rising / flat / declining / insufficient_data)
 //   - highest_seniority_reached (max rank across all experiences)
 //   - has_early_stage_experience + early_stage_companies_count
 //   - has_hypergrowth_experience + hypergrowth_companies_count
@@ -86,23 +86,22 @@ for (const person of people) {
     (e.employment_type_normalized !== 'internship' && !/\bintern\b|\binternship\b|\bco-?op\b/i.test(e.title_raw || ''))
   );
 
-  // ── career_progression ──
-  // Compare first scored FT experience to most-recent scored FT experience
+  // ── career_progression — trajectory of last 2-3 scored FT roles ──
   const scoredFT = fullTimeExps
     .map(e => ({ e, score: expCompanyScore(e) }))
     .filter(x => x.score !== null);
 
-  let careerProgression = null;
+  let careerProgression = 'insufficient_data';
   if (scoredFT.length >= 2) {
-    const first = scoredFT[0].score;
-    const last = scoredFT[scoredFT.length - 1].score;
-    if (last > first) careerProgression = 'upward';
-    else if (last === first) careerProgression = 'lateral';
-    else careerProgression = 'unclear';
-  } else if (scoredFT.length === 1) {
-    careerProgression = 'lateral';
+    const newest = scoredFT[scoredFT.length - 1].score;
+    const baseline = scoredFT.length >= 3
+      ? (scoredFT[scoredFT.length - 2].score + scoredFT[scoredFT.length - 3].score) / 2
+      : scoredFT[scoredFT.length - 2].score;
+    const diff = newest - baseline;
+    if (diff > 0.3) careerProgression = 'rising';
+    else if (diff < -0.3) careerProgression = 'declining';
+    else careerProgression = 'flat';
   }
-  // else null — insufficient data
 
   // ── highest_seniority_reached ──
   let maxRank = 0;

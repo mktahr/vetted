@@ -26,7 +26,8 @@ export interface ScoreBreakdown {
   years_experience: number | null
   function_normalized: string | null
   applied_recruiting_override: boolean
-  career_progression: 'upward' | 'lateral' | 'unclear' | null
+  applied_executive_override: boolean
+  career_progression: 'rising' | 'flat' | 'declining' | 'insufficient_data' | null
   highest_seniority_reached: string | null
   has_early_stage_experience: boolean
   has_hypergrowth_experience: boolean
@@ -58,7 +59,7 @@ export interface Person {
   years_experience_estimate: number | null
   career_stage_assigned: string | null
   // Derived signals (populated by scripts/compute-derived-fields.mjs)
-  career_progression: 'upward' | 'lateral' | 'unclear' | null
+  career_progression: 'rising' | 'flat' | 'declining' | 'insufficient_data' | null
   highest_seniority_reached: string | null
   has_early_stage_experience: boolean
   early_stage_companies_count: number

@@ -223,13 +223,17 @@ async function processOne(person) {
     (e.employment_type_normalized !== 'internship' && !isInternshipTitle(e.title_raw))
   )
 
-  // career_progression
+  // career_progression — trajectory of last 2-3 scored FT roles
   const scoredFT = fullTimeExps.map(e => ({ e, score: expCompanyScore(e) })).filter(x => x.score !== null)
-  let careerProgression = null
+  let careerProgression = 'insufficient_data'
   if (scoredFT.length >= 2) {
-    const first = scoredFT[0].score, last = scoredFT[scoredFT.length - 1].score
-    careerProgression = last > first ? 'upward' : last === first ? 'lateral' : 'unclear'
-  } else if (scoredFT.length === 1) careerProgression = 'lateral'
+    const newest = scoredFT[scoredFT.length - 1].score
+    const baseline = scoredFT.length >= 3
+      ? (scoredFT[scoredFT.length - 2].score + scoredFT[scoredFT.length - 3].score) / 2
+      : scoredFT[scoredFT.length - 2].score
+    const diff = newest - baseline
+    careerProgression = diff > 0.3 ? 'rising' : diff < -0.3 ? 'declining' : 'flat'
+  }
 
   // highest_seniority_reached
   let maxRank = 0, highestSeniority = null
@@ -335,7 +339,7 @@ async function processOne(person) {
     push('internships', 'core', weights.core.internships, avg / 5, (avg / 5) * weights.core.internships)
   }
   if (weights.bonus?.career_slope !== undefined) {
-    const up = careerProgression === 'upward'
+    const up = careerProgression === 'rising'
     push('career_slope', 'bonus', weights.bonus.career_slope, up ? 1 : 0, up ? weights.bonus.career_slope : 0)
   }
   if (weights.penalty) {
