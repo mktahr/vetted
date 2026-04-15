@@ -8,3 +8,6 @@ export type {
   ScoreComponent,
   ScoreResult,
 } from './score-candidate';
+
+export { computeDerivedFields, computeAndWriteDerivedFields } from './compute-derived';
+export type { DerivedFields } from './compute-derived';

@@ -9,3 +9,17 @@ export type { DegreeMatch, FieldOfStudyMatch } from './degrees';
 
 export { normalizeEmploymentType } from './employment';
 export type { EmploymentTypeNorm, EmploymentTypeMatch } from './employment';
+
+export {
+  loadSeniorityRules,
+  resolveSeniority,
+  resolveSeniorityFromRules,
+  matchesRule,
+  graduationDateFromEducation,
+} from './seniority';
+export type {
+  SeniorityLevel,
+  SeniorityMatchType,
+  SeniorityRule,
+  SeniorityContext,
+} from './seniority';

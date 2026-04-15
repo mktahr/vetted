@@ -227,12 +227,14 @@ export default function ProfileTable() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Vetted Database</h1>
-        <a
-          href="/admin/companies"
-          className="text-sm text-blue-600 hover:text-blue-800 underline"
-        >
-          Manage companies →
-        </a>
+        <div className="flex gap-4 text-sm">
+          <a href="/admin/import" className="text-blue-600 hover:text-blue-800 underline">
+            Import from Crust →
+          </a>
+          <a href="/admin/companies" className="text-blue-600 hover:text-blue-800 underline">
+            Manage companies →
+          </a>
+        </div>
       </div>
 
       {/* Search */}

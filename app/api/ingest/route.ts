@@ -14,7 +14,15 @@ import {
   normalizeDegree,
   normalizeFieldOfStudy,
   normalizeEmploymentType,
+  loadSeniorityRules,
+  resolveSeniorityFromRules,
+  graduationDateFromEducation,
 } from '@/lib/normalize';
+import {
+  computeAndWriteDerivedFields,
+  scoreCandidate,
+  writeBucketAssignment,
+} from '@/lib/scoring';
 
 const INGEST_SECRET = process.env.INGEST_SECRET!;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -287,6 +295,10 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Step 6: Insert experiences ──────────────────────────────────────────
+  // Load seniority_rules once per ingest. The resolver no longer uses
+  // title_dictionary for seniority — everything goes through seniority_rules.
+  const seniorityRules = await loadSeniorityRules(supabase);
+  const personGradDate = graduationDateFromEducation(canonical.education || []);
   const experiences = canonical.experiences || [];
 
   for (const exp of experiences) {
@@ -302,6 +314,20 @@ export async function POST(req: NextRequest) {
       : (await normalizeEmploymentType(supabase, exp.employment_type)).employment_type_normalized;
     const employmentType = empFromTitle || empFromRaw || 'unknown';
 
+    // Resolve seniority from the new seniority_rules engine (not title_dict).
+    // Student overrides fire for employment_type='internship' OR when the role
+    // started before the person's graduation end_year.
+    const roleStartDate = toDateString(exp.start_date);
+    const seniority = resolveSeniorityFromRules(
+      {
+        title: exp.title,
+        employment_type: employmentType,
+        role_start_date: roleStartDate,
+        person_graduation_date: personGradDate,
+      },
+      seniorityRules,
+    );
+
     const expRecord = {
       person_id: personId,
       company_id: expCompanyId,
@@ -309,9 +335,9 @@ export async function POST(req: NextRequest) {
       title_normalized: expTitleData?.title_normalized || null,
       function_normalized: expTitleData?.function_normalized || null,
       specialty_normalized: expTitleData?.specialty_normalized || null,
-      seniority_normalized: expTitleData?.seniority_normalized || null,
+      seniority_normalized: seniority,
       employment_type_normalized: employmentType,
-      start_date: toDateString(exp.start_date),
+      start_date: roleStartDate,
       end_date: toDateString(exp.end_date),
       is_current: exp.is_current || false,
       duration_months: exp.duration_months || null,
@@ -404,7 +430,25 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Step 8: Create initial decision state (active) if new person ────────
+  // ── Step 8: Score candidate + assign bucket ────────────────────────────
+  // Order matters: derived fields must be written BEFORE scoreCandidate()
+  // because the scoring engine reads career_progression, highest_seniority,
+  // etc. from the people row. Failures here are non-fatal — a person
+  // record without a score is still a valid ingest, just shows as 'Unscored'.
+  let bucket: string | null = null;
+  let totalScore: number | null = null;
+  try {
+    await computeAndWriteDerivedFields(supabase, personId);
+    const scoreResult = await scoreCandidate(supabase, personId);
+    await writeBucketAssignment(supabase, scoreResult);
+    bucket = scoreResult.bucket;
+    totalScore = scoreResult.total_score;
+    console.log('[ingest] Scored:', payload.linkedin_url, `→ ${bucket} (${totalScore})`);
+  } catch (scoreErr) {
+    console.error('[ingest] Scoring failed (non-fatal):', scoreErr);
+  }
+
+  // ── Step 9: Create initial decision state (active) if new person ────────
   const { data: existingDecision } = await supabase
     .from('candidate_decision_state')
     .select('decision_state_id')
@@ -428,6 +472,8 @@ export async function POST(req: NextRequest) {
     success: true,
     person_id: personId,
     legacy_ok: !legacyError,
+    bucket,
+    total_score: totalScore,
     message: 'Profile ingested and normalized successfully',
   });
 
