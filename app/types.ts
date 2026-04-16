@@ -65,6 +65,8 @@ export interface Person {
   early_stage_companies_count: number
   has_hypergrowth_experience: boolean
   hypergrowth_companies_count: number
+  narrative_summary: string | null
+  narrative_summary_generated_at: string | null
   created_at: string
   updated_at: string
   // Joined data (not on the table itself)

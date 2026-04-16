@@ -42,6 +42,10 @@ export default function ProfilePage() {
   const [bucket, setBucket] = useState<BucketAssignment | null>(null)
   const [breakdownOpen, setBreakdownOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [narrative, setNarrative] = useState<string | null>(null)
+  const [narrativeAt, setNarrativeAt] = useState<string | null>(null)
+  const [narrativeLoading, setNarrativeLoading] = useState(false)
+  const [narrativeError, setNarrativeError] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetchAll() {
@@ -63,6 +67,10 @@ export default function ProfilePage() {
           current_company_name: personData.companies?.company_name || null,
         }
         setPerson(p)
+        if (p.narrative_summary) {
+          setNarrative(p.narrative_summary)
+          setNarrativeAt(p.narrative_summary_generated_at)
+        }
 
         // Fetch experiences with company names
         const { data: expData } = await supabase
@@ -114,6 +122,38 @@ export default function ProfilePage() {
     }
     fetchAll()
   }, [params.id])
+
+  // Auto-generate narrative on first visit if cache is empty.
+  useEffect(() => {
+    if (loading || !person || narrative || narrativeLoading) return
+    setNarrativeLoading(true)
+    setNarrativeError(null)
+    fetch(`/api/people/${params.id}/narrative`)
+      .then(async r => {
+        const data = await r.json()
+        if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`)
+        setNarrative(data.narrative)
+        setNarrativeAt(data.generated_at)
+      })
+      .catch(err => setNarrativeError(err.message))
+      .finally(() => setNarrativeLoading(false))
+  }, [loading, person, narrative, narrativeLoading, params.id])
+
+  async function regenerateNarrative() {
+    setNarrativeLoading(true)
+    setNarrativeError(null)
+    try {
+      const r = await fetch(`/api/people/${params.id}/narrative`, { method: 'POST' })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`)
+      setNarrative(data.narrative)
+      setNarrativeAt(data.generated_at)
+    } catch (err) {
+      setNarrativeError(err instanceof Error ? err.message : 'Unknown error')
+    } finally {
+      setNarrativeLoading(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -182,6 +222,36 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* AI narrative summary */}
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-blue-700 uppercase tracking-wide font-medium">Summary</p>
+            <button
+              onClick={regenerateNarrative}
+              disabled={narrativeLoading}
+              className="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50 disabled:cursor-not-allowed underline"
+            >
+              {narrativeLoading ? 'Generating…' : 'Regenerate'}
+            </button>
+          </div>
+          {narrativeError ? (
+            <p className="text-sm text-red-700">Could not generate summary: {narrativeError}</p>
+          ) : narrative ? (
+            <>
+              <p className="text-sm text-gray-800 whitespace-pre-wrap">{narrative}</p>
+              {narrativeAt && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Generated {new Date(narrativeAt).toLocaleString()}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-gray-500 italic">
+              {narrativeLoading ? 'Generating summary…' : 'No summary yet.'}
+            </p>
+          )}
         </div>
 
         {/* Score breakdown — one-line summary + expandable itemized view */}
