@@ -13,6 +13,8 @@ export type {
   CrustLocationDetails,
 } from './mappers/crust'
 
+export { mapPersonSearchToCanonical } from './mappers/crust-v2'
+
 export { mapGenericToCanonical } from './mappers/generic'
 
-export type MapperName = 'crust' | 'generic'
+export type MapperName = 'crust' | 'crust-v2' | 'generic'

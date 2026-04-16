@@ -416,7 +416,9 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 │   │   └── seed/page.tsx                        ← "/admin/seed" — 3 hardcoded test payloads for smoke tests
 │   └── api/
 │       ├── ingest/route.ts                      ← POST /api/ingest (Chrome ext + admin/import target)
-│       └── admin/import/route.ts                ← POST /api/admin/import (streaming, calls Crust then /api/ingest per profile)
+│       └── admin/
+│           ├── import/route.ts                  ← POST /api/admin/import (streaming full import via /person/search v2)
+│           └── import/preview/route.ts          ← POST /api/admin/import/preview (sample + total_count for confirm dialog)
 │
 ├── lib/
 │   ├── supabase.ts                              ← browser Supabase client (anon key)
@@ -432,9 +434,11 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 │   │   └── compute-derived.ts                   ← computeAndWriteDerivedFields()
 │   └── ingest/
 │       ├── index.ts                             ← barrel
-│       ├── crust-api.ts                         ← buildFilterBody() + fetchCrustPage() + postIngest() (retry-wrapped)
+│       ├── crust-person-search.ts               ← buildPersonSearchBody() + fetchPersonSearchPage() for v2 /person/search
+│       ├── crust-api.ts                         ← legacy — old /screener/persondb/search network layer + postIngest()
 │       └── mappers/
-│           ├── crust.ts                         ← mapCrustToCanonical() for /screener/persondb/search responses
+│           ├── crust-v2.ts                      ← mapPersonSearchToCanonical() for /person/search v2 responses (live)
+│           ├── crust.ts                         ← legacy — mapCrustToCanonical() for old /screener/persondb/search
 │           └── generic.ts                       ← mapGenericToCanonical() — best-effort aliasing for unknown JSON
 │
 └── scripts/                                     ← one-shot + backfill scripts (all .mjs, run with node)
@@ -490,22 +494,49 @@ Returns `{ success, person_id, legacy_ok, bucket, total_score, message }`.
 
 ---
 
-## Admin Import (Crust Data)
+## Admin Import (Crust Data — Person Search API v2)
 
-**POST `/api/admin/import`** — streaming NDJSON.
+Uses Crust's **`POST https://api.crustdata.com/person/search`** API with Bearer auth and `x-api-version: 2025-11-01`. Two-step sample-first workflow:
+
+**Step 1 — `POST /api/admin/import/preview`** (non-streaming JSON)
 
 ```ts
-{ company_name?, job_title?, location?, limit? }  // at least one filter required, limit 1–500 default 25
+{ company_name?, location?, seniority_level?, function_category? }
 ```
 
-Calls Crust `POST /screener/persondb/search` with a fuzzy `(.)` filter per field, paginates via `cursor` at 100 per page, maps each result through `mapCrustToCanonical`, and POSTs to `/api/ingest`. Events stream: `start`, `progress` (per profile with status + name + person_id or error), `info`, `error`, `complete` (with summary + error list).
+Calls Crust with `limit: 50` and returns a sample plus `total_count`. (`preview: true` is supported by the API but not enabled on our current plan — the fallback still returns a real sample of 50.) Response: `{ total_count, sample_count, samples[], filters }`. UI renders a confirmation table before the full pull.
 
-Key mapping rules in `lib/ingest/mappers/crust.ts`:
-- `linkedin_url` ← `flagship_profile_url` (preferred human slug) → `linkedin_profile_url` fallback
-- Dates: strip ISO time component ("2022-05-01T00:00:00" → "2022-05-01")
-- `years_experience` = post-graduation span (Crust's `years_of_experience_raw` is NOT used — it counts student jobs)
-- Current company/title = `current_employers[employer_is_default=true]` → `current_employers[0]` fallback
-- `experiences[].is_current` = true for every item in `current_employers`, false for `past_employers`
+**Step 2 — `POST /api/admin/import`** (streaming NDJSON)
+
+Same filter body plus optional `total_count` (for progress denominator). Flow:
+1. Queries `people.linkedin_url` → passes as `post_processing.exclude_profiles` so Crust skips already-ingested profiles server-side.
+2. Paginates via `next_cursor` at 100/page until exhausted.
+3. Each record → `mapPersonSearchToCanonical` (`lib/ingest/mappers/crust-v2.ts`) → `postIngest` to `/api/ingest`.
+
+Events: `start` (with `estimated_total` and `excluded_count`), `progress`, `info`, `error`, `complete`.
+
+**Filter syntax** — leaf `{ field, type: '(.)', value }`; composite `{ op: 'and', conditions: [...] }`. The four user-facing filters map to:
+
+| Input | Crust field |
+|---|---|
+| company_name | `experience.employment_details.current.company_name` |
+| location | `basic_profile.location.full_location` (broader than city/state/country) |
+| seniority_level | `experience.employment_details.current.seniority_level` |
+| function_category | `experience.employment_details.current.function_category` |
+
+Note: `seniority_level` and `function_category` are filter-only — they are not returned in responses, so the preview table shows `—` for Seniority.
+
+**Key mapping rules in `lib/ingest/mappers/crust-v2.ts`:**
+- `linkedin_url` ← `social_handles.professional_network_identifier.profile_url`
+- `full_name` ← `basic_profile.name`
+- `location_resolved` ← `basic_profile.location.raw` (fallback to city/state/country — structured fields can be unreliable)
+- Current company/title = `employment_details.current[is_default=true]` → `current[0]` fallback
+- `experiences[]` = `employment_details.current[]` (marked `is_current=true`) + `.past[]` (`is_current=false`)
+- `education[]` ← `education.schools[]` with fields `{ school, degree, start_year, end_year }` — note `school` not `school_name`, and `start_year`/`end_year` are direct integers, not parsed from ISO dates
+- Dates: strip ISO time ("2022-05-01T00:00:00" → "2022-05-01")
+- `years_experience` = post-graduation, non-internship span (Crust's `years_of_experience_raw` is NOT used — it counts student jobs)
+
+**Legacy old-API integration** — `lib/ingest/mappers/crust.ts` and `lib/ingest/crust-api.ts` still exist for the old `/screener/persondb/search` endpoint. Not used by the live import flow.
 
 ---
 
@@ -519,7 +550,8 @@ Required in `.env.local` and on Vercel:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Frontend (Supabase client) |
 | `SUPABASE_SERVICE_ROLE_KEY` | `/api/ingest` + all backfill scripts (writes that bypass RLS) |
 | `INGEST_SECRET` | `/api/ingest` auth + `/api/admin/import` forwarding |
-| `CRUST_DATA_API_KEY` | `/api/admin/import` |
+| `CRUSTDATA_API_KEY` | `/api/admin/import` + `/api/admin/import/preview` (Person Search v2, Bearer auth) |
+| `CRUST_DATA_API_KEY` | Legacy — old `/screener/persondb/search` integration (unused by live flow) |
 
 ---
 

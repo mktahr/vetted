@@ -1,69 +1,51 @@
 // app/api/admin/import/route.ts
 //
-// Streaming bulk import from Crust Data.
+// Streaming bulk import from Crust Data Person Search API (v2).
 //
-// POST body (all fields optional — at least one filter required):
-//   { company_name?, job_title?, location?, limit? (default 25, max 500) }
+// POST body:
+//   { company_name?, location?, seniority_level?, function_category?,
+//     total_count?: number (from preview — used as progress denominator) }
 //
 // Response: newline-delimited JSON (NDJSON) events for live progress.
-// Event shapes:
-//   { type: 'start',    target, filters }
-//   { type: 'progress', current, total, name, status: 'success'|'failed'|'skipped', person_id?, error? }
-//   { type: 'info',     message }
-//   { type: 'error',    message }
-//   { type: 'complete', processed, success, failed, skipped, errors[] }
 //
-// Uses the same Crust API call + mapper as the old scripts/bulk-ingest.mjs —
-// just moved behind an HTTP endpoint and wrapped in a stream.
+// Before starting, queries existing linkedin_urls from `people` and passes
+// them to Crust via post_processing.exclude_profiles so we don't re-import
+// duplicates. Paginates via next_cursor at 100 per page until exhausted.
 
 import { NextRequest } from 'next/server'
-import { mapCrustToCanonical } from '@/lib/ingest/mappers/crust'
-import { buildFilterBody, fetchCrustPage, postIngest } from '@/lib/ingest/crust-api'
+import { createClient } from '@supabase/supabase-js'
+import { mapPersonSearchToCanonical } from '@/lib/ingest/mappers/crust-v2'
+import {
+  buildPersonSearchBody,
+  fetchPersonSearchPage,
+  type PersonSearchInputs,
+} from '@/lib/ingest/crust-person-search'
+import { postIngest } from '@/lib/ingest/crust-api'
 
-// Vercel default is 10s (Hobby) / 60s (Pro). Set max 5 min to avoid timing
-// out on 500-profile imports. Local dev has no timeout.
 export const maxDuration = 300
 
-const MAX_LIMIT = 500
-const DEFAULT_LIMIT = 25
-const PAGE_SIZE = 100  // Crust max 1000; 100 is a safe per-call cap
+const PAGE_SIZE = 100
 
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.CRUST_DATA_API_KEY
+  const apiKey = process.env.CRUSTDATA_API_KEY
   const ingestSecret = process.env.INGEST_SECRET
-  if (!apiKey) {
-    return Response.json({ error: 'CRUST_DATA_API_KEY not set' }, { status: 500 })
-  }
-  if (!ingestSecret) {
-    return Response.json({ error: 'INGEST_SECRET not set' }, { status: 500 })
-  }
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  let inputs: {
-    company_name?: string
-    job_title?: string
-    location?: string
-    limit?: number
-  }
+  if (!apiKey) return Response.json({ error: 'CRUSTDATA_API_KEY not set' }, { status: 500 })
+  if (!ingestSecret) return Response.json({ error: 'INGEST_SECRET not set' }, { status: 500 })
+  if (!supabaseUrl || !supabaseKey) return Response.json({ error: 'Missing SUPABASE env vars' }, { status: 500 })
+
+  let inputs: PersonSearchInputs & { total_count?: number }
   try {
     inputs = await req.json()
   } catch {
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const target = Math.min(
-    MAX_LIMIT,
-    Math.max(1, Math.floor(inputs.limit ?? DEFAULT_LIMIT)),
-  )
-
-  // Validate + build filter body up-front so we fail fast on bad inputs.
-  let initialBody
+  // Validate filters
   try {
-    initialBody = buildFilterBody({
-      company_name: inputs.company_name,
-      job_title: inputs.job_title,
-      location: inputs.location,
-      pageSize: Math.min(PAGE_SIZE, target),
-    })
+    buildPersonSearchBody(inputs, { limit: 1 })
   } catch (err) {
     return Response.json(
       { error: err instanceof Error ? err.message : 'Bad inputs' },
@@ -71,12 +53,21 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Build an absolute URL for the ingest endpoint based on the inbound
-  // request's own host. Works locally (localhost:3001) and on Vercel.
   const host = req.headers.get('host')
   const proto = req.headers.get('x-forwarded-proto') || 'http'
   const ingestUrl = `${proto}://${host}/api/ingest`
 
+  // Fetch existing linkedin_urls for exclude_profiles dedup
+  const supabase = createClient(supabaseUrl, supabaseKey)
+  const { data: existingPeople } = await supabase
+    .from('people')
+    .select('linkedin_url')
+    .not('linkedin_url', 'is', null)
+  const excludeProfiles = (existingPeople || [])
+    .map(p => p.linkedin_url as string)
+    .filter(Boolean)
+
+  const estimatedTotal = inputs.total_count ?? null
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream({
@@ -87,11 +78,13 @@ export async function POST(req: NextRequest) {
 
       send({
         type: 'start',
-        target,
+        estimated_total: estimatedTotal,
+        excluded_count: excludeProfiles.length,
         filters: {
           company_name: inputs.company_name || null,
-          job_title: inputs.job_title || null,
           location: inputs.location || null,
+          seniority_level: inputs.seniority_level || null,
+          function_category: inputs.function_category || null,
         },
       })
 
@@ -103,15 +96,15 @@ export async function POST(req: NextRequest) {
       let cursor: string | null = null
 
       try {
-        // Paginate through Crust until we have `target` profiles or run out.
-        paging: while (processed < target) {
-          const body = {
-            ...initialBody,
-            limit: Math.min(PAGE_SIZE, target - processed),
-            ...(cursor ? { cursor } : {}),
-          }
+        // Paginate until Crust runs out of results.
+        while (true) {
+          const body = buildPersonSearchBody(inputs, {
+            limit: PAGE_SIZE,
+            cursor: cursor ?? undefined,
+            excludeProfiles,
+          })
 
-          const page = await fetchCrustPage(apiKey, body)
+          const page = await fetchPersonSearchPage(apiKey, body)
           if (page.error) {
             send({ type: 'error', message: page.error })
             errors.push({ phase: 'crust_search', error: page.error })
@@ -123,23 +116,23 @@ export async function POST(req: NextRequest) {
           }
 
           for (const record of page.records) {
-            if (processed >= target) break paging
-
             processed++
-            const payload = mapCrustToCanonical(record as Parameters<typeof mapCrustToCanonical>[0])
 
+            const payload = mapPersonSearchToCanonical(record)
             if (!payload) {
               skipped++
-              const rawName = (record as { basic_profile?: { name?: string } })?.basic_profile?.name ?? '(unknown)'
+              const rawName = record.basic_profile?.name ?? '(unknown)'
               send({
                 type: 'progress',
                 current: processed,
-                total: target,
+                total: estimatedTotal,
                 name: rawName,
                 status: 'skipped',
                 error: 'missing linkedin_url or full_name',
               })
-              errors.push({ name: rawName, reason: 'missing linkedin_url or full_name' })
+              if (errors.length < 50) {
+                errors.push({ name: rawName, reason: 'missing linkedin_url or full_name' })
+              }
               continue
             }
 
@@ -149,7 +142,7 @@ export async function POST(req: NextRequest) {
               send({
                 type: 'progress',
                 current: processed,
-                total: target,
+                total: estimatedTotal,
                 name: payload.full_name,
                 linkedin_url: payload.linkedin_url,
                 status: 'success',
@@ -159,16 +152,18 @@ export async function POST(req: NextRequest) {
               failed++
               const rb = result.body as { error?: string; message?: string }
               const msg = rb?.error || rb?.message || JSON.stringify(result.body).slice(0, 300)
-              errors.push({
-                name: payload.full_name,
-                linkedin_url: payload.linkedin_url,
-                status: result.status,
-                error: msg,
-              })
+              if (errors.length < 50) {
+                errors.push({
+                  name: payload.full_name,
+                  linkedin_url: payload.linkedin_url,
+                  status: result.status,
+                  error: msg,
+                })
+              }
               send({
                 type: 'progress',
                 current: processed,
-                total: target,
+                total: estimatedTotal,
                 name: payload.full_name,
                 status: 'failed',
                 error: msg,
@@ -186,7 +181,7 @@ export async function POST(req: NextRequest) {
           success,
           failed,
           skipped,
-          errors: errors.slice(0, 50), // cap payload
+          errors: errors.slice(0, 50),
         })
       } catch (err) {
         send({
@@ -204,7 +199,7 @@ export async function POST(req: NextRequest) {
     headers: {
       'Content-Type': 'application/x-ndjson',
       'Cache-Control': 'no-cache, no-transform',
-      'X-Accel-Buffering': 'no', // hint for proxies to not buffer
+      'X-Accel-Buffering': 'no',
     },
   })
 }
