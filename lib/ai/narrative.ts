@@ -21,12 +21,16 @@ export interface NarrativeContext {
   full_name: string
   years_experience: number | null
   career_stage: string | null
+  // career_progression measures company-tier movement across roles, NOT
+  // title/seniority leveling. The seniority_normalized field on each
+  // experience reveals title-leveling trajectory separately.
   career_progression: string | null            // rising/flat/declining/insufficient_data
   highest_seniority_reached: string | null     // executive/manager/lead/IC/student/unknown
   experiences: Array<{
     title: string | null
     company: string | null
     company_tier: number | null                // 1-5 from company_year_scores, only if known
+    seniority_normalized: string | null        // executive/manager/lead/individual_contributor/student/unknown
     start_date: string | null
     end_date: string | null
     is_current: boolean
@@ -64,7 +68,7 @@ export async function buildNarrativeContext(
   // Experiences — joined with company name, ordered most-recent first
   const { data: expRows } = await supabase
     .from('person_experiences')
-    .select('title_raw, title_normalized, start_date, end_date, is_current, duration_months, company_id, companies:company_id ( company_name )')
+    .select('title_raw, title_normalized, seniority_normalized, start_date, end_date, is_current, duration_months, company_id, companies:company_id ( company_name )')
     .eq('person_id', personId)
     .order('is_current', { ascending: false })
     .order('start_date', { ascending: false })
@@ -101,6 +105,7 @@ export async function buildNarrativeContext(
     const e = raw as unknown as {
       title_raw: string | null
       title_normalized: string | null
+      seniority_normalized: string | null
       start_date: string | null
       end_date: string | null
       is_current: boolean
@@ -112,6 +117,7 @@ export async function buildNarrativeContext(
       title: e.title_normalized || e.title_raw || null,
       company: e.companies?.company_name || null,
       company_tier: tierFor(e.company_id, e.start_date, e.end_date, e.is_current),
+      seniority_normalized: e.seniority_normalized,
       start_date: e.start_date,
       end_date: e.end_date,
       is_current: e.is_current,
@@ -160,12 +166,19 @@ export async function buildNarrativeContext(
     core_score?: number
     bonus_score?: number
     penalty_score?: number
+    scoring_stage?: string
   } | null) ?? null
+
+  // Prefer the canonical scoring_stage (from the scoring engine, cutoffs
+  // 0.5/2/5) over career_stage_assigned (set at ingest with rougher 0/4/10
+  // cutoffs — known to mislabel anyone with 5-9 yrs as "mid_career" when
+  // they should be "senior_career").
+  const careerStage = breakdown?.scoring_stage ?? person.career_stage_assigned
 
   return {
     full_name: person.full_name,
     years_experience: person.years_experience_estimate,
-    career_stage: person.career_stage_assigned,
+    career_stage: careerStage,
     career_progression: person.career_progression,
     highest_seniority_reached: person.highest_seniority_reached,
     experiences,
@@ -189,10 +202,20 @@ STRICT RULES:
 2. Do NOT speculate about a person's skills, ambitions, motivations, or personality.
 3. Do NOT invent details that aren't in the data (no inferred salaries, locations, technologies, etc.).
 4. When referring to companies, describe their tier numerically when given (e.g. "tier 1 company", "tier 4 company"). Never describe a company by its actual reputation or industry beyond what the data provides.
-5. Use the career_progression value verbatim if present (e.g. "career progression is rising") — do not paraphrase it.
-6. If important data is missing (no experience, no education, no score), say so directly in the summary.
-7. Keep it factual and concise. 2-4 sentences total. No marketing language. No superlatives.
-8. End EXACTLY with this sentence on its own line: "Based on available structured data only."
+5. If important data is missing (no experience, no education, no score), say so directly.
+6. Keep it factual and concise. 2-4 sentences total. No marketing language. No superlatives.
+7. End EXACTLY with this sentence on its own line: "Based on available structured data only."
+
+CAREER STAGE vs SENIORITY (do NOT confuse):
+- career_stage describes years of experience: pre_career (<0.5), early_career (0.5–2), mid_career (2–5), senior_career (5+). Use the exact value provided.
+- seniority_normalized describes the role's title leveling: individual_contributor / lead / manager / executive / student / unknown. A senior_career engineer can still be an individual_contributor; the two are independent dimensions.
+
+CAREER PROGRESSION (career_progression field):
+- Measures movement in COMPANY TIER across roles, not title leveling. Use the verbatim value (rising/flat/declining/insufficient_data) if you mention it. Never paraphrase as "company progression" — call it "career progression" because that's what the field is named.
+
+SENIORITY SLOPE (derive from the experiences[] sequence):
+- Look at seniority_normalized across experiences ordered most-recent-first. If the level has climbed over time (e.g. individual_contributor → lead → manager) note "rising seniority". If it has stayed flat across many years, note "no observed seniority progression" or similar. If titles lack leveling indicators (e.g. all "Engineer" with no Senior/Staff/Lead qualifier) and seniority_normalized is mostly individual_contributor or unknown, say "title data is insufficient to assess seniority slope".
+- Be specific when the pattern is clear: e.g. "remained at the individual_contributor level across 7 years" is a meaningful observation if the data supports it. Never invent a level the data doesn't show.
 
 Output the summary as plain prose. No headings, no bullet points, no JSON.`
 
