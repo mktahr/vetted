@@ -61,6 +61,7 @@ export interface Person {
   // Derived signals (populated by scripts/compute-derived-fields.mjs)
   career_progression: 'rising' | 'flat' | 'declining' | 'insufficient_data' | null
   highest_seniority_reached: string | null
+  title_level_slope: 'rising' | 'flat' | 'declining' | 'insufficient_data' | null
   has_early_stage_experience: boolean
   early_stage_companies_count: number
   has_hypergrowth_experience: boolean

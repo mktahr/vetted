@@ -24,6 +24,7 @@ import { SupabaseClient } from '@supabase/supabase-js'
 export interface DerivedFields {
   career_progression: 'rising' | 'flat' | 'declining' | 'insufficient_data' | null
   highest_seniority_reached: string | null
+  title_level_slope: 'rising' | 'flat' | 'declining' | 'insufficient_data' | null
   has_early_stage_experience: boolean
   early_stage_companies_count: number
   has_hypergrowth_experience: boolean
@@ -33,6 +34,7 @@ export interface DerivedFields {
 interface ExperienceRow {
   company_id: string | null
   title_raw: string | null
+  title_level: number | null
   seniority_normalized: string | null
   employment_type_normalized: string | null
   start_date: string | null
@@ -73,7 +75,7 @@ export async function computeDerivedFields(
   // 1. Fetch this person's experiences, ordered oldest → newest
   const { data: expRaw } = await supabase
     .from('person_experiences')
-    .select('company_id, title_raw, seniority_normalized, employment_type_normalized, start_date, end_date, is_current')
+    .select('company_id, title_raw, title_level, seniority_normalized, employment_type_normalized, start_date, end_date, is_current')
     .eq('person_id', personId)
     .order('start_date', { ascending: true, nullsFirst: false })
 
@@ -159,7 +161,24 @@ export async function computeDerivedFields(
     }
   }
 
-  // 5. early_stage — experience started within 4 yrs of company founding_year
+  // 5. title_level_slope — trajectory of title_level across recent FT roles.
+  //    Same algorithm as career_progression but reading title_level instead
+  //    of company_year_scores. Experiences are ordered oldest→newest.
+  const leveledFT = fullTimeExps.filter(e => e.title_level !== null) as Array<ExperienceRow & { title_level: number }>
+  let titleLevelSlope: DerivedFields['title_level_slope'] = 'insufficient_data'
+  if (leveledFT.length >= 2) {
+    const newest = leveledFT[leveledFT.length - 1].title_level
+    const baseline = leveledFT.length >= 3
+      ? (leveledFT[leveledFT.length - 2].title_level + leveledFT[leveledFT.length - 3].title_level) / 2
+      : leveledFT[leveledFT.length - 2].title_level
+    const diff = newest - baseline
+    // Threshold of 0.5 (half a level) — a 1-level jump is rising, same level is flat.
+    if (diff >= 0.5) titleLevelSlope = 'rising'
+    else if (diff <= -0.5) titleLevelSlope = 'declining'
+    else titleLevelSlope = 'flat'
+  }
+
+  // 6. early_stage — experience started within 4 yrs of company founding_year
   const earlyStageCompanyIds = new Set<string>()
   for (const e of experiences) {
     if (!e.company_id || !e.start_date) continue
@@ -170,7 +189,7 @@ export async function computeDerivedFields(
     if (startYear - founded <= 4) earlyStageCompanyIds.add(e.company_id)
   }
 
-  // 6. hypergrowth — overlap with years where headcount ≥ 2× prior year
+  // 7. hypergrowth — overlap with years where headcount ≥ 2× prior year
   const hypergrowthYearsByCompany: Record<string, Set<number>> = {}
   for (const m of metrics) {
     if (!m.headcount_estimate) continue
@@ -204,6 +223,7 @@ export async function computeDerivedFields(
   return {
     career_progression: careerProgression,
     highest_seniority_reached: highestSeniority,
+    title_level_slope: titleLevelSlope,
     has_early_stage_experience: earlyStageCompanyIds.size > 0,
     early_stage_companies_count: earlyStageCompanyIds.size,
     has_hypergrowth_experience: hyperCompanyIds.size > 0,

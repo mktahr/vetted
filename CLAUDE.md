@@ -325,6 +325,7 @@ All are **searchable filter tags** — never direct inputs to the score, except 
 |---|---|---|
 | `career_progression` | text | Trajectory of the last 2-3 scored full-time roles. With ≥3 scored roles, compares newest to mean of the prior two; with exactly 2, compares newest to previous. Threshold ±0.3 on the 0–5 company-score scale. Values: `'rising'` (diff > 0.3), `'flat'` (|diff| ≤ 0.3), `'declining'` (diff < -0.3), `'insufficient_data'` (fewer than 2 scored FT roles). Only `'rising'` triggers the career_slope bonus. |
 | `highest_seniority_reached` | `seniority_level` enum | Max `seniority_normalized` across all experiences, by `seniority_dictionary.rank_order`. |
+| `title_level_slope` | text | Trajectory of `title_level` (1–10) across the last 2–3 leveled full-time roles. Same algorithm as `career_progression` but reading the numeric title level (±0.5 threshold on integer scale). Values: `'rising'`, `'flat'`, `'declining'`, `'insufficient_data'`. Distinct from `career_progression` (company-tier) — these are independent dimensions. |
 | `has_early_stage_experience` | boolean | TRUE if any experience started within 4 years of the company's `founding_year`. |
 | `early_stage_companies_count` | smallint | How many such companies. |
 | `has_hypergrowth_experience` | boolean | TRUE if any experience overlapped a year where `company_metrics_by_year.headcount_estimate` ≥ 2× the prior year. |
@@ -383,6 +384,7 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 - `field_of_study_dictionary` — empty (declared in migration, no seeds yet)
 - `seniority_dictionary` — 6 rows (one per enum value with rank_order)
 - `seniority_rules` — 73 rows (see Seniority System section above)
+- `title_level_dictionary` — ~85 patterns mapping title substrings to numeric levels (1–10). Level scale: 1=intern, 2=junior, 3=mid-IC, 4=IC-II, 5=senior/IC-III, 6=staff/lead, 7=principal, 8=distinguished, 9=VP/director, 10=C-suite. Per-experience `title_level` stored on `person_experiences`; trajectory across roles → `people.title_level_slope`.
 - `career_stage_config` — 4 rows (rougher boundaries than scoring engine uses)
 
 ---

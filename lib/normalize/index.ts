@@ -10,6 +10,9 @@ export type { DegreeMatch, FieldOfStudyMatch } from './degrees';
 export { normalizeEmploymentType } from './employment';
 export type { EmploymentTypeNorm, EmploymentTypeMatch } from './employment';
 
+export { loadTitleLevelRules, extractTitleLevel, extractTitleLevelFromDB } from './title-level';
+export type { TitleLevelRule } from './title-level';
+
 export {
   loadSeniorityRules,
   resolveSeniority,

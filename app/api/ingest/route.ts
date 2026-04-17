@@ -17,6 +17,8 @@ import {
   loadSeniorityRules,
   resolveSeniorityFromRules,
   graduationDateFromEducation,
+  loadTitleLevelRules,
+  extractTitleLevel,
 } from '@/lib/normalize';
 import {
   computeAndWriteDerivedFields,
@@ -299,9 +301,9 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Step 6: Insert experiences ──────────────────────────────────────────
-  // Load seniority_rules once per ingest. The resolver no longer uses
-  // title_dictionary for seniority — everything goes through seniority_rules.
+  // Load rules once per ingest to avoid N+1 queries across experiences.
   const seniorityRules = await loadSeniorityRules(supabase);
+  const titleLevelRules = await loadTitleLevelRules(supabase);
   const personGradDate = graduationDateFromEducation(canonical.education || []);
   const experiences = canonical.experiences || [];
 
@@ -332,6 +334,8 @@ export async function POST(req: NextRequest) {
       seniorityRules,
     );
 
+    const titleLevel = extractTitleLevel(exp.title, titleLevelRules);
+
     const expRecord = {
       person_id: personId,
       company_id: expCompanyId,
@@ -341,6 +345,7 @@ export async function POST(req: NextRequest) {
       specialty_normalized: expTitleData?.specialty_normalized || null,
       seniority_normalized: seniority,
       employment_type_normalized: employmentType,
+      title_level: titleLevel,
       start_date: roleStartDate,
       end_date: toDateString(exp.end_date),
       is_current: exp.is_current || false,

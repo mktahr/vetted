@@ -21,15 +21,14 @@ export interface NarrativeContext {
   full_name: string
   years_experience: number | null
   career_stage: string | null
-  // career_progression measures company-tier movement across roles, NOT
-  // title/seniority leveling. The seniority_normalized field on each
-  // experience reveals title-leveling trajectory separately.
-  career_progression: string | null            // rising/flat/declining/insufficient_data
+  career_progression: string | null            // company-tier movement: rising/flat/declining/insufficient_data
+  title_level_slope: string | null             // title-level movement: rising/flat/declining/insufficient_data
   highest_seniority_reached: string | null     // executive/manager/lead/IC/student/unknown
   experiences: Array<{
     title: string | null
     company: string | null
     company_tier: number | null                // 1-5 from company_year_scores, only if known
+    title_level: number | null                 // 1-10 extracted from title text
     seniority_normalized: string | null        // executive/manager/lead/individual_contributor/student/unknown
     start_date: string | null
     end_date: string | null
@@ -60,7 +59,7 @@ export async function buildNarrativeContext(
 ): Promise<NarrativeContext> {
   const { data: person, error: pErr } = await supabase
     .from('people')
-    .select('full_name, years_experience_estimate, career_stage_assigned, career_progression, highest_seniority_reached')
+    .select('full_name, years_experience_estimate, career_stage_assigned, career_progression, title_level_slope, highest_seniority_reached')
     .eq('person_id', personId)
     .single()
   if (pErr || !person) throw new Error(`Person ${personId} not found: ${pErr?.message ?? 'no row'}`)
@@ -68,7 +67,7 @@ export async function buildNarrativeContext(
   // Experiences — joined with company name, ordered most-recent first
   const { data: expRows } = await supabase
     .from('person_experiences')
-    .select('title_raw, title_normalized, seniority_normalized, start_date, end_date, is_current, duration_months, company_id, companies:company_id ( company_name )')
+    .select('title_raw, title_normalized, title_level, seniority_normalized, start_date, end_date, is_current, duration_months, company_id, companies:company_id ( company_name )')
     .eq('person_id', personId)
     .order('is_current', { ascending: false })
     .order('start_date', { ascending: false })
@@ -105,6 +104,7 @@ export async function buildNarrativeContext(
     const e = raw as unknown as {
       title_raw: string | null
       title_normalized: string | null
+      title_level: number | null
       seniority_normalized: string | null
       start_date: string | null
       end_date: string | null
@@ -117,6 +117,7 @@ export async function buildNarrativeContext(
       title: e.title_normalized || e.title_raw || null,
       company: e.companies?.company_name || null,
       company_tier: tierFor(e.company_id, e.start_date, e.end_date, e.is_current),
+      title_level: e.title_level,
       seniority_normalized: e.seniority_normalized,
       start_date: e.start_date,
       end_date: e.end_date,
@@ -179,6 +180,7 @@ export async function buildNarrativeContext(
     full_name: person.full_name,
     years_experience: person.years_experience_estimate,
     career_stage: careerStage,
+    title_level_slope: person.title_level_slope,
     career_progression: person.career_progression,
     highest_seniority_reached: person.highest_seniority_reached,
     experiences,
@@ -213,9 +215,14 @@ CAREER STAGE vs SENIORITY (do NOT confuse):
 CAREER PROGRESSION (career_progression field):
 - Measures movement in COMPANY TIER across roles, not title leveling. Use the verbatim value (rising/flat/declining/insufficient_data) if you mention it. Never paraphrase as "company progression" — call it "career progression" because that's what the field is named.
 
-SENIORITY SLOPE (derive from the experiences[] sequence):
-- Look at seniority_normalized across experiences ordered most-recent-first. If the level has climbed over time (e.g. individual_contributor → lead → manager) note "rising seniority". If it has stayed flat across many years, note "no observed seniority progression" or similar. If titles lack leveling indicators (e.g. all "Engineer" with no Senior/Staff/Lead qualifier) and seniority_normalized is mostly individual_contributor or unknown, say "title data is insufficient to assess seniority slope".
-- Be specific when the pattern is clear: e.g. "remained at the individual_contributor level across 7 years" is a meaningful observation if the data supports it. Never invent a level the data doesn't show.
+TITLE LEVEL + TITLE LEVEL SLOPE:
+- Each experience may have a title_level (1-10 integer) extracted from the title text. Scale: 1=intern, 2=junior, 3=mid-IC, 4=IC-II, 5=senior, 6=staff/lead, 7=principal, 8=distinguished, 9=VP/director, 10=C-suite.
+- title_level_slope (on the person) is the deterministic trajectory of title_level across recent full-time roles: rising/flat/declining/insufficient_data.
+- When title_level_slope is "flat" and the person has many years of experience, that's a meaningful signal — say so clearly (e.g. "title leveling has remained flat across 7 years of experience"). When it's "rising", note the progression. When "insufficient_data", say title data doesn't carry enough leveling indicators.
+- The title_level and title_level_slope are INDEPENDENT from career_progression (which measures company-tier movement). Both can be mentioned.
+
+SENIORITY (seniority_normalized per experience):
+- seniority_normalized is a coarser band (IC/lead/manager/executive) — useful for noting whether someone crossed from IC to management. Use it to complement title_level, not replace it. Don't mention seniority_normalized if title_level already tells the story.
 
 Output the summary as plain prose. No headings, no bullet points, no JSON.`
 
