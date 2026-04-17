@@ -149,13 +149,15 @@ async function upsertSchool(supabase: SupabaseClient, schoolName: string | null 
 
 /**
  * Infer career stage from years of full-time experience.
+ * Uses the canonical scoring-engine boundaries (0.5/2/5) so the value
+ * written at ingest matches what scoreCandidate() computes later.
  */
 function inferCareerStage(yearsExperience: number | null | undefined): string | null {
   if (yearsExperience === null || yearsExperience === undefined) return null;
 
-  if (yearsExperience <= 0) return 'pre_career';
-  if (yearsExperience < 4) return 'early_career';
-  if (yearsExperience < 10) return 'mid_career';
+  if (yearsExperience < 0.5) return 'pre_career';
+  if (yearsExperience < 2) return 'early_career';
+  if (yearsExperience < 5) return 'mid_career';
   return 'senior_career';
 }
 

@@ -81,13 +81,12 @@ function isInternshipTitle(t) {
   return /\bintern\b|\binternship\b|\bco-?op\b/i.test(t)
 }
 
-// career_stage thresholds match app/api/ingest/route.ts inferCareerStage()
-// (0/4/10) — the scoring engine re-derives its own stage at scoring time.
+// career_stage thresholds — canonical scoring-engine boundaries (0.5/2/5).
 function inferCareerStage(years) {
   if (years === null || years === undefined) return null
-  if (years <= 0) return 'pre_career'
-  if (years < 4) return 'early_career'
-  if (years < 10) return 'mid_career'
+  if (years < 0.5) return 'pre_career'
+  if (years < 2) return 'early_career'
+  if (years < 5) return 'mid_career'
   return 'senior_career'
 }
 

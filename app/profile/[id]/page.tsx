@@ -499,6 +499,7 @@ function ScoreBreakdownTable({ bucket }: { bucket: BucketAssignment }) {
             <td className="px-3 py-2 text-gray-500">
               stage: {b.scoring_stage}
               {b.applied_recruiting_override && <span className="ml-2 text-indigo-600">[recruiting override]</span>}
+              {b.applied_executive_override && <span className="ml-2 text-amber-600">[executive override]</span>}
             </td>
           </tr>
         </tfoot>

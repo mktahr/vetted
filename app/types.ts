@@ -84,6 +84,7 @@ export interface Experience {
   company_id: string | null
   title_raw: string | null
   title_normalized: string | null
+  title_level: number | null
   function_normalized: string | null
   seniority_normalized: string | null
   employment_type_normalized: string | null

@@ -36,11 +36,9 @@ const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE
 // [pattern, match_type, title_level, priority, notes]
 
 const RULES = [
-  // ── Priority 1: Exact overrides that must fire before broad patterns ─────
-  // Bare "manager" titles that are actually IC (product manager, program manager, etc.)
-  // These don't get the manager level bump — they stay at whatever the qualifier says.
-  // NOTE: seniority_rules already handles this for seniority; here we just
-  // prevent "product manager" from getting level 9 (VP/manager band).
+  // ── Priority 1: Overrides that must fire before broad patterns ──────────
+  // "Postdoctoral Fellow" must not match the generic "fellow" rule (level 8).
+  ['postdoctoral', 'contains', 3, 1, 'Postdoctoral fellow/researcher = mid-IC, not Distinguished Fellow level'],
 
   // ── Priority 2: Student / Intern (level 1) ──────────────────────────────
   ['intern', 'contains', 1, 2, 'Any title containing intern'],
