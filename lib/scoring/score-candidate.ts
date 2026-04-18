@@ -118,8 +118,14 @@ const EXECUTIVE_OVERRIDE: StageWeights = {
 const ROLE_SCOPE_BY_SENIORITY: Record<string, number> = {
   executive: 1.0,
   manager: 0.7,
-  lead: 0.5,
+  founder: 0.7,
+  lead_ic: 0.5,
+  lead: 0.5,       // deprecated alias
+  senior_ic: 0.4,
   individual_contributor: 0.3,
+  entry: 0.2,
+  intern: 0.1,
+  student: 0.1,    // deprecated alias
 };
 
 // ─── Bucket thresholds ────────────────────────────────────────────────────

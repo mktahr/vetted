@@ -22,15 +22,24 @@ const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE
 
 // ─── Load seniority_rules + seniority_dictionary ────────────────────────
 
+// Post-migration-010: seniority_rules uses title_pattern + seniority_level
+// columns with exact case-insensitive matching (no match_type).
 const { data: rulesRaw } = await supabase
   .from('seniority_rules')
-  .select('rule_id, pattern, match_type, seniority_normalized, priority')
+  .select('rule_id, title_pattern, seniority_level, priority')
+  .eq('active', true)
   .order('priority', { ascending: true })
   .order('rule_id', { ascending: true })
 const rules = rulesRaw || []
 if (rules.length === 0) {
-  console.error('seniority_rules is empty — run seed-seniority-rules.mjs first')
+  console.error('seniority_rules is empty — run migration 010 first')
   process.exit(1)
+}
+// Build map for O(1) exact lookup
+const ruleMap = new Map()
+for (const r of rules) {
+  const key = r.title_pattern.toLowerCase().trim()
+  if (!ruleMap.has(key)) ruleMap.set(key, r.seniority_level)
 }
 
 const { data: seniorityDict } = await supabase
@@ -38,41 +47,19 @@ const { data: seniorityDict } = await supabase
   .select('seniority_normalized, rank_order')
 const seniorityRank = Object.fromEntries((seniorityDict || []).map(s => [s.seniority_normalized, s.rank_order]))
 
-// ─── Matcher (mirrors lib/normalize/seniority.ts) ─────────────────────
-
-function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
-
-function matchesRule(rawTitle, rule) {
-  const title = (rawTitle || '').toLowerCase().trim()
-  const pattern = rule.pattern.toLowerCase()
-  switch (rule.match_type) {
-    case 'exact':        return title === pattern
-    case 'starts_with':  return title.startsWith(pattern)
-    case 'ends_with':    return title.endsWith(pattern)
-    case 'contains':     return title.includes(pattern)
-    case 'contains_word': {
-      const re = new RegExp(`(^|[^a-z0-9])${escapeRegex(pattern)}($|[^a-z0-9])`, 'i')
-      return re.test(title)
-    }
-    case 'regex': {
-      try { return new RegExp(rule.pattern, 'i').test(title) } catch { return false }
-    }
-    default: return false
-  }
-}
+// ─── Resolver (mirrors lib/normalize/seniority.ts post-migration-010) ──
 
 function resolveSeniority(ctx) {
   const emp = (ctx.employment_type || '').toLowerCase().trim()
-  if (emp === 'internship' || /intern|co-?op/.test(emp)) return 'student'
+  if (emp === 'internship' || /intern|co-?op/.test(emp)) return 'intern'
   if (ctx.role_start_date && ctx.graduation_date) {
     const start = new Date(ctx.role_start_date)
-    if (!isNaN(start.getTime()) && start < ctx.graduation_date) return 'student'
+    if (!isNaN(start.getTime()) && start < ctx.graduation_date) return 'intern'
   }
   const title = (ctx.title || '').trim()
   if (!title) return 'unknown'
-  for (const rule of rules) {
-    if (matchesRule(title, rule)) return rule.seniority_normalized
-  }
+  const hit = ruleMap.get(title.toLowerCase())
+  if (hit) return hit
   return 'individual_contributor'
 }
 

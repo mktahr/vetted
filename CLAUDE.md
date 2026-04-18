@@ -165,33 +165,41 @@ We do NOT use Crust's `years_of_experience_raw` because it includes pre-graduati
 
 ## Seniority System
 
-### Enum (6 values)
-`unknown`, `student`, `individual_contributor`, `lead`, `manager`, `executive`
+### Enum (9 active values + 2 deprecated)
+`unknown`(0) < `intern`(1) < `entry`(2) < `individual_contributor`(3) < `senior_ic`(4) < `lead_ic`(5) < `founder`(6) < `manager`(7) < `executive`(8)
 
-Stored in `seniority_dictionary` with `rank_order` 0–5 (used for `highest_seniority_reached` roll-ups).
+Deprecated aliases kept in the enum for backward compat: `student`(=intern), `lead`(=lead_ic).
+
+Stored in `seniority_dictionary` with `rank_order` 0–8.
+
+| Level | Meaning | Examples |
+|---|---|---|
+| `intern` | Internship, co-op, student worker | SWE Intern, Research Intern |
+| `entry` | Junior, associate, new grad | Associate Engineer, SDE I, Junior PM |
+| `individual_contributor` | Mid-level IC | Software Engineer, SDE II, Product Manager |
+| `senior_ic` | Senior IC | Senior Software Engineer, SDE III, Senior PM |
+| `lead_ic` | Staff, principal, architect, tech lead | Staff Engineer, Principal PM, TLM |
+| `founder` | Company founder/co-founder | Founder, Co-Founder (without CxO qualifier) |
+| `manager` | People manager, director | Engineering Manager, Director of Product |
+| `executive` | VP, C-suite, Head-of | VP Engineering, CTO, Founder & CEO |
 
 ### `seniority_rules` table
 
-Standalone table that drives title→seniority mapping universally. `title_dictionary` no longer stores seniority — all ingest paths go through the rules engine (`lib/normalize/seniority.ts`).
+Comprehensive title→seniority dictionary with 400+ patterns covering engineering, product management, product design, operations, and recruiting. All matching is **case-insensitive exact** (no fuzzy/contains/regex).
 
-Columns: `pattern`, `match_type` (`contains`, `starts_with`, `ends_with`, `exact`, `regex`, `contains_word`), `seniority_normalized`, `priority`, `notes`.
+Columns: `title_pattern`, `seniority_level`, `function_hint`, `priority`, `active`.
 
-**Priority scheme** (lower = evaluated first):
-- **Priority 1** — IC overrides that must beat the Manager catch-all (14 rules). Includes: `product manager`/`pm`/`senior pm`/`program manager`/`account manager`/`marketing manager`/`community manager`/`office manager` (exact), `founding member`/`founding team` (contains), and bare `founder`/`co-founder`/`cofounder` (exact) — the last three default to IC because plain founder titles without a CxO qualifier are ambiguous.
-- **Priority 2** — Executive (27 rules). `starts_with chief`, `ends_with officer`, exact CxO codes (`ceo`/`cto`/`coo`/`cfo`/`cmo`/`cpo`/`cro`/`cbo`/`clo`/`chro`), `contains managing director | general partner | managing partner`, and explicit founder+CxO combos: `founder & ceo` / `founder/ceo` / `founder and ceo` / `co-founder & ceo` / `co-founder/ceo` / `founding ceo` / `founder & cto` / `founder/cto` / `co-founder & cto` / `founding cto` / `founder & coo` / `co-founder & coo`.
-- **Priority 3** — Lead (13 rules). `staff engineer | staff software | senior staff | principal | architect | distinguished engineer | founding engineer | tech lead | technical lead | team lead | tech lead manager`, plus `contains_word tlm | fellow`.
-- **Priority 4** — Student (7 rules). `intern | internship | co-op | coop | student | new grad | graduate student`.
-- **Priority 5** — Manager catch-all (12 rules). `vice president | senior vice president | executive vice president`, `contains_word vp | svp | evp`, `head of`, `director`, `senior manager`, `engineering manager`, `group manager`, exact `manager`.
+Priority 0 = founder+CxO combos that override bare-founder rules. Priority 1 = main dictionary. Priority 2 = short ambiguous patterns (e.g. `pm`, `em`, `tl`). Priority 3 = very generic patterns (`engineer`, `developer`, `designer`).
 
-Total: **73 rules** in the DB at priority breakdown 14/27/13/7/12.
+Includes company-specific ladder mappings: Amazon SDE I/II/III, Google L3–L8, Meta E3–E8. Also covers McKinsey/Bain consulting ladders (analyst→associate→engagement manager→principal→partner).
 
 ### Override logic (in `resolveSeniority`)
 
 Before scanning rules:
-1. If `employment_type` normalizes to `internship` (or raw text matches `/intern|co-?op/`) → `student`
-2. If `role_start_date < earliest post-secondary graduation date` → `student`
+1. If `employment_type` normalizes to `internship` (or raw text matches `/intern|co-?op/`) → `intern`
+2. If `role_start_date < earliest post-secondary graduation date` → `intern`
 
-Then rules are scanned in priority order; first match wins. If no rule matches and the title is non-empty → `individual_contributor`. Empty title → `unknown`.
+Then exact case-insensitive title lookup against the rule map; first match (lowest priority) wins. If no rule matches and the title is non-empty → `individual_contributor`. Empty title → `unknown`.
 
 ---
 
@@ -382,8 +390,8 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 - `employment_type_dictionary` — 20 patterns (full-time, contract, freelance, part-time, internship, board, advisory variants)
 - `degree_dictionary` — 32 patterns (BS, BA, MS, MA, MBA, PhD, JD, MD, Certificate, Bootcamp, Coursework, etc.)
 - `field_of_study_dictionary` — empty (declared in migration, no seeds yet)
-- `seniority_dictionary` — 6 rows (one per enum value with rank_order)
-- `seniority_rules` — 73 rows (see Seniority System section above)
+- `seniority_dictionary` — 11 rows (9 active + 2 deprecated, with rank_order 0–8)
+- `seniority_rules` — 400+ rows, exact case-insensitive matching (see Seniority System section above)
 - `title_level_dictionary` — ~85 patterns mapping title substrings to numeric levels (1–10). Level scale: 1=intern, 2=junior, 3=mid-IC, 4=IC-II, 5=senior/IC-III, 6=staff/lead, 7=principal, 8=distinguished, 9=VP/director, 10=C-suite. Per-experience `title_level` stored on `person_experiences`; trajectory across roles → `people.title_level_slope`.
 - `career_stage_config` — 4 rows (rougher boundaries than scoring engine uses)
 
