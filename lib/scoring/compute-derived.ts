@@ -72,6 +72,14 @@ export async function computeDerivedFields(
   supabase: SupabaseClient,
   personId: string,
 ): Promise<DerivedFields> {
+  // 0. Fetch person-level fields needed for override rules
+  const { data: personRow } = await supabase
+    .from('people')
+    .select('years_experience_estimate')
+    .eq('person_id', personId)
+    .single()
+  const yearsExperience: number | null = personRow?.years_experience_estimate ?? null
+
   // 1. Fetch this person's experiences, ordered oldest → newest
   const { data: expRaw } = await supabase
     .from('person_experiences')
@@ -158,6 +166,29 @@ export async function computeDerivedFields(
     if (rank && rank > maxRank) {
       maxRank = rank
       highestSeniority = e.seniority_normalized
+    }
+  }
+
+  // 4b. INTERIM RULE: "head of" + 9+ years → executive override.
+  //     The dictionary maps "head of" titles to manager (correct for small
+  //     startups), but experienced "head of" leaders at established companies
+  //     are executive-level. Until company-size data is available, use years
+  //     of experience as the proxy. This override runs at derivation time,
+  //     not in the dictionary, so the seniority_rules table stays clean.
+  if (
+    highestSeniority !== 'executive' &&
+    yearsExperience !== null &&
+    yearsExperience >= 9
+  ) {
+    const hasHeadOfTitle = experiences.some(e =>
+      e.title_raw && /\bhead of\b/i.test(e.title_raw)
+    )
+    if (hasHeadOfTitle) {
+      const execRank = seniorityRank['executive']
+      if (execRank && execRank > maxRank) {
+        maxRank = execRank
+        highestSeniority = 'executive'
+      }
     }
   }
 
