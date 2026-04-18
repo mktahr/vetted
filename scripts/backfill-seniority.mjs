@@ -47,6 +47,16 @@ const { data: seniorityDict } = await supabase
   .select('seniority_normalized, rank_order')
 const seniorityRank = Object.fromEntries((seniorityDict || []).map(s => [s.seniority_normalized, s.rank_order]))
 
+// Noise suffixes to strip before retry (mirrors seniority.ts)
+const NOISE_SUFFIX_PATTERNS = [
+  /\s*\(.*?\)\s*$/,
+  /\s*-\s*(remote|contract|freelance|part[- ]time|intern|interim)$/i,
+  /\s*[–—]\s*.+$/,
+  /\s*@\s*.+$/,
+  /\s*[|\/]\s*.+$/,
+  /,\s*.+$/,
+]
+
 // ─── Resolver (mirrors lib/normalize/seniority.ts post-migration-010) ──
 
 function resolveSeniority(ctx) {
@@ -58,8 +68,18 @@ function resolveSeniority(ctx) {
   }
   const title = (ctx.title || '').trim()
   if (!title) return 'unknown'
-  const hit = ruleMap.get(title.toLowerCase())
+  const normalized = title.toLowerCase().replace(/\s+/g, ' ')
+  const hit = ruleMap.get(normalized)
   if (hit) return hit
+  // Strip noise suffixes and retry
+  let stripped = normalized
+  for (const pattern of NOISE_SUFFIX_PATTERNS) {
+    stripped = stripped.replace(pattern, '').trim()
+  }
+  if (stripped !== normalized && stripped.length > 0) {
+    const hit2 = ruleMap.get(stripped)
+    if (hit2) return hit2
+  }
   return 'individual_contributor'
 }
 

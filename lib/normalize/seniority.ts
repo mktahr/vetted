@@ -40,6 +40,17 @@ export interface SeniorityRule {
   active: boolean
 }
 
+// Noise suffixes to strip before retrying the lookup — same patterns
+// used by titles.ts for title_dictionary matching.
+const NOISE_SUFFIX_PATTERNS = [
+  /\s*\(.*?\)\s*$/,          // (Remote), (Contract), (Part-Time)
+  /\s*-\s*(remote|contract|freelance|part[- ]time|intern|interim)$/i,
+  /\s*[–—]\s*.+$/,           // – Division Name, — Team (em/en dash)
+  /\s*@\s*.+$/,              // @ Company Name
+  /\s*[|\/]\s*.+$/,          // | Division or / Team
+  /,\s*.+$/,                 // , Something
+]
+
 // Process-level cache — rules are stable across a process's lifetime.
 let cachedRules: SeniorityRule[] | null = null
 // Fast lookup map built from the rule list (case-insensitive exact match).
@@ -103,9 +114,22 @@ export function resolveSeniorityFromRules(
   if (!title) return 'unknown'
 
   // 3. Exact case-insensitive lookup against the rule map
+  const normalized = title.toLowerCase().replace(/\s+/g, ' ')
   if (ruleMap) {
-    const hit = ruleMap.get(title.toLowerCase())
+    const hit = ruleMap.get(normalized)
     if (hit) return hit
+
+    // 3b. Strip noise suffixes and retry — same patterns as titles.ts.
+    // Handles "Senior Staff Software Engineer – Investment Group Technologies",
+    // "Product Manager (Remote)", "Engineer - Contract", etc.
+    let stripped = normalized
+    for (const pattern of NOISE_SUFFIX_PATTERNS) {
+      stripped = stripped.replace(pattern, '').trim()
+    }
+    if (stripped !== normalized && stripped.length > 0) {
+      const hit2 = ruleMap.get(stripped)
+      if (hit2) return hit2
+    }
   }
 
   // 4. Fallback: we have a title but nothing matched → IC

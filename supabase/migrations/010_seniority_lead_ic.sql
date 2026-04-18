@@ -273,7 +273,7 @@ INSERT INTO seniority_rules (title_pattern, seniority_level, function_hint, prio
 ('evp of engineering', 'executive', 'engineering', 1, true),
 ('cto', 'executive', 'engineering', 1, true),
 ('chief technology officer', 'executive', 'engineering', 1, true),
-('head of engineering', 'executive', 'engineering', 1, true),
+('head of engineering', 'manager', 'engineering', 1, true),
 ('google l8', 'executive', 'engineering', 1, true),
 ('google fellow', 'executive', 'engineering', 1, true),
 ('meta e8', 'executive', 'engineering', 1, true),
@@ -327,7 +327,7 @@ INSERT INTO seniority_rules (title_pattern, seniority_level, function_hint, prio
 ('vice president of product', 'executive', 'product_management', 1, true),
 ('chief product officer', 'executive', 'product_management', 1, true),
 ('cpo', 'executive', 'product_management', 2, true),
-('head of product', 'executive', 'product_management', 1, true),
+('head of product', 'manager', 'product_management', 1, true),
 ('svp of product', 'executive', 'product_management', 1, true);
 
 -- ============================================================
@@ -387,8 +387,8 @@ INSERT INTO seniority_rules (title_pattern, seniority_level, function_hint, prio
 ('vp of design', 'executive', 'product_design', 1, true),
 ('vp design', 'executive', 'product_design', 1, true),
 ('chief design officer', 'executive', 'product_design', 1, true),
-('head of design', 'executive', 'product_design', 1, true),
-('head of ux', 'executive', 'product_design', 1, true);
+('head of design', 'manager', 'product_design', 1, true),
+('head of ux', 'manager', 'product_design', 1, true);
 
 -- ============================================================
 -- OPERATIONS
@@ -467,8 +467,8 @@ INSERT INTO seniority_rules (title_pattern, seniority_level, function_hint, prio
 ('vp operations', 'executive', 'operations', 1, true),
 ('chief operating officer', 'executive', 'operations', 1, true),
 ('coo', 'executive', 'operations', 1, true),
-('head of operations', 'executive', 'operations', 1, true),
-('head of strategy', 'executive', 'operations', 1, true),
+('head of operations', 'manager', 'operations', 1, true),
+('head of strategy', 'manager', 'operations', 1, true),
 ('vp of strategy', 'executive', 'operations', 1, true),
 ('svp of operations', 'executive', 'operations', 1, true),
 ('mckinsey partner', 'executive', 'operations', 1, true),
@@ -547,9 +547,9 @@ INSERT INTO seniority_rules (title_pattern, seniority_level, function_hint, prio
 ('chief people officer', 'executive', 'recruiting', 1, true),
 ('chief human resources officer', 'executive', 'recruiting', 1, true),
 ('chro', 'executive', 'recruiting', 1, true),
-('head of people', 'executive', 'recruiting', 1, true),
-('head of talent', 'executive', 'recruiting', 1, true),
-('head of hr', 'executive', 'recruiting', 1, true),
+('head of people', 'manager', 'recruiting', 1, true),
+('head of talent', 'manager', 'recruiting', 1, true),
+('head of hr', 'manager', 'recruiting', 1, true),
 ('svp of people', 'executive', 'recruiting', 1, true);
 
 -- ============================================================
