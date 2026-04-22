@@ -136,6 +136,131 @@ export function resolveSeniorityFromRules(
   return 'individual_contributor'
 }
 
+// ─── Description-based seniority scan ───────────────────────────────────────
+//
+// When the title resolves to individual_contributor or unknown, scan
+// description_raw for seniority-indicating keywords. Word-boundary matching
+// only — "senior" matches but "seniority" does not.
+
+export interface SeniorityResult {
+  level: SeniorityLevel
+  source: 'title' | 'description' | 'internship_override' | 'pre_graduation_override' | 'fallback'
+}
+
+// Ordered by rank (highest first) so the scan returns the highest match.
+const DESCRIPTION_SENIORITY_SIGNALS: Array<{ pattern: RegExp; level: SeniorityLevel; rank: number }> = [
+  { pattern: /\bvice president\b/i, level: 'executive', rank: 8 },
+  { pattern: /\bvp\b/i, level: 'executive', rank: 8 },
+  { pattern: /\bmanaging director\b/i, level: 'executive', rank: 8 },
+  { pattern: /\bdirector\b/i, level: 'manager', rank: 7 },
+  { pattern: /\bengineering manager\b/i, level: 'manager', rank: 7 },
+  { pattern: /\bmanager\b/i, level: 'manager', rank: 7 },
+  { pattern: /\bfounder\b/i, level: 'founder', rank: 6 },
+  { pattern: /\bco-founder\b/i, level: 'founder', rank: 6 },
+  { pattern: /\bprincipal\b/i, level: 'lead_ic', rank: 5 },
+  { pattern: /\bstaff\b/i, level: 'lead_ic', rank: 5 },
+  { pattern: /\btech lead\b/i, level: 'lead_ic', rank: 5 },
+  { pattern: /\btechnical lead\b/i, level: 'lead_ic', rank: 5 },
+  { pattern: /\blead\b/i, level: 'lead_ic', rank: 5 },
+  { pattern: /\bsenior\b/i, level: 'senior_ic', rank: 4 },
+  { pattern: /\bsr\.\b/i, level: 'senior_ic', rank: 4 },
+  { pattern: /\bjunior\b/i, level: 'entry', rank: 2 },
+  { pattern: /\bjr\.\b/i, level: 'entry', rank: 2 },
+  { pattern: /\bassociate\b/i, level: 'entry', rank: 2 },
+  { pattern: /\bnew grad\b/i, level: 'entry', rank: 2 },
+  { pattern: /\binternship\b/i, level: 'intern', rank: 1 },
+  { pattern: /\bintern\b/i, level: 'intern', rank: 1 },
+]
+
+export function scanDescriptionForSeniority(
+  descriptionRaw: string | null | undefined,
+): SeniorityLevel | null {
+  if (!descriptionRaw || descriptionRaw.trim().length < 10) return null
+
+  let bestLevel: SeniorityLevel | null = null
+  let bestRank = 0
+
+  for (const { pattern, level, rank } of DESCRIPTION_SENIORITY_SIGNALS) {
+    if (pattern.test(descriptionRaw)) {
+      if (rank > bestRank) {
+        bestRank = rank
+        bestLevel = level
+      }
+    }
+  }
+
+  return bestLevel
+}
+
+// Seniority levels where a description scan should NOT override.
+// If the title already gave a specific signal, trust it.
+const TITLE_IS_AUTHORITATIVE = new Set<SeniorityLevel>([
+  'intern', 'entry', 'senior_ic', 'lead_ic', 'founder', 'manager', 'executive',
+])
+
+/**
+ * Resolve seniority from title + optional description scan.
+ * Returns both the resolved level and the source of the resolution.
+ */
+export function resolveSeniorityWithDescription(
+  ctx: SeniorityContext & { description_raw?: string | null },
+  _rules: SeniorityRule[],
+): SeniorityResult {
+  // 1. Internship override
+  const emp = (ctx.employment_type || '').toLowerCase().trim()
+  if (emp === 'internship' || /intern|co-?op/.test(emp)) {
+    return { level: 'intern', source: 'internship_override' }
+  }
+
+  // 2. Pre-graduation override
+  if (ctx.role_start_date && ctx.person_graduation_date) {
+    const start = new Date(ctx.role_start_date)
+    if (!isNaN(start.getTime()) && start < ctx.person_graduation_date) {
+      return { level: 'intern', source: 'pre_graduation_override' }
+    }
+  }
+
+  const title = (ctx.title || '').trim()
+  if (!title) {
+    // No title — try description as last resort
+    const descLevel = scanDescriptionForSeniority(ctx.description_raw)
+    if (descLevel) return { level: descLevel, source: 'description' }
+    return { level: 'unknown', source: 'fallback' }
+  }
+
+  // 3. Title-based resolution (same as resolveSeniorityFromRules)
+  const normalized = title.toLowerCase().replace(/\s+/g, ' ')
+  let titleLevel: SeniorityLevel | null = null
+
+  if (ruleMap) {
+    titleLevel = ruleMap.get(normalized) ?? null
+    if (!titleLevel) {
+      let stripped = normalized
+      for (const pattern of NOISE_SUFFIX_PATTERNS) {
+        stripped = stripped.replace(pattern, '').trim()
+      }
+      if (stripped !== normalized && stripped.length > 0) {
+        titleLevel = ruleMap.get(stripped) ?? null
+      }
+    }
+  }
+
+  // If title gave a specific (non-IC) answer, trust it — title wins
+  if (titleLevel && TITLE_IS_AUTHORITATIVE.has(titleLevel)) {
+    return { level: titleLevel, source: 'title' }
+  }
+
+  // 4. Title was IC or no match — try description scan
+  const descLevel = scanDescriptionForSeniority(ctx.description_raw)
+  if (descLevel) {
+    return { level: descLevel, source: 'description' }
+  }
+
+  // 5. Fallback to title result or IC
+  if (titleLevel) return { level: titleLevel, source: 'title' }
+  return { level: 'individual_contributor', source: 'fallback' }
+}
+
 /** Convenience: load rules and resolve in one call. */
 export async function resolveSeniority(
   supabase: SupabaseClient,

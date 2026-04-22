@@ -20,6 +20,8 @@ export {
   loadSeniorityRules,
   resolveSeniority,
   resolveSeniorityFromRules,
+  resolveSeniorityWithDescription,
+  scanDescriptionForSeniority,
   matchesRule,
   graduationDateFromEducation,
 } from './seniority';
@@ -28,4 +30,5 @@ export type {
   SeniorityMatchType,
   SeniorityRule,
   SeniorityContext,
+  SeniorityResult,
 } from './seniority';

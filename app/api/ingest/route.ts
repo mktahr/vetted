@@ -15,7 +15,7 @@ import {
   normalizeFieldOfStudy,
   normalizeEmploymentType,
   loadSeniorityRules,
-  resolveSeniorityFromRules,
+  resolveSeniorityWithDescription,
   graduationDateFromEducation,
   loadTitleLevelRules,
   extractTitleLevel,
@@ -325,21 +325,31 @@ export async function POST(req: NextRequest) {
       : (await normalizeEmploymentType(supabase, exp.employment_type)).employment_type_normalized;
     const employmentType = empFromTitle || empFromRaw || 'unknown';
 
-    // Resolve seniority from the new seniority_rules engine (not title_dict).
-    // Student overrides fire for employment_type='internship' OR when the role
-    // started before the person's graduation end_year.
+    // Resolve seniority: title first, then description scan if title is ambiguous.
     const roleStartDate = toDateString(exp.start_date);
-    const seniority = resolveSeniorityFromRules(
+    const seniorityResult = resolveSeniorityWithDescription(
       {
         title: exp.title,
         employment_type: employmentType,
         role_start_date: roleStartDate,
         person_graduation_date: personGradDate,
+        description_raw: exp.description,
       },
       seniorityRules,
     );
+    const seniority = seniorityResult.level;
 
-    const titleLevel = extractTitleLevel(exp.title, titleLevelRules);
+    let titleLevel = extractTitleLevel(exp.title, titleLevelRules);
+    // When description upgrades seniority beyond what the title implied,
+    // also upgrade title_level so slope calculations reflect the real level.
+    if (seniorityResult.source === 'description' && titleLevel !== null) {
+      const SENIORITY_TO_TITLE_LEVEL: Record<string, number> = {
+        intern: 1, entry: 2, individual_contributor: 3, senior_ic: 5,
+        lead_ic: 6, founder: 6, manager: 9, executive: 10,
+      };
+      const impliedLevel = SENIORITY_TO_TITLE_LEVEL[seniority] ?? titleLevel;
+      if (impliedLevel > titleLevel) titleLevel = impliedLevel;
+    }
 
     // Specialty: prefer specialty_dictionary (richer patterns) over title_dictionary
     const specialtyMatch = resolveSpecialty(
@@ -360,6 +370,7 @@ export async function POST(req: NextRequest) {
       function_normalized: specialtyMatch?.function_normalized || expTitleData?.function_normalized || null,
       specialty_normalized: resolvedSpecialty,
       seniority_normalized: seniority,
+      seniority_source: seniorityResult.source,
       employment_type_normalized: employmentType,
       title_level: titleLevel,
       start_date: roleStartDate,
