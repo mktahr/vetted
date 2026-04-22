@@ -13,6 +13,9 @@ export type { EmploymentTypeNorm, EmploymentTypeMatch } from './employment';
 export { loadTitleLevelRules, extractTitleLevel, extractTitleLevelFromDB } from './title-level';
 export type { TitleLevelRule } from './title-level';
 
+export { loadSpecialtyDictionary, resolveSpecialty, aggregatePersonSpecialties } from './specialty';
+export type { SpecialtyDictionaryEntry, SpecialtyMatch, PersonSpecialties } from './specialty';
+
 export {
   loadSeniorityRules,
   resolveSeniority,

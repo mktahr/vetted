@@ -76,6 +76,7 @@ export default function ProfileTable() {
   const [companySel, setCompanySel] = useState<string[]>([])     // company_id values
   const [schoolSel, setSchoolSel] = useState<string[]>([])       // school_id values
   const [locationSel, setLocationSel] = useState<string[]>([])   // location_name values
+  const [specialtySel, setSpecialtySel] = useState<string[]>([]) // primary_specialty values
 
   // Years-of-experience range (min/max inclusive)
   const [yearsMin, setYearsMin] = useState<string>('')
@@ -87,6 +88,7 @@ export default function ProfileTable() {
   const [companyOptions, setCompanyOptions] = useState<MultiSelectOption[]>([])
   const [schoolOptions, setSchoolOptions] = useState<MultiSelectOption[]>([])
   const [locationOptions, setLocationOptions] = useState<MultiSelectOption[]>([])
+  const [specialtyOptions, setSpecialtyOptions] = useState<MultiSelectOption[]>([])
 
   // ─── Fetch everything in parallel ────────────────────────────────────────
   useEffect(() => {
@@ -188,6 +190,15 @@ export default function ProfileTable() {
           Array.from(locs).sort().map(l => ({ value: l, label: l }))
         )
 
+        // Specialty options from actual data
+        const specSet = new Set<string>()
+        for (const row of rows) {
+          if (row.primary_specialty) specSet.add(row.primary_specialty)
+        }
+        setSpecialtyOptions(
+          Array.from(specSet).sort().map(s => ({ value: s, label: s.replace(/_/g, ' ') }))
+        )
+
         setError(null)
       } catch (err: any) {
         console.error('Error fetching people:', err)
@@ -257,6 +268,12 @@ export default function ProfileTable() {
       rows = rows.filter(p => p.location_name && s.has(p.location_name))
     }
 
+    // Multi-select: specialty
+    if (specialtySel.length > 0) {
+      const s = new Set(specialtySel)
+      rows = rows.filter(p => p.primary_specialty && s.has(p.primary_specialty))
+    }
+
     // Years-of-experience range
     const minN = yearsMin === '' ? null : parseFloat(yearsMin)
     const maxN = yearsMax === '' ? null : parseFloat(yearsMax)
@@ -276,7 +293,7 @@ export default function ProfileTable() {
     }
 
     return rows
-  }, [people, searchQuery, bucketSel, stageSel, functionSel, senioritySel, companySel, schoolSel, locationSel, yearsMin, yearsMax, sortField, sortDirection])
+  }, [people, searchQuery, bucketSel, stageSel, functionSel, senioritySel, companySel, schoolSel, locationSel, specialtySel, yearsMin, yearsMax, sortField, sortDirection])
 
   const activeFilterCount =
     (bucketSel.length > 0 ? 1 : 0) +
@@ -286,6 +303,7 @@ export default function ProfileTable() {
     (companySel.length > 0 ? 1 : 0) +
     (schoolSel.length > 0 ? 1 : 0) +
     (locationSel.length > 0 ? 1 : 0) +
+    (specialtySel.length > 0 ? 1 : 0) +
     (yearsMin !== '' || yearsMax !== '' ? 1 : 0)
 
   const clearAllFilters = () => {
@@ -297,6 +315,7 @@ export default function ProfileTable() {
     setCompanySel([])
     setSchoolSel([])
     setLocationSel([])
+    setSpecialtySel([])
     setYearsMin('')
     setYearsMax('')
   }
@@ -416,6 +435,14 @@ export default function ProfileTable() {
           onChange={setLocationSel}
           placeholder="Any location"
           emptyMessage="No locations match"
+        />
+        <MultiSelect
+          label="Specialty"
+          options={specialtyOptions}
+          selected={specialtySel}
+          onChange={setSpecialtySel}
+          placeholder="Any specialty"
+          emptyMessage="No specialties match"
         />
 
         {/* Years of experience range */}

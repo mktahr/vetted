@@ -286,6 +286,16 @@ export default function ProfilePage() {
 
         {/* Derived signals */}
         <div className="flex flex-wrap gap-2 mb-6">
+          {person.primary_specialty && (
+            <span className="px-2 py-1 bg-cyan-50 text-cyan-700 rounded text-xs border border-cyan-200">
+              {person.primary_specialty.replace(/_/g, ' ')}
+            </span>
+          )}
+          {person.specialty_transition_flag && person.historical_specialty && (
+            <span className="px-2 py-1 bg-amber-50 text-amber-700 rounded text-xs border border-amber-200">
+              career transition — previously {person.historical_specialty.replace(/_/g, ' ')}
+            </span>
+          )}
           {person.career_progression && (
             <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-xs border border-indigo-200">
               progression: {person.career_progression}

@@ -20,11 +20,16 @@
 // scoreCandidate() reads these fields, so this must run BEFORE scoring.
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { aggregatePersonSpecialties, type PersonSpecialties } from '@/lib/normalize/specialty'
 
 export interface DerivedFields {
   career_progression: 'rising' | 'flat' | 'declining' | 'insufficient_data' | null
   highest_seniority_reached: string | null
   title_level_slope: 'rising' | 'flat' | 'declining' | 'insufficient_data' | null
+  primary_specialty: string | null
+  secondary_specialty: string | null
+  historical_specialty: string | null
+  specialty_transition_flag: boolean
   has_early_stage_experience: boolean
   early_stage_companies_count: number
   has_hypergrowth_experience: boolean
@@ -35,6 +40,7 @@ interface ExperienceRow {
   company_id: string | null
   title_raw: string | null
   title_level: number | null
+  specialty_normalized: string | null
   seniority_normalized: string | null
   employment_type_normalized: string | null
   start_date: string | null
@@ -83,7 +89,7 @@ export async function computeDerivedFields(
   // 1. Fetch this person's experiences, ordered oldest → newest
   const { data: expRaw } = await supabase
     .from('person_experiences')
-    .select('company_id, title_raw, title_level, seniority_normalized, employment_type_normalized, start_date, end_date, is_current')
+    .select('company_id, title_raw, title_level, specialty_normalized, seniority_normalized, employment_type_normalized, start_date, end_date, is_current')
     .eq('person_id', personId)
     .order('start_date', { ascending: true, nullsFirst: false })
 
@@ -251,10 +257,25 @@ export async function computeDerivedFields(
     }
   }
 
+  // 8. Person-level specialty aggregation (most-recent first for recency weighting)
+  const experiencesRecentFirst = [...experiences].reverse()
+  const specialties: PersonSpecialties = aggregatePersonSpecialties(
+    experiencesRecentFirst.map(e => ({
+      specialty_normalized: e.specialty_normalized,
+      is_current: e.is_current,
+      employment_type_normalized: e.employment_type_normalized,
+      title_raw: e.title_raw,
+    })),
+  )
+
   return {
     career_progression: careerProgression,
     highest_seniority_reached: highestSeniority,
     title_level_slope: titleLevelSlope,
+    primary_specialty: specialties.primary_specialty,
+    secondary_specialty: specialties.secondary_specialty,
+    historical_specialty: specialties.historical_specialty,
+    specialty_transition_flag: specialties.specialty_transition_flag,
     has_early_stage_experience: earlyStageCompanyIds.size > 0,
     early_stage_companies_count: earlyStageCompanyIds.size,
     has_hypergrowth_experience: hyperCompanyIds.size > 0,
