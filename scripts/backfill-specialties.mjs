@@ -54,12 +54,24 @@ const SENIORITY_PREFIXES = [
   'senior ', 'lead ', 'junior ', 'associate ',
 ]
 
+const SEPARATOR_PATTERNS = [/\s*[|\/]\s*/, /\s*[–—]\s*/, /,\s*/]
+
 function stripTitle(raw) {
   const normalized = raw.toLowerCase().trim().replace(/\s+/g, ' ')
   const variants = [normalized]
+  // Extract parts from separator-delimited titles before stripping noise.
+  // "Senior Software Engineer | Machine Learning" → try "machine learning" too.
+  for (const sep of SEPARATOR_PATTERNS) {
+    if (sep.test(normalized)) {
+      const parts = normalized.split(sep).map(p => p.trim()).filter(p => p.length > 0)
+      for (const part of parts) {
+        if (part !== normalized && !variants.includes(part)) variants.push(part)
+      }
+    }
+  }
   let stripped = normalized
   for (const p of NOISE_SUFFIX) stripped = stripped.replace(p, '').trim()
-  if (stripped !== normalized && stripped.length > 0) variants.push(stripped)
+  if (stripped !== normalized && stripped.length > 0 && !variants.includes(stripped)) variants.push(stripped)
   const bases = [...variants]
   for (const prefix of SENIORITY_PREFIXES) {
     for (const v of bases) {
@@ -77,9 +89,19 @@ function stripTitle(raw) {
 function resolveSpecialty(titleRaw, descriptionRaw, skillsTags) {
   // Pass 1: title
   if (titleRaw) {
-    for (const v of stripTitle(titleRaw)) {
+    const variants = stripTitle(titleRaw)
+    for (const v of variants) {
       const hit = titleMap.get(v)
       if (hit) return hit
+    }
+    // Pass 1b: separator fragments against keyword_signals
+    for (const v of variants) {
+      for (const entry of dict) {
+        if (!entry.keyword_signals?.length) continue
+        for (const kw of entry.keyword_signals) {
+          if (v === kw.toLowerCase()) return entry.specialty_normalized
+        }
+      }
     }
   }
   // Pass 2: keywords in description (need ≥2 matches)

@@ -93,11 +93,30 @@ const SENIORITY_PREFIXES = [
   'senior staff ', 'distinguished ',
 ]
 
+// Patterns that split on separators — the part AFTER the separator may
+// contain specialty signals (e.g. "Senior SWE | Machine Learning").
+const SEPARATOR_PATTERNS = [
+  /\s*[|\/]\s*/,     // | or /
+  /\s*[–—]\s*/,      // em/en dash
+  /,\s*/,            // comma
+]
+
 function stripTitle(raw: string): string[] {
   const normalized = raw.toLowerCase().trim().replace(/\s+/g, ' ')
   const variants = [normalized]
 
-  // Strip noise suffixes
+  // Extract parts from separator-delimited titles BEFORE stripping noise.
+  // "Senior Software Engineer | Machine Learning" → try "machine learning" too.
+  for (const sep of SEPARATOR_PATTERNS) {
+    if (sep.test(normalized)) {
+      const parts = normalized.split(sep).map(p => p.trim()).filter(p => p.length > 0)
+      for (const part of parts) {
+        if (part !== normalized) variants.push(part)
+      }
+    }
+  }
+
+  // Strip noise suffixes (parentheses, @, etc.)
   let stripped = normalized
   for (const pattern of NOISE_SUFFIX_PATTERNS) {
     stripped = stripped.replace(pattern, '').trim()
@@ -106,7 +125,7 @@ function stripTitle(raw: string): string[] {
     variants.push(stripped)
   }
 
-  // Strip seniority prefixes from both forms
+  // Strip seniority prefixes from all forms collected so far
   const bases = [...variants]
   for (const prefix of SENIORITY_PREFIXES) {
     for (const v of bases) {
@@ -141,6 +160,25 @@ export function resolveSpecialty(
           function_normalized: hit.function_norm,
           match_source: 'title',
           signal_count: 1,
+        }
+      }
+    }
+
+    // Pass 1b: separator-extracted fragments that didn't match as full titles
+    // may still be keyword signals (e.g. "Machine Learning" from
+    // "Senior SWE | Machine Learning"). Scan fragments against keyword_signals.
+    for (const variant of variants) {
+      for (const entry of cachedEntries) {
+        if (!entry.keyword_signals?.length) continue
+        for (const kw of entry.keyword_signals) {
+          if (variant === kw.toLowerCase()) {
+            return {
+              specialty_normalized: entry.specialty_normalized,
+              function_normalized: entry.function_normalized,
+              match_source: 'title',
+              signal_count: 1,
+            }
+          }
         }
       }
     }
