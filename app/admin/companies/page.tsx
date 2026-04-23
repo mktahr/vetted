@@ -39,6 +39,7 @@ export default function CompaniesListPage() {
   const [industryFilter, setIndustryFilter] = useState('')
   const [bucketFilter, setBucketFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [reviewFilter, setReviewFilter] = useState('')
 
   // Sort
   const [sortBy, setSortBy] = useState<SortBy>('name_asc')
@@ -138,6 +139,8 @@ export default function CompaniesListPage() {
     if (industryFilter) rows = rows.filter(c => c.primary_industry_tag === industryFilter)
     if (bucketFilter)   rows = rows.filter(c => c.company_bucket === bucketFilter)
     if (statusFilter)   rows = rows.filter(c => c.current_status === statusFilter)
+    if (reviewFilter === 'scored') rows = rows.filter(c => c.manual_review_status === 'reviewed' || c.manual_review_status === 'locked')
+    if (reviewFilter === 'unscored') rows = rows.filter(c => c.manual_review_status === 'unreviewed')
 
     if (sortBy === 'name_asc') {
       rows.sort((a, b) => a.company_name.localeCompare(b.company_name))
@@ -158,14 +161,15 @@ export default function CompaniesListPage() {
     }
 
     return rows
-  }, [companies, searchQuery, industryFilter, bucketFilter, statusFilter, sortBy, sortYear, sortFunction, scoresByCompany, functionScoreByCompany])
+  }, [companies, searchQuery, industryFilter, bucketFilter, statusFilter, reviewFilter, sortBy, sortYear, sortFunction, scoresByCompany, functionScoreByCompany])
 
-  const activeFilters = [industryFilter, bucketFilter, statusFilter].filter(Boolean).length
+  const activeFilters = [industryFilter, bucketFilter, statusFilter, reviewFilter].filter(Boolean).length
   const clearAll = () => {
     setSearchQuery('')
     setIndustryFilter('')
     setBucketFilter('')
     setStatusFilter('')
+    setReviewFilter('')
   }
 
   function toggleSelect(id: string) {
@@ -303,6 +307,19 @@ export default function CompaniesListPage() {
           </select>
         </div>
 
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Review Status</label>
+          <select
+            value={reviewFilter}
+            onChange={(e) => setReviewFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All</option>
+            <option value="scored">Scored only</option>
+            <option value="unscored">Unscored only</option>
+          </select>
+        </div>
+
         <div className="border-l border-gray-300 pl-3 ml-2 flex gap-3 items-end">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Sort by</label>
@@ -430,6 +447,11 @@ export default function CompaniesListPage() {
                       <div className="flex items-center gap-2">
                         <CompanyLogo domain={guessDomain(c.company_name)} companyName={c.company_name} size={20} />
                         <span className="text-blue-600 font-medium">{c.company_name}</span>
+                        {c.manual_review_status === 'reviewed' || c.manual_review_status === 'locked' ? (
+                          <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] rounded border border-emerald-200 font-medium">Scored</span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 bg-gray-50 text-gray-400 text-[10px] rounded border border-gray-200">Unscored</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">{c.primary_industry_tag || '—'}</td>
@@ -452,11 +474,14 @@ export default function CompaniesListPage() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm" onClick={(e) => e.stopPropagation()}>
                       {c.linkedin_url ? (
-                        <a href={c.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline">
-                          View
+                        <a href={c.linkedin_url} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800"
+                          title={c.linkedin_url}
+                        >
+                          <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                         </a>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-gray-300">—</span>
                       )}
                     </td>
                   </tr>
