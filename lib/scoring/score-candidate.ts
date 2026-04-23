@@ -359,14 +359,17 @@ export async function scoreCandidate(
     .eq('person_id', personId);
   const education: EducationRow[] = eduRaw || [];
 
-  // 4. All company_year_scores for referenced companies
+  // 4. All company_year_scores + company_function_scores for referenced companies
   const companyIds = Array.from(new Set(experiences.map(e => e.company_id).filter(Boolean))) as string[];
   let yearScores: CompanyYearScore[] = [];
+  let functionScores: Array<{ company_id: string; function_normalized: string; function_score: number }> = [];
   if (companyIds.length > 0) {
-    const { data } = await supabase
-      .from('company_year_scores')
-      .select('company_id, year, company_score')
-      .in('company_id', companyIds);
+    const [ysRes, fsRes] = await Promise.all([
+      supabase.from('company_year_scores').select('company_id, year, company_score').in('company_id', companyIds),
+      supabase.from('company_function_scores').select('company_id, function_normalized, function_score').in('company_id', companyIds),
+    ]);
+    functionScores = fsRes.data || [];
+    const { data } = ysRes;
     yearScores = data || [];
   }
 
@@ -555,12 +558,62 @@ export async function scoreCandidate(
   }
 
   // ─────────────────────────────────────────────────────────────────────
-  // BONUS: remaining signals (not yet sourced in schema — skipped)
-  // hackathons, clubs, labs, publications, open_source, fellowships,
-  // biz_unit, company_function_quality
+  // BONUS: company_function_quality — sourced from company_function_scores.
+  // If the candidate's current function has a function_score for their
+  // most recent company, use it. Otherwise fall back to the company's
+  // overall year score (explicit fallback, not assumed).
+  // ─────────────────────────────────────────────────────────────────────
+  if ('company_function_quality' in (weights.bonus || {})) {
+    const fullTime = experiences.filter(e => !isInternship(e));
+    const mostRecent = fullTime[0];
+    let fqScore = 0;
+    let fqNote = 'No function score data';
+
+    if (mostRecent?.company_id && functionName) {
+      // Map candidate function to company function score categories
+      const FUNCTION_MAP: Record<string, string> = {
+        engineering: 'engineering', product: 'product', design: 'design',
+        sales: 'go_to_market', marketing: 'go_to_market',
+        operations: 'operations', finance: 'operations',
+        customer_success: 'customer_success',
+        recruiting: 'operations', people_hr: 'operations',
+      };
+      const mappedFn = FUNCTION_MAP[functionName] || functionName;
+      const fnMatch = functionScores.find(fs =>
+        fs.company_id === mostRecent.company_id && fs.function_normalized === mappedFn
+      );
+
+      if (fnMatch) {
+        fqScore = fnMatch.function_score;
+        fqNote = `${mappedFn} function score: ${fqScore}/5`;
+      } else {
+        // Explicit fallback: use the company's overall year score for the most recent role
+        const overallScore = experienceCompanyScore(mostRecent, yearScores);
+        if (overallScore !== null) {
+          fqScore = overallScore;
+          fqNote = `No function score — fallback to overall company score: ${overallScore.toFixed(1)}/5`;
+        } else {
+          fqNote = 'No function score, company not in scored set';
+        }
+      }
+    }
+
+    components.push({
+      name: 'company_function_quality',
+      category: 'bonus',
+      weight: weights.bonus!.company_function_quality,
+      raw: fqScore / 5,
+      points: (fqScore / 5) * weights.bonus!.company_function_quality,
+      note: fqNote,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // BONUS: remaining signals (not yet sourced — skipped)
+  // hackathons, clubs, labs, publications, open_source, fellowships, biz_unit
   // ─────────────────────────────────────────────────────────────────────
   const unsourcedBonus = ['hackathons', 'clubs', 'labs', 'publications', 'open_source',
-                          'fellowships', 'biz_unit', 'company_function_quality'];
+                          'fellowships', 'biz_unit'];
   for (const name of unsourcedBonus) {
     if (name in (weights.bonus || {})) {
       components.push({

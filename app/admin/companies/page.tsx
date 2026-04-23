@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Company, CompanyBucket, CompanyStatus, CompanyYearScore, CompanyFunctionScore } from '@/app/types'
 import CompanyLogo, { guessDomain } from '@/app/components/CompanyLogo'
+import { COMPANY_FUNCTIONS } from '@/app/constants'
 
 const BUCKET_OPTIONS: Array<{ value: CompanyBucket; label: string }> = [
   { value: 'static_mature',    label: 'Static Mature' },
@@ -27,7 +28,6 @@ export default function CompaniesListPage() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [yearScoresAll, setYearScoresAll] = useState<CompanyYearScore[]>([])
   const [functionScoresAll, setFunctionScoresAll] = useState<CompanyFunctionScore[]>([])
-  const [functionOptions, setFunctionOptions] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -79,12 +79,8 @@ export default function CompaniesListPage() {
           .select('company_id, function_normalized, year, function_score')
         setFunctionScoresAll(fs || [])
 
-        const { data: fns } = await supabase
-          .from('function_dictionary')
-          .select('function_normalized')
-          .eq('active', true)
-          .order('function_normalized')
-        setFunctionOptions((fns || []).map(f => f.function_normalized))
+        // Function options come from curated COMPANY_FUNCTIONS constant
+        // (not function_dictionary which has irrelevant entries like 'founder')
       } catch (err: any) {
         setError(err?.message || 'Failed to load companies.')
       } finally {
@@ -357,7 +353,7 @@ export default function CompaniesListPage() {
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Pick one…</option>
-                {functionOptions.map(f => <option key={f} value={f}>{f.replace(/_/g, ' ')}</option>)}
+                {COMPANY_FUNCTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
               </select>
             </div>
           )}
@@ -421,13 +417,14 @@ export default function CompaniesListPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bucket</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year Scores</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Function Scores</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Website</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">LinkedIn</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-4 text-center text-gray-500">No companies found</td></tr>
+                <tr><td colSpan={10} className="px-4 py-4 text-center text-gray-500">No companies found</td></tr>
               ) : (
                 filtered.map(c => (
                   <tr
@@ -461,6 +458,21 @@ export default function CompaniesListPage() {
                       {c.company_bucket ? c.company_bucket.replace(/_/g, ' ') : '—'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">{renderYearScores(c.company_id)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-700">
+                      {(() => {
+                        const fScores = functionScoresAll.filter(fs => fs.company_id === c.company_id)
+                        if (fScores.length === 0) return <span className="text-gray-400">—</span>
+                        return (
+                          <div className="flex flex-wrap gap-1">
+                            {fScores.map(fs => (
+                              <span key={fs.function_normalized} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200 text-[10px]" title={`${fs.function_normalized}: ${fs.function_score}/5`}>
+                                {COMPANY_FUNCTIONS.find(f => f.value === fs.function_normalized)?.label || fs.function_normalized}: {fs.function_score}
+                              </span>
+                            ))}
+                          </div>
+                        )
+                      })()}
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm" onClick={(e) => e.stopPropagation()}>
                       {(() => {
                         const domain = c.website_url?.replace(/^https?:\/\//, '').replace(/\/+$/, '') || guessDomain(c.company_name)

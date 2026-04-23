@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Company, CompanyBucket, CompanyStatus, CompanyYearScore } from '@/app/types'
+import { Company, CompanyBucket, CompanyStatus, CompanyYearScore, CompanyFunctionScore } from '@/app/types'
 import CompanyLogo, { guessDomain } from '@/app/components/CompanyLogo'
+import { COMPANY_FUNCTIONS } from '@/app/constants'
 
 const BUCKET_OPTIONS: Array<{ value: CompanyBucket; label: string }> = [
   { value: 'static_mature',    label: 'Static Mature' },
@@ -27,6 +28,7 @@ export default function CompanyEditPage() {
 
   const [company, setCompany] = useState<Company | null>(null)
   const [yearScores, setYearScores] = useState<CompanyYearScore[]>([])
+  const [functionScores, setFunctionScores] = useState<CompanyFunctionScore[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState<{ text: string; ok: boolean } | null>(null)
@@ -72,6 +74,12 @@ export default function CompanyEditPage() {
           .eq('company_id', companyId)
           .order('year', { ascending: false })
         setYearScores(ys || [])
+
+        const { data: fs } = await supabase
+          .from('company_function_scores')
+          .select('company_id, function_normalized, year, function_score')
+          .eq('company_id', companyId)
+        setFunctionScores(fs || [])
       } catch (err: any) {
         console.error('Error fetching company:', err)
       } finally {
@@ -173,6 +181,40 @@ export default function CompanyEditPage() {
       return
     }
     await upsertYearScore(y, s)
+  }
+
+  async function upsertFunctionScore(fn: string, score: number) {
+    const { error } = await supabase
+      .from('company_function_scores')
+      .upsert(
+        { company_id: companyId, function_normalized: fn, year: new Date().getFullYear(), function_score: score },
+        { onConflict: 'company_id,function_normalized,year' }
+      )
+    if (error) {
+      setSaveMsg({ text: `Failed: ${error.message}`, ok: false })
+      setTimeout(() => setSaveMsg(null), 3000)
+      return
+    }
+    setFunctionScores(prev => {
+      const others = prev.filter(p => p.function_normalized !== fn)
+      return [...others, { company_id: companyId, function_normalized: fn, year: new Date().getFullYear(), function_score: score }]
+    })
+    setSaveMsg({ text: `${fn}: score ${score} saved`, ok: true })
+    setTimeout(() => setSaveMsg(null), 2000)
+  }
+
+  async function deleteFunctionScore(fn: string) {
+    const { error } = await supabase
+      .from('company_function_scores')
+      .delete()
+      .eq('company_id', companyId)
+      .eq('function_normalized', fn)
+    if (error) {
+      setSaveMsg({ text: `Delete failed: ${error.message}`, ok: false })
+      setTimeout(() => setSaveMsg(null), 3000)
+      return
+    }
+    setFunctionScores(prev => prev.filter(p => p.function_normalized !== fn))
   }
 
   if (loading) {
@@ -385,6 +427,42 @@ export default function CompanyEditPage() {
             >
               Add / Update
             </button>
+          </div>
+        </div>
+
+        {/* Function Scores */}
+        <div className="mb-8 border-t pt-6">
+          <h2 className="text-lg font-semibold mb-3">Function Scores</h2>
+          <p className="text-xs text-gray-500 mb-3">
+            Per-function quality (0-5). Only set when a company is notably strong or weak for a specific function.
+            When not set, the scoring engine falls back to the overall year score.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {COMPANY_FUNCTIONS.map(fn => {
+              const existing = functionScores.find(fs => fs.function_normalized === fn.value)
+              return (
+                <div key={fn.value} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-sm font-medium text-gray-700">{fn.label}</span>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={existing?.function_score ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        if (val === '') {
+                          if (existing) deleteFunctionScore(fn.value)
+                        } else {
+                          upsertFunctionScore(fn.value, parseInt(val, 10))
+                        }
+                      }}
+                      className="px-2 py-1 border border-gray-300 rounded text-sm bg-white w-20"
+                    >
+                      <option value="">—</option>
+                      {[1,2,3,4,5].map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
 
