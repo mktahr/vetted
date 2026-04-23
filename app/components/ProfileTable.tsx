@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { Person, SortField, SortDirection, CandidateBucket } from '../types'
 import ProfileDrawer from './ProfileDrawer'
 import { MultiSelect, MultiSelectOption } from './MultiSelect'
+import CompanyLogo, { guessDomain } from './CompanyLogo'
 
 /** Strip employment type from company name: "Acme · Full-time" → "Acme" */
 function cleanCompanyName(name: string | null | undefined): string | null {
@@ -547,7 +548,10 @@ export default function ProfileTable() {
                       {person.location_name || '—'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                      {cleanCompanyName(person.current_company_name) || '—'}
+                      <div className="flex items-center gap-2">
+                        <CompanyLogo domain={guessDomain(person.current_company_name)} companyName={person.current_company_name} size={20} />
+                        {cleanCompanyName(person.current_company_name) || '—'}
+                      </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                       <div className="truncate max-w-[220px]">

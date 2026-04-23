@@ -1,6 +1,7 @@
 'use client'
 
 import { Person, CandidateBucket } from '../types'
+import CompanyLogo, { guessDomain } from './CompanyLogo'
 
 interface ProfileDrawerProps {
   person: Person | null
@@ -92,7 +93,10 @@ export default function ProfileDrawer({ person, isOpen, onClose, onPrev, onNext 
                 <h3 className="text-sm font-medium text-gray-500 mb-1">Current Role</h3>
                 <p className="text-gray-900 font-medium">{displayTitle}</p>
                 {companyName && (
-                  <p className="text-gray-700">{companyName}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <CompanyLogo domain={guessDomain(companyName)} companyName={companyName} size={20} />
+                    <p className="text-gray-700">{companyName}</p>
+                  </div>
                 )}
               </div>
             )}

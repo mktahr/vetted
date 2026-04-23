@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Person, Experience, Education, BucketAssignment, CandidateBucket, ScoreComponent } from '../../types'
+import CompanyLogo, { guessDomain } from '../../components/CompanyLogo'
 
 function cleanCompanyName(name: string | null | undefined): string | null {
   if (!name) return null
@@ -350,7 +351,10 @@ export default function ProfilePage() {
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase">Company</p>
-            <p className="font-medium text-sm">{companyName || 'N/A'}</p>
+            <div className="flex items-center gap-1.5 font-medium text-sm">
+              <CompanyLogo domain={guessDomain(companyName)} companyName={companyName} size={18} />
+              {companyName || 'N/A'}
+            </div>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase">Experience</p>
@@ -384,12 +388,15 @@ export default function ProfilePage() {
                   <p className="font-medium">
                     {exp.title_normalized || exp.title_raw || 'Unknown title'}
                   </p>
-                  <p className="text-gray-700 text-sm">
-                    {cleanCompanyName(exp.company_name) || 'Unknown company'}
-                    {exp.employment_type_normalized && exp.employment_type_normalized !== 'unknown' && (
-                      <span className="text-gray-500"> · {exp.employment_type_normalized.replace(/_/g, ' ')}</span>
-                    )}
-                  </p>
+                  <div className="flex items-center gap-1.5 text-gray-700 text-sm">
+                    <CompanyLogo domain={guessDomain(exp.company_name)} companyName={exp.company_name} size={16} />
+                    <span>
+                      {cleanCompanyName(exp.company_name) || 'Unknown company'}
+                      {exp.employment_type_normalized && exp.employment_type_normalized !== 'unknown' && (
+                        <span className="text-gray-500"> · {exp.employment_type_normalized.replace(/_/g, ' ')}</span>
+                      )}
+                    </span>
+                  </div>
                   <p className="text-gray-500 text-xs mt-0.5">
                     {exp.start_date && formatDate(exp.start_date)}
                     {exp.start_date && ' — '}
