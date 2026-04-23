@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Company, CompanyBucket, CompanyStatus, CompanyYearScore, CompanyFunctionScore } from '@/app/types'
+import CompanyLogo, { guessDomain } from '@/app/components/CompanyLogo'
 
 const BUCKET_OPTIONS: Array<{ value: CompanyBucket; label: string }> = [
   { value: 'static_mature',    label: 'Static Mature' },
@@ -45,12 +46,24 @@ export default function CompaniesListPage() {
   useEffect(() => {
     async function fetchAll() {
       try {
-        const { data: co, error: coErr } = await supabase
-          .from('companies')
-          .select('*')
-          .order('company_name', { ascending: true })
-        if (coErr) throw coErr
-        setCompanies(co || [])
+        // Fetch all companies — Supabase defaults to 1000 rows, so we
+        // need to paginate or set a higher limit for 1300+ companies.
+        let allCompanies: Company[] = []
+        let from = 0
+        const pageSize = 1000
+        while (true) {
+          const { data: page, error: pageErr } = await supabase
+            .from('companies')
+            .select('*')
+            .order('company_name', { ascending: true })
+            .range(from, from + pageSize - 1)
+          if (pageErr) throw pageErr
+          if (!page || page.length === 0) break
+          allCompanies = allCompanies.concat(page)
+          if (page.length < pageSize) break
+          from += pageSize
+        }
+        setCompanies(allCompanies)
 
         const { data: ys } = await supabase
           .from('company_year_scores')
@@ -327,11 +340,12 @@ export default function CompaniesListPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bucket</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year Scores</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Links</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filtered.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-4 text-center text-gray-500">No companies found</td></tr>
+                <tr><td colSpan={7} className="px-4 py-4 text-center text-gray-500">No companies found</td></tr>
               ) : (
                 filtered.map(c => (
                   <tr
@@ -340,7 +354,10 @@ export default function CompaniesListPage() {
                     onClick={() => router.push(`/admin/companies/${c.company_id}`)}
                   >
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="text-blue-600 font-medium">{c.company_name}</span>
+                      <div className="flex items-center gap-2">
+                        <CompanyLogo domain={guessDomain(c.company_name)} companyName={c.company_name} size={20} />
+                        <span className="text-blue-600 font-medium">{c.company_name}</span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">{c.primary_industry_tag || '—'}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">{c.founding_year ?? '—'}</td>
@@ -349,6 +366,27 @@ export default function CompaniesListPage() {
                       {c.company_bucket ? c.company_bucket.replace(/_/g, ' ') : '—'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">{renderYearScores(c.company_id)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-2">
+                        {c.linkedin_url && (
+                          <a href={c.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800" title="LinkedIn">
+                            LI
+                          </a>
+                        )}
+                        {(c.website_url || guessDomain(c.company_name)) && (
+                          <a
+                            href={c.website_url || `https://${guessDomain(c.company_name)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-gray-500 hover:text-gray-700"
+                            title="Website"
+                          >
+                            www
+                          </a>
+                        )}
+                        {!c.linkedin_url && !c.website_url && !guessDomain(c.company_name) && '—'}
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
