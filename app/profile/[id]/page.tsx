@@ -46,6 +46,8 @@ export default function ProfilePage() {
   const [narrativeAt, setNarrativeAt] = useState<string | null>(null)
   const [narrativeLoading, setNarrativeLoading] = useState(false)
   const [narrativeError, setNarrativeError] = useState<string | null>(null)
+  const [skillsTags, setSkillsTags] = useState<string[]>([])
+  const [skillsOpen, setSkillsOpen] = useState(false)
 
   useEffect(() => {
     async function fetchAll() {
@@ -114,6 +116,19 @@ export default function ProfilePage() {
           .limit(1)
           .maybeSingle()
         setBucket(bucketData as BucketAssignment | null)
+
+        // Fetch skills from the latest profile snapshot's canonical_json
+        const { data: snapData } = await supabase
+          .from('profile_snapshots')
+          .select('canonical_json')
+          .eq('linkedin_url', p.linkedin_url)
+          .order('scraped_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        const skills = (snapData?.canonical_json as Record<string, unknown>)?.skills_tags
+        if (Array.isArray(skills) && skills.length > 0) {
+          setSkillsTags(skills as string[])
+        }
       } catch (err) {
         console.error('Error fetching person:', err)
       } finally {
@@ -286,9 +301,18 @@ export default function ProfilePage() {
 
         {/* Derived signals */}
         <div className="flex flex-wrap gap-2 mb-6">
-          {person.primary_specialty && (
+          {person.primary_specialty ? (
             <span className="px-2 py-1 bg-cyan-50 text-cyan-700 rounded text-xs border border-cyan-200">
               {person.primary_specialty.replace(/_/g, ' ')}
+            </span>
+          ) : (
+            <span className="px-2 py-1 bg-gray-50 text-gray-400 rounded text-xs border border-gray-200">
+              specialty: unknown
+            </span>
+          )}
+          {person.secondary_specialty && (
+            <span className="px-2 py-1 bg-cyan-50 text-cyan-600 rounded text-xs border border-cyan-100">
+              also: {person.secondary_specialty.replace(/_/g, ' ')}
             </span>
           )}
           {person.specialty_transition_flag && person.historical_specialty && (
@@ -415,6 +439,29 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
+
+        {/* Skills & Technologies */}
+        {skillsTags.length > 0 && (
+          <div className="mb-8">
+            <button
+              onClick={() => setSkillsOpen(o => !o)}
+              className="flex items-center gap-2 text-lg font-semibold hover:text-gray-600"
+            >
+              <span className="inline-block w-3 text-sm">{skillsOpen ? '▾' : '▸'}</span>
+              Skills & Technologies
+              <span className="text-gray-400 font-normal text-sm">({skillsTags.length})</span>
+            </button>
+            {skillsOpen && (
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {skillsTags.map((skill, i) => (
+                  <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs border border-gray-200">
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Timestamps */}
         <div className="pt-6 border-t border-gray-200 text-xs text-gray-400">

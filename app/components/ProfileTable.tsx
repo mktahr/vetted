@@ -550,7 +550,14 @@ export default function ProfileTable() {
                       {cleanCompanyName(person.current_company_name) || '—'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                      {person.current_title_normalized || person.current_title_raw || '—'}
+                      <div className="truncate max-w-[220px]">
+                        {(person.current_title_normalized || person.current_title_raw || '—').split(/\s*[|–—]\s*/)[0].split(/,\s*/)[0]}
+                      </div>
+                      {person.primary_specialty && (
+                        <span className="inline-block mt-0.5 px-1.5 py-0.5 bg-cyan-50 text-cyan-700 rounded text-[10px] border border-cyan-200">
+                          {person.primary_specialty.replace(/_/g, ' ')}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                       {person.years_experience_estimate ?? '—'}
@@ -588,6 +595,18 @@ export default function ProfileTable() {
           setIsDrawerOpen(false)
           setSelectedPerson(null)
         }}
+        onPrev={(() => {
+          if (!selectedPerson) return null
+          const idx = filteredPeople.findIndex(p => p.person_id === selectedPerson.person_id)
+          if (idx <= 0) return null
+          return () => setSelectedPerson(filteredPeople[idx - 1])
+        })()}
+        onNext={(() => {
+          if (!selectedPerson) return null
+          const idx = filteredPeople.findIndex(p => p.person_id === selectedPerson.person_id)
+          if (idx < 0 || idx >= filteredPeople.length - 1) return null
+          return () => setSelectedPerson(filteredPeople[idx + 1])
+        })()}
       />
     </div>
   )

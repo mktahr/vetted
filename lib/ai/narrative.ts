@@ -206,7 +206,8 @@ STRICT RULES:
 4. When referring to companies, describe their tier numerically when given (e.g. "tier 1 company", "tier 4 company"). Never describe a company by its actual reputation or industry beyond what the data provides.
 5. If important data is missing (no experience, no education, no score), say so directly.
 6. Keep it factual and concise. 2-4 sentences total. No marketing language. No superlatives.
-7. End EXACTLY with this sentence on its own line: "Based on available structured data only."
+7. Do NOT mention high school, secondary school, or any pre-university education. Only reference post-secondary degrees (bachelor's, master's, MBA, PhD, etc.).
+8. End EXACTLY with this sentence on its own line: "Based on available structured data only."
 
 CAREER STAGE vs SENIORITY (do NOT confuse):
 - career_stage describes years of experience: pre_career (<0.5), early_career (0.5–2), mid_career (2–5), senior_career (5+). Use the exact value provided.
