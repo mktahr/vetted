@@ -171,6 +171,28 @@ export default function ProfilePage() {
     }
   }
 
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDelete() {
+    if (!deleteConfirm) { setDeleteConfirm(true); return }
+    setDeleting(true)
+    try {
+      const r = await fetch(`/api/people/${params.id}`, { method: 'DELETE' })
+      if (!r.ok) {
+        const data = await r.json()
+        alert(`Delete failed: ${data.error}`)
+        return
+      }
+      router.push('/')
+    } catch (err) {
+      alert(`Delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    } finally {
+      setDeleting(false)
+      setDeleteConfirm(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -197,12 +219,26 @@ export default function ProfilePage() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <button
-        onClick={() => router.push('/')}
-        className="mb-6 text-blue-600 hover:text-blue-800"
-      >
-        ← Back to List
-      </button>
+      <div className="mb-6 flex items-center justify-between">
+        <button
+          onClick={() => router.push('/')}
+          className="text-blue-600 hover:text-blue-800"
+        >
+          ← Back to List
+        </button>
+        <button
+          onClick={handleDelete}
+          onBlur={() => setDeleteConfirm(false)}
+          disabled={deleting}
+          className={`px-3 py-1.5 text-sm rounded-lg border ${
+            deleteConfirm
+              ? 'bg-red-600 text-white border-red-600 hover:bg-red-700'
+              : 'text-red-600 border-red-300 hover:bg-red-50'
+          } disabled:opacity-50`}
+        >
+          {deleting ? 'Deleting…' : deleteConfirm ? 'Click again to confirm' : 'Delete'}
+        </button>
+      </div>
 
       <div className="bg-white rounded-lg shadow-lg p-8">
         {/* Header */}

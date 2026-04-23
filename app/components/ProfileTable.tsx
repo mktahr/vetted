@@ -68,6 +68,9 @@ export default function ProfileTable() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [sortField, setSortField] = useState<SortField>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
 
   // Multi-select filters (all ANDed together; within a field, values OR)
   const [bucketSel, setBucketSel] = useState<string[]>([])
@@ -330,6 +333,38 @@ export default function ProfileTable() {
     }
   }
 
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === filteredPeople.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredPeople.map(p => p.person_id)))
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (!bulkDeleteConfirm) { setBulkDeleteConfirm(true); return }
+    setBulkDeleting(true)
+    const ids = Array.from(selectedIds)
+    let deleted = 0
+    for (const id of ids) {
+      const r = await fetch(`/api/people/${id}`, { method: 'DELETE' })
+      if (r.ok) deleted++
+    }
+    // Remove deleted people from local state
+    setPeople(prev => prev.filter(p => !selectedIds.has(p.person_id)))
+    setSelectedIds(new Set())
+    setBulkDeleting(false)
+    setBulkDeleteConfirm(false)
+  }
+
   // ─── Render ──────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -492,12 +527,45 @@ export default function ProfileTable() {
         )}
       </div>
 
+      {/* Bulk delete bar */}
+      {selectedIds.size > 0 && (
+        <div className="mb-3 flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <span className="text-sm text-red-800 font-medium">{selectedIds.size} selected</span>
+          <button
+            onClick={handleBulkDelete}
+            onBlur={() => setBulkDeleteConfirm(false)}
+            disabled={bulkDeleting}
+            className={`px-3 py-1 text-sm rounded ${
+              bulkDeleteConfirm
+                ? 'bg-red-600 text-white hover:bg-red-700'
+                : 'bg-white text-red-600 border border-red-300 hover:bg-red-50'
+            } disabled:opacity-50`}
+          >
+            {bulkDeleting ? 'Deleting…' : bulkDeleteConfirm ? 'Click again to confirm' : 'Delete selected'}
+          </button>
+          <button
+            onClick={() => { setSelectedIds(new Set()); setBulkDeleteConfirm(false) }}
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-2 py-3 w-8">
+                  <input
+                    type="checkbox"
+                    checked={filteredPeople.length > 0 && selectedIds.size === filteredPeople.length}
+                    onChange={toggleSelectAll}
+                    className="rounded border-gray-300"
+                  />
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bucket</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
@@ -530,6 +598,14 @@ export default function ProfileTable() {
                       setIsDrawerOpen(true)
                     }}
                   >
+                    <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(person.person_id)}
+                        onChange={() => toggleSelect(person.person_id)}
+                        className="rounded border-gray-300"
+                      />
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <button
                         onClick={(e) => {
