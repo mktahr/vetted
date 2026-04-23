@@ -30,6 +30,9 @@ export default function CompaniesListPage() {
   const [functionOptions, setFunctionOptions] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('')
@@ -163,6 +166,35 @@ export default function CompaniesListPage() {
     setIndustryFilter('')
     setBucketFilter('')
     setStatusFilter('')
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filtered.map(c => c.company_id)))
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (!bulkDeleteConfirm) { setBulkDeleteConfirm(true); return }
+    setBulkDeleting(true)
+    const ids = Array.from(selectedIds)
+    for (const id of ids) {
+      await supabase.from('companies').delete().eq('company_id', id)
+    }
+    setCompanies(prev => prev.filter(c => !selectedIds.has(c.company_id)))
+    setSelectedIds(new Set())
+    setBulkDeleting(false)
+    setBulkDeleteConfirm(false)
   }
 
   // Year range for sort-by-year dropdown — build from data
@@ -328,12 +360,44 @@ export default function CompaniesListPage() {
         Showing {filtered.length} of {companies.length} companies
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="mb-3 flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <span className="text-sm text-red-800 font-medium">{selectedIds.size} selected</span>
+          <button
+            onClick={handleBulkDelete}
+            onBlur={() => setBulkDeleteConfirm(false)}
+            disabled={bulkDeleting}
+            className={`px-3 py-1 text-sm rounded ${
+              bulkDeleteConfirm
+                ? 'bg-red-600 text-white hover:bg-red-700'
+                : 'bg-white text-red-600 border border-red-300 hover:bg-red-50'
+            } disabled:opacity-50`}
+          >
+            {bulkDeleting ? 'Deleting…' : bulkDeleteConfirm ? 'Click again to confirm' : 'Delete selected'}
+          </button>
+          <button
+            onClick={() => { setSelectedIds(new Set()); setBulkDeleteConfirm(false) }}
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-2 py-3 w-8">
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                    onChange={toggleSelectAll}
+                    className="rounded border-gray-300"
+                  />
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Industry</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Founded</th>
@@ -346,7 +410,7 @@ export default function CompaniesListPage() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filtered.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-4 text-center text-gray-500">No companies found</td></tr>
+                <tr><td colSpan={9} className="px-4 py-4 text-center text-gray-500">No companies found</td></tr>
               ) : (
                 filtered.map(c => (
                   <tr
@@ -354,6 +418,14 @@ export default function CompaniesListPage() {
                     className="hover:bg-gray-50 cursor-pointer"
                     onClick={() => router.push(`/admin/companies/${c.company_id}`)}
                   >
+                    <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(c.company_id)}
+                        onChange={() => toggleSelect(c.company_id)}
+                        className="rounded border-gray-300"
+                      />
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <CompanyLogo domain={guessDomain(c.company_name)} companyName={c.company_name} size={20} />

@@ -118,10 +118,9 @@ export default function CompanyEditPage() {
         .delete()
         .eq('company_id', companyId)
       if (error) throw error
-      router.push('/admin/companies')
+      router.replace('/admin/companies')
     } catch (err: any) {
       alert(`Delete failed: ${err.message}`)
-    } finally {
       setDeleting(false)
       setDeleteConfirm(false)
     }
