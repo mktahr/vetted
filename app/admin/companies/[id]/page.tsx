@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Company, CompanyBucket, CompanyStatus, CompanyYearScore } from '@/app/types'
+import CompanyLogo, { guessDomain } from '@/app/components/CompanyLogo'
 
 const BUCKET_OPTIONS: Array<{ value: CompanyBucket; label: string }> = [
   { value: 'static_mature',    label: 'Static Mature' },
@@ -29,17 +30,19 @@ export default function CompanyEditPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
-  // Edit form state (mirrors company; separate so we can have a Save button)
   const [form, setForm] = useState({
     company_name: '',
     primary_industry_tag: '',
     founding_year: '' as string,
     current_status: 'active' as CompanyStatus,
     company_bucket: '' as CompanyBucket | '',
+    website_url: '',
+    linkedin_url: '',
   })
 
-  // New year score input
   const [newYear, setNewYear] = useState<string>(String(new Date().getFullYear()))
   const [newScore, setNewScore] = useState<string>('3')
 
@@ -59,6 +62,8 @@ export default function CompanyEditPage() {
           founding_year: c.founding_year != null ? String(c.founding_year) : '',
           current_status: c.current_status,
           company_bucket: c.company_bucket || '',
+          website_url: c.website_url || '',
+          linkedin_url: c.linkedin_url || '',
         })
 
         const { data: ys } = await supabase
@@ -86,6 +91,8 @@ export default function CompanyEditPage() {
         founding_year: form.founding_year ? parseInt(form.founding_year, 10) : null,
         current_status: form.current_status,
         company_bucket: (form.company_bucket as CompanyBucket) || null,
+        website_url: form.website_url.trim() || null,
+        linkedin_url: form.linkedin_url.trim() || null,
       }
       const { error } = await supabase
         .from('companies')
@@ -93,13 +100,30 @@ export default function CompanyEditPage() {
         .eq('company_id', companyId)
       if (error) throw error
       setSaveMsg({ text: 'Saved', ok: true })
-      // Refresh local state
       setCompany(prev => prev ? { ...prev, ...updates } as Company : prev)
     } catch (err: any) {
       setSaveMsg({ text: `Save failed: ${err.message}`, ok: false })
     } finally {
       setSaving(false)
       setTimeout(() => setSaveMsg(null), 2500)
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteConfirm) { setDeleteConfirm(true); return }
+    setDeleting(true)
+    try {
+      const { error } = await supabase
+        .from('companies')
+        .delete()
+        .eq('company_id', companyId)
+      if (error) throw error
+      router.push('/admin/companies')
+    } catch (err: any) {
+      alert(`Delete failed: ${err.message}`)
+    } finally {
+      setDeleting(false)
+      setDeleteConfirm(false)
     }
   }
 
@@ -115,7 +139,6 @@ export default function CompanyEditPage() {
       setTimeout(() => setSaveMsg(null), 3000)
       return
     }
-    // Update local
     setYearScores(prev => {
       const others = prev.filter(p => p.year !== year)
       return [...others, { company_id: companyId, year, company_score: score }].sort((a, b) => b.year - a.year)
@@ -172,18 +195,51 @@ export default function CompanyEditPage() {
     )
   }
 
+  const domain = company.website_url?.replace(/^https?:\/\//, '').replace(/\/+$/, '') || guessDomain(company.company_name)
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <button
-        onClick={() => router.push('/admin/companies')}
-        className="mb-6 text-blue-600 hover:text-blue-800"
-      >
-        ← Back to companies
-      </button>
+      <div className="mb-6 flex items-center justify-between">
+        <button
+          onClick={() => router.push('/admin/companies')}
+          className="text-blue-600 hover:text-blue-800"
+        >
+          ← Back to companies
+        </button>
+        <button
+          onClick={handleDelete}
+          onBlur={() => setDeleteConfirm(false)}
+          disabled={deleting}
+          className={`px-3 py-1.5 text-sm rounded-lg border ${
+            deleteConfirm
+              ? 'bg-red-600 text-white border-red-600 hover:bg-red-700'
+              : 'text-red-600 border-red-300 hover:bg-red-50'
+          } disabled:opacity-50`}
+        >
+          {deleting ? 'Deleting…' : deleteConfirm ? 'Click again to confirm' : 'Delete Company'}
+        </button>
+      </div>
 
       <div className="bg-white rounded-lg shadow-lg p-8">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">{company.company_name}</h1>
+          <div className="flex items-center gap-3">
+            <CompanyLogo domain={domain} companyName={company.company_name} size={40} />
+            <div>
+              <h1 className="text-3xl font-bold">{company.company_name}</h1>
+              <div className="flex items-center gap-3 mt-1 text-sm">
+                {company.linkedin_url && (
+                  <a href={company.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
+                    LinkedIn
+                  </a>
+                )}
+                {(company.website_url || domain) && (
+                  <a href={company.website_url || `https://${domain}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
+                    {domain}
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
           {saveMsg && (
             <span className={`text-sm px-3 py-1 rounded-full ${saveMsg.ok ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
               {saveMsg.text}
@@ -212,6 +268,28 @@ export default function CompanyEditPage() {
                 value={form.primary_industry_tag}
                 onChange={(e) => setForm({ ...form, primary_industry_tag: e.target.value })}
                 placeholder="e.g. FinTech, Consumer, SaaS"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Website URL</label>
+              <input
+                type="text"
+                value={form.website_url}
+                onChange={(e) => setForm({ ...form, website_url: e.target.value })}
+                placeholder="https://example.com"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">LinkedIn URL</label>
+              <input
+                type="text"
+                value={form.linkedin_url}
+                onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })}
+                placeholder="https://linkedin.com/company/example"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -282,40 +360,37 @@ export default function CompanyEditPage() {
             </div>
           )}
 
-          {/* Add new year score */}
-          <div className="flex items-end gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="flex items-center gap-3 mt-4 p-3 bg-gray-50 rounded-lg">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
+              <label className="block text-xs text-gray-500">Year</label>
               <input
                 type="number"
-                min="1800"
-                max="2100"
                 value={newYear}
                 onChange={(e) => setNewYear(e.target.value)}
-                className="w-24 px-3 py-2 border border-gray-300 rounded text-sm"
+                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Score (1-5)</label>
+              <label className="block text-xs text-gray-500">Score (1-5)</label>
               <select
                 value={newScore}
                 onChange={(e) => setNewScore(e.target.value)}
-                className="w-24 px-3 py-2 border border-gray-300 rounded text-sm bg-white"
+                className="px-2 py-1 border border-gray-300 rounded text-sm bg-white"
               >
-                {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
+                {[1,2,3,4,5].map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <button
               onClick={handleAddYearScore}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+              className="mt-3 px-4 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
             >
               Add / Update
             </button>
           </div>
         </div>
 
-        {/* Metadata footer */}
-        <div className="pt-6 border-t border-gray-200 text-xs text-gray-400">
+        {/* Footer */}
+        <div className="pt-4 border-t text-xs text-gray-400">
           <p>company_id: {company.company_id}</p>
           <p>Created: {new Date(company.created_at).toLocaleString()}</p>
           <p>Updated: {new Date(company.updated_at).toLocaleString()}</p>
@@ -325,68 +400,53 @@ export default function CompanyEditPage() {
   )
 }
 
-// ─── Inline editable row for a single year score ─────────────────────────
+// ─── Year score row with inline edit ─────────────────────────────────────
 
-function YearScoreRow({
-  year, score, onSave, onDelete,
-}: {
+function YearScoreRow({ year, score, onSave, onDelete }: {
   year: number
   score: number
-  onSave: (newScore: number) => void
+  onSave: (score: number) => void
   onDelete: () => void
 }) {
   const [editing, setEditing] = useState(false)
-  const [val, setVal] = useState(String(score))
+  const [editScore, setEditScore] = useState(String(score))
+
+  if (editing) {
+    return (
+      <div className="flex items-center justify-between px-4 py-2">
+        <span className="font-mono text-sm w-16">{year}</span>
+        <select
+          value={editScore}
+          onChange={(e) => setEditScore(e.target.value)}
+          className="px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+        >
+          {[1,2,3,4,5].map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { onSave(parseInt(editScore, 10)); setEditing(false) }}
+            className="text-xs text-blue-600 hover:text-blue-800"
+          >
+            Save
+          </button>
+          <button
+            onClick={() => setEditing(false)}
+            className="text-xs text-gray-500 hover:text-gray-700"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="flex items-center justify-between px-3 py-2">
-      <div className="flex items-center gap-6">
-        <span className="text-sm font-mono text-gray-700 w-16">{year}</span>
-        {editing ? (
-          <select
-            value={val}
-            onChange={(e) => setVal(e.target.value)}
-            className="px-2 py-1 border border-gray-300 rounded text-sm bg-white"
-            autoFocus
-          >
-            {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
-        ) : (
-          <span className="text-sm font-semibold text-gray-900">{score}</span>
-        )}
-      </div>
-      <div className="flex gap-2">
-        {editing ? (
-          <>
-            <button
-              onClick={() => { onSave(parseInt(val, 10)); setEditing(false) }}
-              className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              Save
-            </button>
-            <button
-              onClick={() => { setVal(String(score)); setEditing(false) }}
-              className="px-2 py-1 text-xs text-gray-600 hover:text-gray-900"
-            >
-              Cancel
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              onClick={() => setEditing(true)}
-              className="px-2 py-1 text-xs text-blue-600 hover:text-blue-800"
-            >
-              Edit
-            </button>
-            <button
-              onClick={onDelete}
-              className="px-2 py-1 text-xs text-red-600 hover:text-red-800"
-            >
-              Delete
-            </button>
-          </>
-        )}
+    <div className="flex items-center justify-between px-4 py-2">
+      <span className="font-mono text-sm w-16">{year}</span>
+      <span className="text-sm font-medium">{score}</span>
+      <div className="flex gap-3">
+        <button onClick={() => setEditing(true)} className="text-xs text-blue-600 hover:text-blue-800">Edit</button>
+        <button onClick={onDelete} className="text-xs text-red-600 hover:text-red-800">Delete</button>
       </div>
     </div>
   )

@@ -340,12 +340,13 @@ export default function CompaniesListPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bucket</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year Scores</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Links</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Website</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">LinkedIn</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filtered.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-4 text-center text-gray-500">No companies found</td></tr>
+                <tr><td colSpan={8} className="px-4 py-4 text-center text-gray-500">No companies found</td></tr>
               ) : (
                 filtered.map(c => (
                   <tr
@@ -367,25 +368,24 @@ export default function CompaniesListPage() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">{renderYearScores(c.company_id)}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-2">
-                        {c.linkedin_url && (
-                          <a href={c.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800" title="LinkedIn">
-                            LI
+                      {(() => {
+                        const domain = c.website_url?.replace(/^https?:\/\//, '').replace(/\/+$/, '') || guessDomain(c.company_name)
+                        if (!domain) return <span className="text-gray-400">—</span>
+                        return (
+                          <a href={c.website_url || `https://${domain}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline">
+                            {domain}
                           </a>
-                        )}
-                        {(c.website_url || guessDomain(c.company_name)) && (
-                          <a
-                            href={c.website_url || `https://${guessDomain(c.company_name)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-gray-500 hover:text-gray-700"
-                            title="Website"
-                          >
-                            www
-                          </a>
-                        )}
-                        {!c.linkedin_url && !c.website_url && !guessDomain(c.company_name) && '—'}
-                      </div>
+                        )
+                      })()}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm" onClick={(e) => e.stopPropagation()}>
+                      {c.linkedin_url ? (
+                        <a href={c.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline">
+                          View
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
                     </td>
                   </tr>
                 ))
