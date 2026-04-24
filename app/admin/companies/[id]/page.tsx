@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Company, CompanyBucket, CompanyStatus, CompanyYearScore, CompanyFunctionScore } from '@/app/types'
+import { Company, CompanyBucket, CompanyStatus, CompanyFocus, CompanyYearScore, CompanyFunctionScore } from '@/app/types'
 import CompanyLogo, { guessDomain } from '@/app/components/CompanyLogo'
 import { COMPANY_FUNCTIONS } from '@/app/constants'
 
@@ -19,6 +19,12 @@ const STATUS_OPTIONS: Array<{ value: CompanyStatus; label: string }> = [
   { value: 'acquired',  label: 'Acquired' },
   { value: 'public',    label: 'Public' },
   { value: 'shut_down', label: 'Shut Down' },
+]
+
+const FOCUS_OPTIONS: Array<{ value: CompanyFocus; label: string }> = [
+  { value: 'hard_tech',  label: 'Hard Tech' },
+  { value: 'all_tech',   label: 'All Tech' },
+  { value: 'unreviewed', label: 'Unreviewed' },
 ]
 
 export default function CompanyEditPage() {
@@ -41,6 +47,7 @@ export default function CompanyEditPage() {
     founding_year: '' as string,
     current_status: 'active' as CompanyStatus,
     company_bucket: '' as CompanyBucket | '',
+    focus: 'all_tech' as CompanyFocus,
     website_url: '',
     linkedin_url: '',
   })
@@ -64,6 +71,7 @@ export default function CompanyEditPage() {
           founding_year: c.founding_year != null ? String(c.founding_year) : '',
           current_status: c.current_status,
           company_bucket: c.company_bucket || '',
+          focus: (c.focus as CompanyFocus) || 'all_tech',
           website_url: c.website_url || '',
           linkedin_url: c.linkedin_url || '',
         })
@@ -99,6 +107,7 @@ export default function CompanyEditPage() {
         founding_year: form.founding_year ? parseInt(form.founding_year, 10) : null,
         current_status: form.current_status,
         company_bucket: (form.company_bucket as CompanyBucket) || null,
+        focus: form.focus,
         website_url: form.website_url.trim() || null,
         linkedin_url: form.linkedin_url.trim() || null,
       }
@@ -367,6 +376,22 @@ export default function CompanyEditPage() {
               >
                 <option value="">— none —</option>
                 {BUCKET_OPTIONS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Focus
+                <span className="ml-1 text-gray-400 font-normal normal-case">
+                  (hard_tech = hardware/defense/aerospace/robotics; all_tech = default searchable universe)
+                </span>
+              </label>
+              <select
+                value={form.focus}
+                onChange={(e) => setForm({ ...form, focus: e.target.value as CompanyFocus })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {FOCUS_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
               </select>
             </div>
           </div>

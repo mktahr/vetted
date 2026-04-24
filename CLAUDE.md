@@ -110,6 +110,65 @@ Four separate outputs:
 
 ---
 
+## Company Focus Field
+
+Added in migration 016. Every company has a `focus` column (enum `company_focus_type`) with three values:
+
+| Value | Meaning |
+|---|---|
+| `hard_tech` | Hardware, deep tech, aerospace, defense, robotics, autonomy — the hard-tech product focus |
+| `all_tech` | **Default.** The full searchable universe — includes `hard_tech` companies plus SaaS/FinTech/etc. Recruiter default view. |
+| `unreviewed` | Auto-created via ingest, not yet triaged by admin. Appears in admin triage queue only. |
+
+**Scoping semantics** — important for filter queries:
+
+- A filter for `hard_tech` matches **only** `focus = 'hard_tech'`.
+- A filter for `all_tech` matches `focus IN ('hard_tech', 'all_tech')` — hard_tech companies ARE part of the all_tech universe.
+- `unreviewed` is explicitly excluded from both default views; recruiter searches never surface unreviewed companies.
+
+**Write path** — all promotion to `hard_tech` is manual via the admin UI. Ingest auto-creates new companies with `focus = 'unreviewed'`. Backfill on migration 016 set the focus to `unreviewed` for any pre-existing company that had never been triaged (manual_review_status = 'unreviewed' AND no bucket AND no industry).
+
+---
+
+## Specialty as the Primary Search Filter (Post-Migration 016)
+
+Recruiters search by **specialty** (mechanical_engineering, avionics, backend, gnc…), not by function (engineering, product…). The `ProfileTable` filter bar reflects this:
+
+- Specialty is the widest, most prominent filter, with a "Any past specialty" (default) / "Current only" scope toggle. Default mode scans all of a person's experiences, capturing career switchers. "Current only" queries `people.primary_specialty`.
+- Function remains available but is labeled "(secondary)" and visually demoted. Function still drives the scoring engine internally and powers `company_function_scores`; it's not the recruiter's primary search axis.
+
+The specialty picker displays all active specialties grouped: **Hardware engineering** (first — matches the hard-tech focus), **Software engineering**, then non-engineering by parent_function (operations, product_management, product_design, recruiting).
+
+Migration 016 added 23 hardware-oriented specialties (mechanical_engineering, electrical_engineering, firmware, flight_software, avionics, gnc, propulsion, controls_engineering, rf_engineering, fpga_engineering, asic_engineering, hardware_engineering, systems_engineering, test_engineering, manufacturing_engineering, reliability_engineering, quality_engineering, structural_engineering, thermal_engineering, materials_engineering, power_electronics, optics_engineering, mechatronics). Title→specialty mappings for these are **not yet seeded** — they appear in the filter UI but candidates won't be auto-tagged from raw LinkedIn titles until a follow-up session adds the title_dictionary entries.
+
+---
+
+## Clearance Field on People (Post-Migration 016)
+
+`people.clearance_level` (enum `clearance_level_type`): `unknown`, `none`, `confidential`, `secret`, `top_secret`, `ts_sci`, `q_clearance`, `other`. Default `unknown`; always manually edited (never inferred from resume text). `people.clearance_notes` is an optional free-text field.
+
+Surfaces in the candidate search table as a multi-select filter (useful for defense/aerospace roles) and on the profile detail page as an editable admin section.
+
+---
+
+## Function-Level Company Scoring (company_function_scores)
+
+`function_dictionary` (18 functions) classifies **people** — it's the full set a candidate's role can normalize to.
+
+`company_function_scores` is a separate, narrower dimension: it scores **companies** on non-engineering functions where exceptional quality differentiates them. Migration 016 added a CHECK constraint restricting `function_normalized` to **three values**: `design`, `operations`, `sales`.
+
+**Why engineering isn't scored as a function.** The overall `company_year_scores.company_score` already encodes engineering quality — the baseline for company tiering. Adding a redundant "engineering function score" would double-count. If a company excels at engineering beyond what the overall score captures, the overall score itself should move up.
+
+The table is empty today (as of the 016 migration); rows will be populated manually via the admin UI over time. The scoring engine's `company_function_quality` bonus component reads from this table and falls back to the overall `company_year_scores.company_score` when no function-specific row exists.
+
+---
+
+## Profiles Table — Deprecated Writes
+
+As of 2026-04-24, the ingest route **no longer writes to the legacy `profiles` table** or calls `upsert_profile_from_snapshot()`. Zero application code reads from `profiles`. The RPC function remains defined in the DB as a read-only archive and can be dropped in a future cleanup. All ingest traffic goes directly to the normalized tables (`people` + `person_experiences` + `person_education` + `candidate_bucket_assignments`).
+
+---
+
 ## Candidate Bucket Taxonomy
 
 | Bucket | Meaning |
@@ -149,7 +208,7 @@ When rendering buckets in the UI (tables, chips, detail pages), use these title-
 
 Scoring weights differ sharply by stage — see "Scoring Spec" below.
 
-**Note:** `career_stage_config` in the DB and the `inferCareerStage()` function in `app/api/ingest/route.ts` use rougher boundaries (0 / 4 / 10). The scoring engine (`lib/scoring/score-candidate.ts`) recomputes the stage from `years_experience_estimate` at scoring time using the ranges above, so these are the authoritative cutoffs.
+**Note:** as of migration 016, `career_stage_config` in the DB matches these boundaries (0.5 / 2 / 5). The `inferCareerStage()` function in `app/api/ingest/route.ts` and the scoring engine (`lib/scoring/score-candidate.ts::determineStage()`) also use these same boundaries. All three agree.
 
 ### Years-of-experience calculation
 

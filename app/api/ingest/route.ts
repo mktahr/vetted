@@ -98,7 +98,8 @@ async function upsertCompany(supabase: SupabaseClient, companyName: string | nul
 
   if (existing) return existing.company_id;
 
-  // Create new (minimal record — to be enriched later)
+  // Create new (minimal record — to be enriched later).
+  // focus='unreviewed' so Matt's admin triage queue picks it up.
   const { data: created, error } = await supabase
     .from('companies')
     .insert({
@@ -106,6 +107,7 @@ async function upsertCompany(supabase: SupabaseClient, companyName: string | nul
       company_score_mode: 'manual',
       manual_review_status: 'unreviewed',
       current_status: 'active',
+      focus: 'unreviewed',
     })
     .select('company_id')
     .single();
@@ -227,21 +229,22 @@ export async function POST(req: NextRequest) {
 
   try {
 
-  // ── Step 1: Existing ingest path (PRESERVED) ────────────────────────────
-  // This calls the existing upsert_profile_from_snapshot function.
-  // Do NOT modify this behavior.
-
-  const { error: legacyError } = await supabase.rpc('upsert_profile_from_snapshot', {
-    p_linkedin_url: payload.linkedin_url,
-    p_full_name: payload.full_name,
-    p_canonical_json: canonical,
-    p_raw_json: payload.raw_json || canonical,
-  });
-
-  if (legacyError) {
-    console.error('[ingest] Legacy upsert failed:', legacyError);
-    // Don't hard-fail — continue to normalized path
-  }
+  // Deprecated 2026-04-24: profiles table no longer written on ingest.
+  // Zero application code reads from profiles. Kept as read-only archive.
+  // The RPC function itself remains in the DB for now; can be dropped later.
+  //
+  // const { error: legacyError } = await supabase.rpc('upsert_profile_from_snapshot', {
+  //   p_linkedin_url: payload.linkedin_url,
+  //   p_full_name: payload.full_name,
+  //   p_canonical_json: canonical,
+  //   p_raw_json: payload.raw_json || canonical,
+  // });
+  //
+  // if (legacyError) {
+  //   console.error('[ingest] Legacy upsert failed:', legacyError);
+  //   // Don't hard-fail — continue to normalized path
+  // }
+  const legacyError = null;
 
   // ── Step 2: Normalize company ────────────────────────────────────────────
   const currentCompanyId = await upsertCompany(supabase, canonical.current_company);
@@ -311,6 +314,12 @@ export async function POST(req: NextRequest) {
   const specialtyEntries = await loadSpecialtyDictionary(supabase);
   const personGradDate = graduationDateFromEducation(canonical.education || []);
   const experiences = canonical.experiences || [];
+
+  // Capture the current role's normalized values to return to the client
+  // so the extension popup can pre-populate editable tags.
+  let currentSpecialty: string | null = null;
+  let currentSeniority: string | null = null;
+  let currentTitleNormalized: string | null = null;
 
   for (const exp of experiences) {
     if (!exp.company_name && !exp.title) continue;
@@ -392,6 +401,25 @@ export async function POST(req: NextRequest) {
 
     if (expError) {
       console.error('[ingest] Experience insert failed:', expError);
+    }
+
+    // Capture current role's normalized tags for the API response
+    if (exp.is_current && !currentSpecialty && !currentSeniority) {
+      currentSpecialty = resolvedSpecialty;
+      currentSeniority = seniority;
+      currentTitleNormalized = expTitleData?.title_normalized || null;
+    }
+  }
+
+  // If no explicit is_current was found, fall back to the first experience
+  if (!currentSpecialty && !currentSeniority && experiences.length > 0) {
+    const first = experiences[0];
+    if (first.company_name || first.title) {
+      const firstTitleData = await normalizeTitle(supabase, first.title);
+      const firstSpec = resolveSpecialty(first.title, first.description, canonical.skills_tags, specialtyEntries);
+      currentSpecialty = firstSpec?.specialty_normalized ?? firstTitleData?.specialty_normalized ?? null;
+      currentTitleNormalized = firstTitleData?.title_normalized || null;
+      // Seniority requires more context; leave null if not the current role
     }
   }
 
@@ -510,6 +538,10 @@ export async function POST(req: NextRequest) {
     legacy_ok: !legacyError,
     bucket,
     total_score: totalScore,
+    current_function: titleData?.function_normalized ?? null,
+    current_specialty: currentSpecialty,
+    current_seniority: currentSeniority,
+    current_title_normalized: currentTitleNormalized ?? titleData?.title_normalized ?? null,
     message: 'Profile ingested and normalized successfully',
   });
 

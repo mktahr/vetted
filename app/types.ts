@@ -72,6 +72,8 @@ export interface Person {
   hypergrowth_companies_count: number
   narrative_summary: string | null
   narrative_summary_generated_at: string | null
+  clearance_level: ClearanceLevel
+  clearance_notes: string | null
   created_at: string
   updated_at: string
   // Joined data (not on the table itself)
@@ -82,6 +84,10 @@ export interface Person {
   person_education?: Education[]
 }
 
+export type ClearanceLevel =
+  | 'unknown' | 'none' | 'confidential' | 'secret' | 'top_secret'
+  | 'ts_sci' | 'q_clearance' | 'other'
+
 export interface Experience {
   person_experience_id: string
   person_id: string
@@ -90,6 +96,7 @@ export interface Experience {
   title_normalized: string | null
   title_level: number | null
   function_normalized: string | null
+  specialty_normalized: string | null
   seniority_normalized: string | null
   employment_type_normalized: string | null
   start_date: string | null
@@ -126,6 +133,7 @@ export type CompanyBucket = 'static_mature' | 'high_bar_tech' | 'growth_startup'
 export type CompanyStatus = 'active' | 'acquired' | 'public' | 'shut_down'
 export type CompanyScoreMode = 'manual' | 'calculated' | 'hybrid'
 export type CompanyReviewStatus = 'unreviewed' | 'reviewed' | 'locked'
+export type CompanyFocus = 'hard_tech' | 'all_tech' | 'unreviewed'
 
 export interface Company {
   company_id: string
@@ -134,6 +142,7 @@ export interface Company {
   company_bucket: CompanyBucket | null
   company_score_mode: CompanyScoreMode
   manual_review_status: CompanyReviewStatus
+  focus: CompanyFocus
   is_stealth_company: boolean
   founding_date: string | null
   founding_year: number | null

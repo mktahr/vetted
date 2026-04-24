@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Person, SortField, SortDirection, CandidateBucket } from '../types'
+import { Person, SortField, SortDirection, CandidateBucket, ClearanceLevel } from '../types'
 import ProfileDrawer from './ProfileDrawer'
 import { MultiSelect, MultiSelectOption } from './MultiSelect'
 import CompanyLogo, { guessDomain } from './CompanyLogo'
@@ -49,11 +49,57 @@ const STAGE_OPTIONS: MultiSelectOption[] = [
   { value: 'senior_career', label: 'Senior Career' },
 ]
 
+const CLEARANCE_OPTIONS: MultiSelectOption[] = [
+  { value: 'none',         label: 'None' },
+  { value: 'confidential', label: 'Confidential' },
+  { value: 'secret',       label: 'Secret' },
+  { value: 'top_secret',   label: 'Top Secret' },
+  { value: 'ts_sci',       label: 'TS/SCI' },
+  { value: 'q_clearance',  label: 'Q (DOE)' },
+  { value: 'other',        label: 'Other' },
+  { value: 'unknown',      label: 'Unknown' },
+]
+
+// Hard-tech specialties surface first when focus scope is hard_tech.
+// Matches migration 016's new specialty entries plus pre-existing hardware
+// specialties (embedded, robotics).
+const HARDWARE_SPECIALTIES = new Set([
+  'mechanical_engineering', 'electrical_engineering', 'firmware', 'flight_software',
+  'avionics', 'gnc', 'propulsion', 'controls_engineering', 'rf_engineering',
+  'fpga_engineering', 'asic_engineering', 'hardware_engineering', 'systems_engineering',
+  'test_engineering', 'manufacturing_engineering', 'reliability_engineering',
+  'quality_engineering', 'structural_engineering', 'thermal_engineering',
+  'materials_engineering', 'power_electronics', 'optics_engineering', 'mechatronics',
+  'embedded', 'robotics',
+])
+
+const SOFTWARE_SPECIALTIES = new Set([
+  'backend', 'frontend', 'fullstack', 'mobile_ios', 'mobile_android',
+  'data_engineering', 'devops', 'sre', 'infrastructure', 'platform',
+  'ml_engineering', 'ai_research', 'computer_vision', 'nlp', 'blockchain',
+  'game_engineering', 'security', 'qa_testing', 'devrel',
+])
+
+type FocusScope = 'all' | 'hard_tech' | 'all_tech'
+
+/** Compact per-experience record kept on each Person for in-memory filtering. */
+interface ExperienceLite {
+  company_id: string | null
+  company_focus: 'hard_tech' | 'all_tech' | 'unreviewed' | null
+  specialty: string | null
+  start_date: string | null
+  end_date: string | null
+}
+
 // ─── Enriched person record (people table + filter lookup sets) ────────────
 
 interface PersonWithFilters extends Person {
   company_ids_all: Set<string>
   school_ids_all: Set<string>
+  // Per-experience lite records for focus-scope + compound filters
+  experiences_lite: ExperienceLite[]
+  // Union of specialties across ALL experiences (for "any past specialty")
+  all_specialties: Set<string>
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────
@@ -80,7 +126,23 @@ export default function ProfileTable() {
   const [companySel, setCompanySel] = useState<string[]>([])     // company_id values
   const [schoolSel, setSchoolSel] = useState<string[]>([])       // school_id values
   const [locationSel, setLocationSel] = useState<string[]>([])   // location_name values
-  const [specialtySel, setSpecialtySel] = useState<string[]>([]) // primary_specialty values
+  const [specialtySel, setSpecialtySel] = useState<string[]>([]) // specialty_normalized values
+  const [clearanceSel, setClearanceSel] = useState<string[]>([]) // clearance_level values
+
+  // Specialty scope: "current" reads people.primary_specialty;
+  // "any" reads across all person_experiences.specialty_normalized.
+  // Default "any" captures career switchers.
+  const [specialtyScope, setSpecialtyScope] = useState<'current' | 'any'>('any')
+
+  // Focus scope — narrows candidate list by whether they have experience
+  // at hard_tech / all_tech companies.
+  const [focusScope, setFocusScope] = useState<FocusScope>('all')
+
+  // Compound filter: "worked at <company> as <specialty> between <y1> and <y2>"
+  const [compoundCompany, setCompoundCompany] = useState<string>('') // single company_id
+  const [compoundSpecialties, setCompoundSpecialties] = useState<string[]>([])
+  const [compoundYearMin, setCompoundYearMin] = useState<string>('')
+  const [compoundYearMax, setCompoundYearMax] = useState<string>('')
 
   // Years-of-experience range (min/max inclusive)
   const [yearsMin, setYearsMin] = useState<string>('')
@@ -107,6 +169,7 @@ export default function ProfileTable() {
           { data: srs },
           { data: companies },
           { data: schools },
+          { data: specDict },
         ] = await Promise.all([
           supabase.from('people').select(`
             *,
@@ -115,12 +178,13 @@ export default function ProfileTable() {
           supabase.from('candidate_bucket_assignments')
             .select('person_id, candidate_bucket, assignment_reason, effective_at')
             .order('effective_at', { ascending: false }),
-          supabase.from('person_experiences').select('person_id, company_id'),
+          supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, start_date, end_date'),
           supabase.from('person_education').select('person_id, school_id'),
           supabase.from('function_dictionary').select('function_normalized').eq('active', true).order('function_normalized'),
           supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
-          supabase.from('companies').select('company_id, company_name, primary_industry_tag').order('company_name'),
+          supabase.from('companies').select('company_id, company_name, primary_industry_tag, focus').order('company_name'),
           supabase.from('schools').select('school_id, school_name, is_foreign').order('school_name'),
+          supabase.from('specialty_dictionary').select('specialty_normalized, parent_function').eq('active', true).order('specialty_normalized'),
         ])
 
         if (peopleErr) {
@@ -139,12 +203,37 @@ export default function ProfileTable() {
           }
         }
 
+        // Build company_id → focus lookup for per-experience enrichment
+        const companyFocusById: Record<string, 'hard_tech' | 'all_tech' | 'unreviewed'> = {}
+        for (const c of companies || []) {
+          companyFocusById[c.company_id] = (c as any).focus ?? 'all_tech'
+        }
+
         // company_ids per person (for "ever worked at" filter)
         const companyIdsByPerson: Record<string, Set<string>> = {}
+        // Lite per-experience records (for focus scope + compound filter)
+        const expLiteByPerson: Record<string, ExperienceLite[]> = {}
+        // Union of specialties across all a person's experiences
+        const allSpecialtiesByPerson: Record<string, Set<string>> = {}
+
         for (const row of expData || []) {
-          if (!row.company_id) continue
-          if (!companyIdsByPerson[row.person_id]) companyIdsByPerson[row.person_id] = new Set()
-          companyIdsByPerson[row.person_id].add(row.company_id)
+          const pid = row.person_id
+          if (row.company_id) {
+            if (!companyIdsByPerson[pid]) companyIdsByPerson[pid] = new Set()
+            companyIdsByPerson[pid].add(row.company_id)
+          }
+          if (!expLiteByPerson[pid]) expLiteByPerson[pid] = []
+          expLiteByPerson[pid].push({
+            company_id: row.company_id,
+            company_focus: row.company_id ? (companyFocusById[row.company_id] ?? null) : null,
+            specialty: (row as any).specialty_normalized ?? null,
+            start_date: (row as any).start_date ?? null,
+            end_date: (row as any).end_date ?? null,
+          })
+          if ((row as any).specialty_normalized) {
+            if (!allSpecialtiesByPerson[pid]) allSpecialtiesByPerson[pid] = new Set()
+            allSpecialtiesByPerson[pid].add((row as any).specialty_normalized)
+          }
         }
 
         // school_ids per person (for "ever studied at" filter)
@@ -162,6 +251,8 @@ export default function ProfileTable() {
           latest_bucket_reason: latestBucketByPerson[row.person_id]?.reason ?? null,
           company_ids_all: companyIdsByPerson[row.person_id] || new Set(),
           school_ids_all: schoolIdsByPerson[row.person_id] || new Set(),
+          experiences_lite: expLiteByPerson[row.person_id] || [],
+          all_specialties: allSpecialtiesByPerson[row.person_id] || new Set(),
         }))
 
         setPeople(rows)
@@ -194,14 +285,36 @@ export default function ProfileTable() {
           Array.from(locs).sort().map(l => ({ value: l, label: l }))
         )
 
-        // Specialty options from actual data
-        const specSet = new Set<string>()
-        for (const row of rows) {
-          if (row.primary_specialty) specSet.add(row.primary_specialty)
+        // Specialty options — all active specialties from the dictionary,
+        // grouped: Hardware engineering first (for hard-tech recruiting),
+        // then Software engineering, then non-engineering grouped by parent.
+        const dict = (specDict || []) as Array<{ specialty_normalized: string; parent_function: string | null }>
+        const hardware: MultiSelectOption[] = []
+        const software: MultiSelectOption[] = []
+        const byParent: Record<string, MultiSelectOption[]> = {}
+        for (const d of dict) {
+          const opt: MultiSelectOption = {
+            value: d.specialty_normalized,
+            label: d.specialty_normalized.replace(/_/g, ' '),
+          }
+          if (HARDWARE_SPECIALTIES.has(d.specialty_normalized)) {
+            hardware.push({ ...opt, sublabel: 'hardware' })
+          } else if (SOFTWARE_SPECIALTIES.has(d.specialty_normalized)) {
+            software.push({ ...opt, sublabel: 'software' })
+          } else {
+            const parent = d.parent_function || 'other'
+            if (!byParent[parent]) byParent[parent] = []
+            byParent[parent].push({ ...opt, sublabel: parent.replace(/_/g, ' ') })
+          }
         }
-        setSpecialtyOptions(
-          Array.from(specSet).sort().map(s => ({ value: s, label: s.replace(/_/g, ' ') }))
-        )
+        const grouped: MultiSelectOption[] = [
+          ...hardware.sort((a, b) => a.label.localeCompare(b.label)),
+          ...software.sort((a, b) => a.label.localeCompare(b.label)),
+          ...Object.keys(byParent).sort().flatMap(k =>
+            byParent[k].sort((a, b) => a.label.localeCompare(b.label))
+          ),
+        ]
+        setSpecialtyOptions(grouped)
 
         setError(null)
       } catch (err: any) {
@@ -272,10 +385,54 @@ export default function ProfileTable() {
       rows = rows.filter(p => p.location_name && s.has(p.location_name))
     }
 
-    // Multi-select: specialty
+    // Multi-select: specialty (scope-aware)
     if (specialtySel.length > 0) {
       const s = new Set(specialtySel)
-      rows = rows.filter(p => p.primary_specialty && s.has(p.primary_specialty))
+      if (specialtyScope === 'current') {
+        rows = rows.filter(p => p.primary_specialty && s.has(p.primary_specialty))
+      } else {
+        // "any past specialty" — scan all experiences
+        rows = rows.filter(p => Array.from(p.all_specialties).some(spec => s.has(spec)))
+      }
+    }
+
+    // Multi-select: clearance_level
+    if (clearanceSel.length > 0) {
+      const s = new Set(clearanceSel)
+      rows = rows.filter(p => p.clearance_level && s.has(p.clearance_level))
+    }
+
+    // Focus scope — candidate must have at least one experience at a company
+    // with the matching focus. 'all' = no filter.
+    if (focusScope === 'hard_tech') {
+      rows = rows.filter(p => p.experiences_lite.some(e => e.company_focus === 'hard_tech'))
+    } else if (focusScope === 'all_tech') {
+      rows = rows.filter(p => p.experiences_lite.some(e => e.company_focus === 'hard_tech' || e.company_focus === 'all_tech'))
+    }
+
+    // Compound filter: worked at <company> with <specialty> between <y1> and <y2>
+    if (compoundCompany) {
+      const y1 = compoundYearMin === '' ? null : parseInt(compoundYearMin, 10)
+      const y2 = compoundYearMax === '' ? null : parseInt(compoundYearMax, 10)
+      const needSpecs = compoundSpecialties.length > 0 ? new Set(compoundSpecialties) : null
+      // Range bounds in days-since-epoch, inclusive
+      const rangeStart = y1 !== null && !isNaN(y1) ? new Date(y1, 0, 1).getTime() : null
+      const rangeEnd = y2 !== null && !isNaN(y2) ? new Date(y2, 11, 31).getTime() : null
+
+      rows = rows.filter(p => {
+        return p.experiences_lite.some(e => {
+          if (e.company_id !== compoundCompany) return false
+          if (needSpecs && !(e.specialty && needSpecs.has(e.specialty))) return false
+          // Date-range overlap: exp.start <= rangeEnd AND (exp.end >= rangeStart OR exp.end is null)
+          if (rangeStart !== null || rangeEnd !== null) {
+            const expStart = e.start_date ? new Date(e.start_date).getTime() : null
+            const expEnd = e.end_date ? new Date(e.end_date).getTime() : null // null = ongoing
+            if (rangeEnd !== null && expStart !== null && expStart > rangeEnd) return false
+            if (rangeStart !== null && expEnd !== null && expEnd < rangeStart) return false
+          }
+          return true
+        })
+      })
     }
 
     // Years-of-experience range
@@ -297,7 +454,7 @@ export default function ProfileTable() {
     }
 
     return rows
-  }, [people, searchQuery, bucketSel, stageSel, functionSel, senioritySel, companySel, schoolSel, locationSel, specialtySel, yearsMin, yearsMax, sortField, sortDirection])
+  }, [people, searchQuery, bucketSel, stageSel, functionSel, senioritySel, companySel, schoolSel, locationSel, specialtySel, specialtyScope, clearanceSel, focusScope, compoundCompany, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, sortField, sortDirection])
 
   const activeFilterCount =
     (bucketSel.length > 0 ? 1 : 0) +
@@ -308,6 +465,9 @@ export default function ProfileTable() {
     (schoolSel.length > 0 ? 1 : 0) +
     (locationSel.length > 0 ? 1 : 0) +
     (specialtySel.length > 0 ? 1 : 0) +
+    (clearanceSel.length > 0 ? 1 : 0) +
+    (focusScope !== 'all' ? 1 : 0) +
+    (compoundCompany ? 1 : 0) +
     (yearsMin !== '' || yearsMax !== '' ? 1 : 0)
 
   const clearAllFilters = () => {
@@ -320,6 +480,13 @@ export default function ProfileTable() {
     setSchoolSel([])
     setLocationSel([])
     setSpecialtySel([])
+    setSpecialtyScope('any')
+    setClearanceSel([])
+    setFocusScope('all')
+    setCompoundCompany('')
+    setCompoundSpecialties([])
+    setCompoundYearMin('')
+    setCompoundYearMax('')
     setYearsMin('')
     setYearsMax('')
   }
@@ -418,28 +585,57 @@ export default function ProfileTable() {
         />
       </div>
 
-      {/* Filters */}
-      <div className="mb-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 items-end">
+      {/* Primary filters — specialty is the lead axis for recruiter search */}
+      <div className="mb-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 items-end">
+        {/* Specialty — primary filter, wider */}
+        <div className="col-span-2">
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs font-medium text-gray-600">Specialty</label>
+            <div className="flex items-center gap-1 text-[11px]">
+              <button
+                type="button"
+                onClick={() => setSpecialtyScope('any')}
+                className={`px-1.5 py-0.5 rounded ${specialtyScope === 'any' ? 'bg-blue-100 text-blue-800 border border-blue-200' : 'text-gray-500 border border-transparent hover:border-gray-200'}`}
+                title="Match against any past specialty (captures career switchers)"
+              >Any past</button>
+              <button
+                type="button"
+                onClick={() => setSpecialtyScope('current')}
+                className={`px-1.5 py-0.5 rounded ${specialtyScope === 'current' ? 'bg-blue-100 text-blue-800 border border-blue-200' : 'text-gray-500 border border-transparent hover:border-gray-200'}`}
+                title="Match only the current primary specialty"
+              >Current only</button>
+            </div>
+          </div>
+          <MultiSelect
+            label=""
+            options={specialtyOptions}
+            selected={specialtySel}
+            onChange={setSpecialtySel}
+            placeholder="Any specialty (backend, avionics, gnc, …)"
+            emptyMessage="No specialties match"
+          />
+        </div>
+
+        {/* Company focus scope */}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Company focus scope</label>
+          <select
+            value={focusScope}
+            onChange={(e) => setFocusScope(e.target.value as FocusScope)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All candidates</option>
+            <option value="hard_tech">Hard tech experience</option>
+            <option value="all_tech">All tech experience</option>
+          </select>
+        </div>
+
         <MultiSelect
           label="Bucket"
           options={BUCKET_OPTIONS}
           selected={bucketSel}
           onChange={setBucketSel}
           placeholder="Any bucket"
-        />
-        <MultiSelect
-          label="Career Stage"
-          options={STAGE_OPTIONS}
-          selected={stageSel}
-          onChange={setStageSel}
-          placeholder="Any stage"
-        />
-        <MultiSelect
-          label="Function"
-          options={functionOptions}
-          selected={functionSel}
-          onChange={setFunctionSel}
-          placeholder="Any function"
         />
         <MultiSelect
           label="Seniority"
@@ -473,12 +669,27 @@ export default function ProfileTable() {
           emptyMessage="No locations match"
         />
         <MultiSelect
-          label="Specialty"
-          options={specialtyOptions}
-          selected={specialtySel}
-          onChange={setSpecialtySel}
-          placeholder="Any specialty"
-          emptyMessage="No specialties match"
+          label="Clearance"
+          options={CLEARANCE_OPTIONS}
+          selected={clearanceSel}
+          onChange={setClearanceSel}
+          placeholder="Any clearance"
+        />
+        <MultiSelect
+          label="Career Stage"
+          options={STAGE_OPTIONS}
+          selected={stageSel}
+          onChange={setStageSel}
+          placeholder="Any stage"
+        />
+
+        {/* Function — demoted to a secondary filter */}
+        <MultiSelect
+          label="Function (secondary)"
+          options={functionOptions}
+          selected={functionSel}
+          onChange={setFunctionSel}
+          placeholder="Any function"
         />
 
         {/* Years of experience range */}
@@ -505,6 +716,70 @@ export default function ProfileTable() {
               className="w-20 px-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+        </div>
+      </div>
+
+      {/* Compound filter: worked at <company> as <specialty> between <year range> */}
+      <div className="mb-6 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-700 mb-2">
+          Worked at specific company
+          <span className="ml-2 font-normal text-slate-500 normal-case">
+            e.g. “embedded engineers from SpaceX between 2011 and 2014”
+          </span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="block text-[11px] font-medium text-gray-600 mb-1">Company</label>
+            <select
+              value={compoundCompany}
+              onChange={(e) => setCompoundCompany(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">— none —</option>
+              {companyOptions.map(c => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+          <MultiSelect
+            label="Specialty (any match)"
+            options={specialtyOptions}
+            selected={compoundSpecialties}
+            onChange={setCompoundSpecialties}
+            placeholder="Any specialty"
+          />
+          <div>
+            <label className="block text-[11px] font-medium text-gray-600 mb-1">Between year</label>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                min="1950"
+                max="2100"
+                value={compoundYearMin}
+                onChange={e => setCompoundYearMin(e.target.value)}
+                placeholder="start"
+                className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-gray-400">–</span>
+              <input
+                type="number"
+                min="1950"
+                max="2100"
+                value={compoundYearMax}
+                onChange={e => setCompoundYearMax(e.target.value)}
+                placeholder="end"
+                className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          {compoundCompany && (
+            <button
+              onClick={() => { setCompoundCompany(''); setCompoundSpecialties([]); setCompoundYearMin(''); setCompoundYearMax('') }}
+              className="px-3 py-2 text-sm text-slate-700 hover:text-slate-900 border border-slate-300 rounded-lg bg-white hover:bg-slate-100"
+            >
+              Clear compound filter
+            </button>
+          )}
         </div>
       </div>
 

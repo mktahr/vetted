@@ -66,7 +66,7 @@ export function MultiSelect({ label, options, selected, onChange, placeholder, e
 
   return (
     <div ref={containerRef} className="relative">
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      {label && <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>}
 
       <button
         type="button"

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Company, CompanyBucket, CompanyStatus, CompanyYearScore, CompanyFunctionScore } from '@/app/types'
+import { Company, CompanyBucket, CompanyStatus, CompanyFocus, CompanyYearScore, CompanyFunctionScore } from '@/app/types'
 import CompanyLogo, { guessDomain } from '@/app/components/CompanyLogo'
 import { COMPANY_FUNCTIONS } from '@/app/constants'
 
@@ -20,6 +20,16 @@ const STATUS_OPTIONS: Array<{ value: CompanyStatus; label: string }> = [
   { value: 'public',    label: 'Public' },
   { value: 'shut_down', label: 'Shut Down' },
 ]
+
+const FOCUS_OPTIONS: Array<{ value: CompanyFocus; label: string }> = [
+  { value: 'hard_tech',  label: 'Hard Tech' },
+  { value: 'all_tech',   label: 'All Tech' },
+  { value: 'unreviewed', label: 'Unreviewed' },
+]
+
+// Default focus filter shows reviewed companies only (hard_tech + all_tech).
+// Use 'all' to include unreviewed in the view.
+type FocusFilter = '' | 'hard_tech' | 'all_tech' | 'unreviewed' | 'all'
 
 type SortBy = 'name_asc' | 'name_desc' | 'year_score' | 'function_score'
 
@@ -40,6 +50,10 @@ export default function CompaniesListPage() {
   const [bucketFilter, setBucketFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [reviewFilter, setReviewFilter] = useState('')
+  // Default: reviewed-only view (hard_tech + all_tech). Matches recruiter
+  // workflow — unreviewed is the admin-triage list, opted in explicitly.
+  const [focusFilter, setFocusFilter] = useState<FocusFilter>('')
+  const [bulkFocusing, setBulkFocusing] = useState(false)
 
   // Sort
   const [sortBy, setSortBy] = useState<SortBy>('name_asc')
@@ -138,6 +152,17 @@ export default function CompaniesListPage() {
     if (reviewFilter === 'scored') rows = rows.filter(c => c.manual_review_status === 'reviewed' || c.manual_review_status === 'locked')
     if (reviewFilter === 'unscored') rows = rows.filter(c => c.manual_review_status === 'unreviewed')
 
+    // Focus filter. Default ('') = reviewed only = hard_tech + all_tech.
+    // 'all' explicitly includes unreviewed; specific values filter exactly.
+    if (focusFilter === '' || focusFilter === 'all_tech') {
+      rows = rows.filter(c => c.focus === 'hard_tech' || c.focus === 'all_tech')
+    } else if (focusFilter === 'hard_tech') {
+      rows = rows.filter(c => c.focus === 'hard_tech')
+    } else if (focusFilter === 'unreviewed') {
+      rows = rows.filter(c => c.focus === 'unreviewed')
+    }
+    // focusFilter === 'all' → no filter applied
+
     if (sortBy === 'name_asc') {
       rows.sort((a, b) => a.company_name.localeCompare(b.company_name))
     } else if (sortBy === 'name_desc') {
@@ -157,15 +182,16 @@ export default function CompaniesListPage() {
     }
 
     return rows
-  }, [companies, searchQuery, industryFilter, bucketFilter, statusFilter, reviewFilter, sortBy, sortYear, sortFunction, scoresByCompany, functionScoreByCompany])
+  }, [companies, searchQuery, industryFilter, bucketFilter, statusFilter, reviewFilter, focusFilter, sortBy, sortYear, sortFunction, scoresByCompany, functionScoreByCompany])
 
-  const activeFilters = [industryFilter, bucketFilter, statusFilter, reviewFilter].filter(Boolean).length
+  const activeFilters = [industryFilter, bucketFilter, statusFilter, reviewFilter, focusFilter].filter(Boolean).length
   const clearAll = () => {
     setSearchQuery('')
     setIndustryFilter('')
     setBucketFilter('')
     setStatusFilter('')
     setReviewFilter('')
+    setFocusFilter('')
   }
 
   function toggleSelect(id: string) {
@@ -195,6 +221,35 @@ export default function CompaniesListPage() {
     setSelectedIds(new Set())
     setBulkDeleting(false)
     setBulkDeleteConfirm(false)
+  }
+
+  async function handleBulkSetFocus(newFocus: CompanyFocus) {
+    if (selectedIds.size === 0) return
+    setBulkFocusing(true)
+    const ids = Array.from(selectedIds)
+    const { error: updateErr } = await supabase
+      .from('companies')
+      .update({ focus: newFocus })
+      .in('company_id', ids)
+    if (updateErr) {
+      alert(`Failed to update focus: ${updateErr.message}`)
+    } else {
+      setCompanies(prev => prev.map(c => selectedIds.has(c.company_id) ? { ...c, focus: newFocus } : c))
+      setSelectedIds(new Set())
+    }
+    setBulkFocusing(false)
+  }
+
+  async function handleQuickPromote(companyId: string, newFocus: CompanyFocus) {
+    const { error: updateErr } = await supabase
+      .from('companies')
+      .update({ focus: newFocus })
+      .eq('company_id', companyId)
+    if (updateErr) {
+      alert(`Failed to promote: ${updateErr.message}`)
+      return
+    }
+    setCompanies(prev => prev.map(c => c.company_id === companyId ? { ...c, focus: newFocus } : c))
   }
 
   // Year range for sort-by-year dropdown — build from data
@@ -316,6 +371,20 @@ export default function CompaniesListPage() {
           </select>
         </div>
 
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Focus</label>
+          <select
+            value={focusFilter}
+            onChange={(e) => setFocusFilter(e.target.value as FocusFilter)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Tech (default)</option>
+            <option value="hard_tech">Hard Tech only</option>
+            <option value="unreviewed">Unreviewed only</option>
+            <option value="all">Show everything</option>
+          </select>
+        </div>
+
         <div className="border-l border-gray-300 pl-3 ml-2 flex gap-3 items-end">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Sort by</label>
@@ -374,8 +443,26 @@ export default function CompaniesListPage() {
       </div>
 
       {selectedIds.size > 0 && (
-        <div className="mb-3 flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <span className="text-sm text-red-800 font-medium">{selectedIds.size} selected</span>
+        <div className="mb-3 flex flex-wrap items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <span className="text-sm text-amber-900 font-medium">{selectedIds.size} selected</span>
+
+          {/* Bulk focus change */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-700">Set focus:</span>
+            {FOCUS_OPTIONS.map(f => (
+              <button
+                key={f.value}
+                onClick={() => handleBulkSetFocus(f.value)}
+                disabled={bulkFocusing}
+                className="px-2 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex-1" />
+
           <button
             onClick={handleBulkDelete}
             onBlur={() => setBulkDeleteConfirm(false)}
@@ -415,6 +502,7 @@ export default function CompaniesListPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Industry</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Founded</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Focus</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bucket</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year Scores</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Function Scores</th>
@@ -424,7 +512,7 @@ export default function CompaniesListPage() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filtered.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-4 text-center text-gray-500">No companies found</td></tr>
+                <tr><td colSpan={11} className="px-4 py-4 text-center text-gray-500">No companies found</td></tr>
               ) : (
                 filtered.map(c => (
                   <tr
@@ -454,6 +542,31 @@ export default function CompaniesListPage() {
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">{c.primary_industry_tag || '—'}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">{c.founding_year ?? '—'}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 capitalize">{c.current_status.replace('_', ' ')}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs" onClick={(e) => e.stopPropagation()}>
+                      {c.focus === 'hard_tech' ? (
+                        <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded border border-indigo-200 font-medium">Hard Tech</span>
+                      ) : c.focus === 'all_tech' ? (
+                        <span className="text-gray-600">All Tech</span>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded border border-amber-200 font-medium">Unreviewed</span>
+                          <button
+                            onClick={() => handleQuickPromote(c.company_id, 'hard_tech')}
+                            className="px-1.5 py-0.5 bg-white text-indigo-700 border border-indigo-200 rounded hover:bg-indigo-50 text-[10px]"
+                            title="Promote to Hard Tech"
+                          >
+                            →HT
+                          </button>
+                          <button
+                            onClick={() => handleQuickPromote(c.company_id, 'all_tech')}
+                            className="px-1.5 py-0.5 bg-white text-gray-700 border border-gray-200 rounded hover:bg-gray-50 text-[10px]"
+                            title="Promote to All Tech"
+                          >
+                            →AT
+                          </button>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
                       {c.company_bucket ? c.company_bucket.replace(/_/g, ' ') : '—'}
                     </td>

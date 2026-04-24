@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Person, Experience, Education, BucketAssignment, CandidateBucket, ScoreComponent } from '../../types'
+import { Person, Experience, Education, BucketAssignment, CandidateBucket, ClearanceLevel, ScoreComponent } from '../../types'
 import CompanyLogo, { guessDomain } from '../../components/CompanyLogo'
 
 function cleanCompanyName(name: string | null | undefined): string | null {
@@ -173,6 +173,38 @@ export default function ProfilePage() {
 
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  // Editable clearance fields
+  const [clearanceLevel, setClearanceLevel] = useState<ClearanceLevel>('unknown')
+  const [clearanceNotes, setClearanceNotes] = useState<string>('')
+  const [clearanceSaving, setClearanceSaving] = useState(false)
+  const [clearanceMsg, setClearanceMsg] = useState<{ text: string; ok: boolean } | null>(null)
+
+  useEffect(() => {
+    if (person) {
+      setClearanceLevel(person.clearance_level || 'unknown')
+      setClearanceNotes(person.clearance_notes || '')
+    }
+  }, [person])
+
+  async function handleSaveClearance() {
+    setClearanceSaving(true)
+    setClearanceMsg(null)
+    try {
+      const { error } = await supabase
+        .from('people')
+        .update({ clearance_level: clearanceLevel, clearance_notes: clearanceNotes || null })
+        .eq('person_id', params.id as string)
+      if (error) throw error
+      setClearanceMsg({ text: 'Saved', ok: true })
+      setPerson(prev => prev ? { ...prev, clearance_level: clearanceLevel, clearance_notes: clearanceNotes || null } : prev)
+    } catch (err: any) {
+      setClearanceMsg({ text: `Save failed: ${err.message}`, ok: false })
+    } finally {
+      setClearanceSaving(false)
+      setTimeout(() => setClearanceMsg(null), 2500)
+    }
+  }
 
   async function handleDelete() {
     if (!deleteConfirm) { setDeleteConfirm(true); return }
@@ -403,6 +435,54 @@ export default function ProfilePage() {
           <div>
             <p className="text-xs text-gray-500 uppercase">Stage</p>
             <p className="font-medium text-sm">{person.career_stage_assigned?.replace(/_/g, ' ') || 'N/A'}</p>
+          </div>
+        </div>
+
+        {/* Admin — clearance */}
+        <div className="mb-8 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Clearance (admin)</h2>
+            {clearanceMsg && (
+              <span className={`text-xs ${clearanceMsg.ok ? 'text-emerald-700' : 'text-red-700'}`}>
+                {clearanceMsg.text}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-[180px,1fr,auto] gap-3 items-end">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Level</label>
+              <select
+                value={clearanceLevel}
+                onChange={e => setClearanceLevel(e.target.value as ClearanceLevel)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="unknown">Unknown</option>
+                <option value="none">None</option>
+                <option value="confidential">Confidential</option>
+                <option value="secret">Secret</option>
+                <option value="top_secret">Top Secret</option>
+                <option value="ts_sci">TS / SCI</option>
+                <option value="q_clearance">Q (DOE)</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+              <input
+                type="text"
+                value={clearanceNotes}
+                onChange={e => setClearanceNotes(e.target.value)}
+                placeholder="e.g. active since 2021, requires polygraph"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <button
+              onClick={handleSaveClearance}
+              disabled={clearanceSaving}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+            >
+              {clearanceSaving ? 'Saving…' : 'Save'}
+            </button>
           </div>
         </div>
 
