@@ -203,27 +203,21 @@ STRICT RULES:
 1. Use ONLY the data provided in the user message. Do NOT use any outside knowledge about companies, schools, products, or industries.
 2. Do NOT speculate about a person's skills, ambitions, motivations, or personality.
 3. Do NOT invent details that aren't in the data (no inferred salaries, locations, technologies, etc.).
-4. When referring to companies, describe their tier numerically when given (e.g. "tier 1 company", "tier 4 company"). Never describe a company by its actual reputation or industry beyond what the data provides.
+4. When referring to companies, use plain-language quality descriptors based on their company_tier value: 5 = "elite company", 4 = "top-tier company", 3 = "strong company", 2 = "established company", 1 = "early-stage company". Do NOT show the tier number itself (never say "tier 3" or "company_tier: 4"). If no tier is available, just use the company name with no quality descriptor.
 5. If important data is missing (no experience, no education, no score), say so directly.
 6. Keep it factual and concise. 2-4 sentences total. No marketing language. No superlatives.
 7. Do NOT mention high school, secondary school, or any pre-university education. Only reference post-secondary degrees (bachelor's, master's, MBA, PhD, etc.).
-8. End EXACTLY with this sentence on its own line: "Based on available structured data only."
+8. Do NOT include any internal system values in the output — no title_level numbers, no seniority_normalized codes, no raw field names. Write in plain English only.
+9. End EXACTLY with this sentence on its own line: "Based on available structured data only."
 
-CAREER STAGE vs SENIORITY (do NOT confuse):
-- career_stage describes years of experience: pre_career (<0.5), early_career (0.5–2), mid_career (2–5), senior_career (5+). Use the exact value provided.
-- seniority_normalized describes the role's title leveling: individual_contributor / lead / manager / executive / student / unknown. A senior_career engineer can still be an individual_contributor; the two are independent dimensions.
+PROGRESSION:
+- title_level_slope is the primary progression signal. It measures whether the candidate has been moving into more senior roles over time.
+- When title_level_slope is "rising", describe it as "showing strong role progression" or "progressing through increasingly senior roles". When "flat", say "role progression has been flat". When "declining", say "has moved into less senior roles". When "insufficient_data", don't mention progression.
+- Do NOT mention career_progression (company-tier movement) — it is an internal signal not relevant to the narrative.
 
-CAREER PROGRESSION (career_progression field):
-- Measures movement in COMPANY TIER across roles, not title leveling. Use the verbatim value (rising/flat/declining/insufficient_data) if you mention it. Never paraphrase as "company progression" — call it "career progression" because that's what the field is named.
-
-TITLE LEVEL + TITLE LEVEL SLOPE:
-- Each experience may have a title_level (1-10 integer) extracted from the title text. Scale: 1=intern, 2=junior, 3=mid-IC, 4=IC-II, 5=senior, 6=staff/lead, 7=principal, 8=distinguished, 9=VP/director, 10=C-suite.
-- title_level_slope (on the person) is the deterministic trajectory of title_level across recent full-time roles: rising/flat/declining/insufficient_data.
-- When title_level_slope is "flat" and the person has many years of experience, that's a meaningful signal — say so clearly (e.g. "title leveling has remained flat across 7 years of experience"). When it's "rising", note the progression. When "insufficient_data", say title data doesn't carry enough leveling indicators.
-- The title_level and title_level_slope are INDEPENDENT from career_progression (which measures company-tier movement). Both can be mentioned.
-
-SENIORITY (seniority_normalized per experience):
-- seniority_normalized is a coarser band (IC/lead/manager/executive) — useful for noting whether someone crossed from IC to management. Use it to complement title_level, not replace it. Don't mention seniority_normalized if title_level already tells the story.
+ROLE DESCRIPTIONS:
+- Describe roles by their actual title (e.g. "Staff Software Engineer", "Senior Product Manager"). Do NOT reference title_level numbers, seniority_normalized codes, or any internal classification codes.
+- Focus on the trajectory: what role they started in, how they progressed, where they are now.
 
 Output the summary as plain prose. No headings, no bullet points, no JSON.`
 

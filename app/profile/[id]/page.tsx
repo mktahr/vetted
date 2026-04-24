@@ -357,9 +357,13 @@ export default function ProfilePage() {
               career transition — previously {person.historical_specialty.replace(/_/g, ' ')}
             </span>
           )}
-          {person.career_progression && (
-            <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-xs border border-indigo-200">
-              progression: {person.career_progression}
+          {person.title_level_slope && person.title_level_slope !== 'insufficient_data' && (
+            <span className={`px-2 py-1 rounded text-xs border ${
+              person.title_level_slope === 'rising' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+              person.title_level_slope === 'declining' ? 'bg-red-50 text-red-700 border-red-200' :
+              'bg-gray-50 text-gray-600 border-gray-200'
+            }`}>
+              progression: {person.title_level_slope}
             </span>
           )}
           {person.highest_seniority_reached && (

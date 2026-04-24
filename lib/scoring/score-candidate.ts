@@ -332,7 +332,7 @@ export async function scoreCandidate(
   // 1. Person (with derived fields populated by compute-derived-fields script)
   const { data: person, error: personErr } = await supabase
     .from('people')
-    .select('person_id, full_name, years_experience_estimate, current_function_normalized, career_progression, highest_seniority_reached, has_early_stage_experience, has_hypergrowth_experience')
+    .select('person_id, full_name, years_experience_estimate, current_function_normalized, career_progression, title_level_slope, highest_seniority_reached, has_early_stage_experience, has_hypergrowth_experience')
     .eq('person_id', personId)
     .single();
 
@@ -543,17 +543,18 @@ export async function scoreCandidate(
   }
 
   // ─────────────────────────────────────────────────────────────────────
-  // BONUS: career_slope — only adds if progression = 'rising'
+  // BONUS: career_slope — fires when title_level_slope = 'rising'
+  //        (measures actual role progression: IC → Senior → Staff, etc.)
   // ─────────────────────────────────────────────────────────────────────
   if ('career_slope' in (weights.bonus || {})) {
-    const isRising = person.career_progression === 'rising';
+    const isRising = person.title_level_slope === 'rising';
     components.push({
       name: 'career_slope',
       category: 'bonus',
       weight: weights.bonus!.career_slope,
       raw: isRising ? 1.0 : 0,
       points: isRising ? weights.bonus!.career_slope : 0,
-      note: `progression=${person.career_progression ?? 'none'}`,
+      note: `title_level_slope=${person.title_level_slope ?? 'none'}`,
     });
   }
 
