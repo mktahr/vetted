@@ -102,10 +102,13 @@ export function resolveSeniorityFromRules(
   const emp = (ctx.employment_type || '').toLowerCase().trim()
   if (emp === 'internship' || /intern|co-?op/.test(emp)) return 'intern'
 
-  // 2. Pre-graduation override
+  // 2. Pre-graduation override — only fire when the role starts in a year
+  //    STRICTLY BEFORE the graduation year. Roles starting in the
+  //    graduation year (e.g. June new-grad start) are post-graduation.
   if (ctx.role_start_date && ctx.person_graduation_date) {
-    const start = new Date(ctx.role_start_date)
-    if (!isNaN(start.getTime()) && start < ctx.person_graduation_date) {
+    const startYear = new Date(ctx.role_start_date).getFullYear()
+    const gradYear = ctx.person_graduation_date.getFullYear()
+    if (!isNaN(startYear) && startYear < gradYear) {
       return 'intern'
     }
   }
@@ -212,10 +215,11 @@ export function resolveSeniorityWithDescription(
     return { level: 'intern', source: 'internship_override' }
   }
 
-  // 2. Pre-graduation override
+  // 2. Pre-graduation override — year comparison only (see resolveSeniorityFromRules)
   if (ctx.role_start_date && ctx.person_graduation_date) {
-    const start = new Date(ctx.role_start_date)
-    if (!isNaN(start.getTime()) && start < ctx.person_graduation_date) {
+    const startYear = new Date(ctx.role_start_date).getFullYear()
+    const gradYear = ctx.person_graduation_date.getFullYear()
+    if (!isNaN(startYear) && startYear < gradYear) {
       return { level: 'intern', source: 'pre_graduation_override' }
     }
   }
@@ -291,7 +295,7 @@ export function matchesRule(_rawTitle: string, _rule: SeniorityRule): boolean {
 /**
  * Helper: derive a person's graduation date from their education entries.
  *
- * Returns the EARLIEST post-secondary end_year as a Date (Dec 31 of that
+ * Returns the EARLIEST post-secondary end_year as a Date (June 1 of that
  * year). Rationale:
  *
  *   LATEST end_year breaks on people who later pick up an MBA or
@@ -334,7 +338,10 @@ export function graduationDateFromEducation(
       earliestPostSecondary = edu.end_year
     }
   }
-  if (earliestPostSecondary !== null) return new Date(earliestPostSecondary, 11, 31)
+  // Use June 1 (not Dec 31) — most graduates start their first job in
+  // summer of their graduation year. Dec 31 caused roles starting in
+  // June/July of the grad year to be flagged as pre-graduation.
+  if (earliestPostSecondary !== null) return new Date(earliestPostSecondary, 5, 1)
 
   let earliestOverall: number | null = null
   for (const edu of education) {
@@ -342,5 +349,5 @@ export function graduationDateFromEducation(
     if (earliestOverall === null || edu.end_year < earliestOverall) earliestOverall = edu.end_year
   }
   if (earliestOverall === null) return null
-  return new Date(earliestOverall, 11, 31)
+  return new Date(earliestOverall, 5, 1)
 }

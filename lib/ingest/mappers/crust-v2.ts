@@ -107,13 +107,13 @@ function graduationDateFromEducation(
     if (isHighSchoolOrLower(edu)) continue
     if (earliest === null || edu.end_year < earliest) earliest = edu.end_year
   }
-  if (earliest !== null) return new Date(earliest, 11, 31)
+  if (earliest !== null) return new Date(earliest, 5, 1)
 
   for (const edu of education) {
     if (!edu.end_year) continue
     if (earliest === null || edu.end_year < earliest) earliest = edu.end_year
   }
-  return earliest === null ? null : new Date(earliest, 11, 31)
+  return earliest === null ? null : new Date(earliest, 5, 1)
 }
 
 function computeYearsSpan(

@@ -64,7 +64,9 @@ function resolveSeniority(ctx) {
   if (emp === 'internship' || /intern|co-?op/.test(emp)) return 'intern'
   if (ctx.role_start_date && ctx.graduation_date) {
     const start = new Date(ctx.role_start_date)
-    if (!isNaN(start.getTime()) && start < ctx.graduation_date) return 'intern'
+    const startYear = start.getFullYear()
+    const gradYear = ctx.graduation_date.getFullYear()
+    if (!isNaN(startYear) && startYear < gradYear) return 'intern'
   }
   const title = (ctx.title || '').trim()
   if (!title) return 'unknown'
@@ -142,7 +144,7 @@ for (const person of people || []) {
       if (earliest === null || e.end_year < earliest) earliest = e.end_year
     }
   }
-  const gradDate = earliest !== null ? new Date(earliest, 11, 31) : null
+  const gradDate = earliest !== null ? new Date(earliest, 5, 1) : null
 
   // Update each experience
   const changedTitles = []
@@ -199,7 +201,7 @@ for (const person of people || []) {
     if (isInternshipTitle(e.title_raw)) continue
     const start = new Date(e.start_date)
     if (isNaN(start.getTime())) continue
-    if (gradDate && start < gradDate) continue
+    if (gradDate && start.getFullYear() < gradDate.getFullYear()) continue
     if (earliestPostGrad === null || start < earliestPostGrad) earliestPostGrad = start
   }
 

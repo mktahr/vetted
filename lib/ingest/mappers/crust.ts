@@ -293,7 +293,7 @@ function graduationDateFromEducation(
     if (isHighSchoolOrLower(edu)) continue
     if (earliest === null || edu.end_year < earliest) earliest = edu.end_year
   }
-  if (earliest !== null) return new Date(earliest, 11, 31)
+  if (earliest !== null) return new Date(earliest, 5, 1)
 
   // Fallback: no post-secondary — use earliest overall
   for (const edu of education) {
@@ -301,7 +301,7 @@ function graduationDateFromEducation(
     if (earliest === null || edu.end_year < earliest) earliest = edu.end_year
   }
   if (earliest === null) return null
-  return new Date(earliest, 11, 31)
+  return new Date(earliest, 5, 1)
 }
 
 // ─── Main mapper ────────────────────────────────────────────────────────────
