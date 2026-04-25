@@ -96,7 +96,7 @@ export default function ProfileTable() {
 
   // Filter state
   const [roleSel, setRoleSel] = useState<string[]>([])
-  const [bucketSel, setBucketSel] = useState<string[]>([])
+  const [bucketSel, setBucketSel] = useState<string[]>(['vetted_talent', 'high_potential', 'silver_medalist'])
   const [stageSel, setStageSel] = useState<string[]>([])
   const [senioritySel, setSenioritySel] = useState<string[]>([])
   const [schoolSel, setSchoolSel] = useState<string[]>([])
@@ -360,8 +360,8 @@ export default function ProfileTable() {
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '64vh', color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)' }}>Loading people...</div>
   if (error) return <div style={{ padding: 24 }}><div style={{ background: 'var(--red-950)', border: '1px solid var(--red-800)', borderRadius: 'var(--r-card)', padding: 16 }}><p style={{ color: 'var(--red-400)', fontSize: 'var(--fs-13)' }}>{error}</p></div></div>
 
-  // Import theme toggle
   const ThemeToggle = require('./ThemeToggle').default
+  const eyebrow: React.CSSProperties = { padding: '8px 12px', textAlign: 'left', fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)' as any, fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: 'var(--tr-eyebrow)', color: 'var(--fg-tertiary)', whiteSpace: 'nowrap' }
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)' }}>
@@ -458,15 +458,12 @@ export default function ProfileTable() {
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-strong)' }}>
                     <th style={{ padding: '8px 8px', width: 32 }}><input type="checkbox" checked={filteredPeople.length > 0 && selectedIds.size === filteredPeople.length} onChange={toggleSelectAll} style={{ accentColor: 'var(--accent-500)' }} /></th>
-                    {['Name','Bucket','Location','Company','Title','Yrs','Stage','LinkedIn'].map((h, i) => (
-                      <th key={h} onClick={h === 'Yrs' ? () => handleSort('years_experience_estimate') : undefined}
-                        style={{
-                          padding: '8px 12px', textAlign: 'left',
-                          fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)', fontFamily: 'var(--font-sans)',
-                          textTransform: 'uppercase', letterSpacing: 'var(--tr-eyebrow)',
-                          color: 'var(--fg-tertiary)', whiteSpace: 'nowrap',
-                          cursor: h === 'Yrs' ? 'pointer' : 'default',
-                        }}>
+                    <th style={{ ...eyebrow, width: 36, padding: '8px 4px' }} title="LinkedIn">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="var(--fg-tertiary)"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                    </th>
+                    {[{h:'Name',sort:false},{h:'Company',sort:false},{h:'Title',sort:false},{h:'Specialty',sort:false},{h:'Yrs',sort:true},{h:'Location',sort:false}].map(({h,sort}) => (
+                      <th key={h} onClick={sort ? () => handleSort('years_experience_estimate') : undefined}
+                        style={{ ...eyebrow, cursor: sort ? 'pointer' : 'default' }}>
                         {h}{h === 'Yrs' && sortField === 'years_experience_estimate' && (sortDirection === 'asc' ? ' ↑' : ' ↓')}
                       </th>
                     ))}
@@ -474,59 +471,66 @@ export default function ProfileTable() {
                 </thead>
                 <tbody>
                   {filteredPeople.length === 0 ? (
-                    <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: 'var(--fg-tertiary)' }}>No candidates match these filters</td></tr>
-                  ) : filteredPeople.map(person => (
+                    <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: 'var(--fg-tertiary)' }}>No candidates match these filters</td></tr>
+                  ) : filteredPeople.map(person => {
+                    const isSelected = selectedPerson?.person_id === person.person_id
+                    return (
                     <tr key={person.person_id}
                       onClick={() => { setSelectedPerson(person); setIsDrawerOpen(true) }}
                       style={{
                         borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer',
                         transition: 'background var(--dur-hover) var(--ease)',
-                        borderLeft: selectedPerson?.person_id === person.person_id ? '2px solid var(--accent-500)' : '2px solid transparent',
-                        background: selectedPerson?.person_id === person.person_id ? 'var(--bg-selected)' : 'transparent',
+                        borderLeft: isSelected ? '2px solid var(--accent-500)' : '2px solid transparent',
+                        background: isSelected ? 'var(--bg-selected)' : 'transparent',
                       }}
-                      onMouseEnter={e => { if (selectedPerson?.person_id !== person.person_id) e.currentTarget.style.background = 'var(--bg-hover)' }}
-                      onMouseLeave={e => { if (selectedPerson?.person_id !== person.person_id) e.currentTarget.style.background = 'transparent' }}>
+                      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--bg-hover)' }}
+                      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}>
+                      {/* Checkbox */}
                       <td style={{ padding: '8px 8px' }} onClick={e => e.stopPropagation()}>
                         <input type="checkbox" checked={selectedIds.has(person.person_id)} onChange={() => toggleSelect(person.person_id)} style={{ accentColor: 'var(--accent-500)' }} />
                       </td>
+                      {/* LinkedIn icon */}
+                      <td style={{ padding: '8px 4px', width: 36 }} onClick={e => e.stopPropagation()}>
+                        {person.linkedin_url ? (
+                          <a href={person.linkedin_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fg-tertiary)', transition: 'color 150ms' }}
+                            onMouseEnter={e => (e.currentTarget.style.color = 'var(--fg-primary)')}
+                            onMouseLeave={e => (e.currentTarget.style.color = 'var(--fg-tertiary)')}>
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                          </a>
+                        ) : (
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="var(--fg-tertiary)" style={{ opacity: 0.25 }}><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                        )}
+                      </td>
+                      {/* Name */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
                         <button onClick={e => { e.stopPropagation(); router.push(`/profile/${person.person_id}`) }}
-                          style={{
-                            color: selectedPerson?.person_id === person.person_id ? 'var(--accent)' : 'var(--fg-primary)',
-                            fontWeight: 'var(--fw-medium)', background: 'none', border: 'none', cursor: 'pointer',
-                            fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-13)',
-                            transition: 'color 150ms var(--ease)',
-                          }}
+                          style={{ color: isSelected ? 'var(--accent)' : 'var(--fg-primary)', fontWeight: 'var(--fw-medium)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-13)', transition: 'color 150ms var(--ease)' }}
                           onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
-                          onMouseLeave={e => { if (selectedPerson?.person_id !== person.person_id) e.currentTarget.style.color = 'var(--fg-primary)' }}>
+                          onMouseLeave={e => { if (!isSelected) e.currentTarget.style.color = 'var(--fg-primary)' }}>
                           {person.full_name || 'N/A'}
                         </button>
                       </td>
-                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}><BucketChip bucket={person.latest_bucket} /></td>
-                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)' }}>{person.location_name || '—'}</td>
+                      {/* Company */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <CompanyLogo domain={guessDomain(person.current_company_name)} companyName={person.current_company_name} size={20} />
                           <span style={{ color: 'var(--fg-primary)' }}>{cleanCompanyName(person.current_company_name) || '—'}</span>
                         </div>
                       </td>
-                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
-                        <div style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--fg-primary)' }}>
-                          {(person.current_title_normalized || person.current_title_raw || '—').split(/\s*[|–—]\s*/)[0].split(/,\s*/)[0]}
-                        </div>
-                        {person.primary_specialty && (
-                          <span style={{ display: 'inline-block', marginTop: 2, padding: '1px 6px', background: 'var(--tag-mist-bg)', color: 'var(--tag-mist-text)', border: '1px solid var(--tag-mist-border)', borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-11)' }}>
-                            {person.primary_specialty.replace(/_/g, ' ')}
-                          </span>
-                        )}
+                      {/* Title (text only, no pills) */}
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-primary)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {(person.current_title_normalized || person.current_title_raw || '—').split(/\s*[|–—]\s*/)[0].split(/,\s*/)[0]}
                       </td>
+                      {/* Specialty (plain text, quiet) */}
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)' }}>
+                        {person.primary_specialty ? person.primary_specialty.replace(/_/g, ' ') : <span style={{ opacity: 0.4 }}>—</span>}
+                      </td>
+                      {/* Years */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', color: 'var(--fg-secondary)' }}>{person.years_experience_estimate ?? '—'}</td>
-                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)' }}>{person.career_stage_assigned?.replace(/_/g, ' ') || '—'}</td>
-                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
-                        {person.linkedin_url ? <a href={person.linkedin_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)', textDecoration: 'none' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--fg-primary)'; e.currentTarget.style.textDecoration = 'underline' }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--fg-secondary)'; e.currentTarget.style.textDecoration = 'none' }}>View</a> : <span style={{ color: 'var(--fg-tertiary)' }}>—</span>}
-                      </td>
+                      {/* Location */}
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)' }}>{person.location_name || '—'}</td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>

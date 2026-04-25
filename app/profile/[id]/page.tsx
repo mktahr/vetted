@@ -309,7 +309,7 @@ export default function ProfilePage() {
         </div>
 
         {/* AI narrative summary */}
-        <div className="mb-6 p-4 bg-selected border border-primary rounded-lg">
+        <div className="mb-6 p-4 bg-card border border-border rounded-lg">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Summary</p>
             <button

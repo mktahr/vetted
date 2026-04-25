@@ -50,6 +50,8 @@ export default function CompanyEditPage() {
     focus: 'all_tech' as CompanyFocus,
     website_url: '',
     linkedin_url: '',
+    funding_stage: '',
+    headcount_range: '',
   })
 
   const [newYear, setNewYear] = useState<string>(String(new Date().getFullYear()))
@@ -74,6 +76,8 @@ export default function CompanyEditPage() {
           focus: (c.focus as CompanyFocus) || 'all_tech',
           website_url: c.website_url || '',
           linkedin_url: c.linkedin_url || '',
+          funding_stage: (c as any).funding_stage || '',
+          headcount_range: (c as any).headcount_range || '',
         })
 
         const { data: ys } = await supabase
@@ -110,6 +114,8 @@ export default function CompanyEditPage() {
         focus: form.focus,
         website_url: form.website_url.trim() || null,
         linkedin_url: form.linkedin_url.trim() || null,
+        funding_stage: form.funding_stage.trim() || null,
+        headcount_range: form.headcount_range.trim() || null,
       }
       const { error } = await supabase
         .from('companies')
@@ -342,6 +348,30 @@ export default function CompanyEditPage() {
                 placeholder="https://linkedin.com/company/example"
                 className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Funding Stage</label>
+              <select
+                value={form.funding_stage}
+                onChange={(e) => setForm({ ...form, funding_stage: e.target.value })}
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">— none —</option>
+                {['Pre-Seed','Seed','Series A','Series B','Series C','Series D','Series E','Series F','Series G','Series H','Public','Acquired','Bootstrapped'].map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Headcount Range</label>
+              <select
+                value={form.headcount_range}
+                onChange={(e) => setForm({ ...form, headcount_range: e.target.value })}
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">— none —</option>
+                {['1-10','11-50','51-200','201-500','501-1000','1000+'].map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
             </div>
 
             <div>

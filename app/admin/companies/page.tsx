@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { Company, CompanyBucket, CompanyStatus, CompanyFocus, CompanyYearScore, CompanyFunctionScore } from '@/app/types'
 import CompanyLogo, { guessDomain } from '@/app/components/CompanyLogo'
 import { COMPANY_FUNCTIONS } from '@/app/constants'
+import ThemeToggle from '@/app/components/ThemeToggle'
 
 const BUCKET_OPTIONS: Array<{ value: CompanyBucket; label: string }> = [
   { value: 'static_mature',    label: 'Static Mature' },
@@ -301,12 +302,15 @@ export default function CompaniesListPage() {
           <a href="/" className="text-sm text-muted-foreground hover:text-foreground">← Back to people</a>
           <h1 className="text-3xl font-bold mt-2">Companies</h1>
         </div>
-        <button
-          onClick={() => router.push('/admin/companies/new')}
-          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-accent-strong"
-        >
-          + Add Company
-        </button>
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+          <button
+            onClick={() => router.push('/admin/companies/new')}
+            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-accent-strong"
+          >
+            + Add Company
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -498,21 +502,21 @@ export default function CompaniesListPage() {
                     className="rounded border-border"
                   />
                 </th>
+                <th className="px-2 py-3 w-9" title="LinkedIn">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" className="text-tertiary"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Name</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Industry</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Founded</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Focus</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Stage</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Size</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Bucket</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Year Scores</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Function Scores</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Website</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">LinkedIn</th>
               </tr>
             </thead>
             <tbody className="bg-card divide-y divide-border">
               {filtered.length === 0 ? (
-                <tr><td colSpan={11} className="px-4 py-4 text-center text-tertiary">No companies found</td></tr>
+                <tr><td colSpan={9} className="px-4 py-4 text-center text-tertiary">No companies found</td></tr>
               ) : (
                 filtered.map(c => (
                   <tr
@@ -528,63 +532,31 @@ export default function CompaniesListPage() {
                         className="rounded border-border"
                       />
                     </td>
+                    {/* LinkedIn icon */}
+                    <td className="px-2 py-3 w-9" onClick={(e) => e.stopPropagation()}>
+                      {c.linkedin_url ? (
+                        <a href={c.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-tertiary hover:text-foreground">
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                        </a>
+                      ) : (
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" className="text-tertiary" style={{ opacity: 0.25 }}><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                      )}
+                    </td>
+                    {/* Name + logo */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <CompanyLogo domain={guessDomain(c.company_name)} companyName={c.company_name} size={20} />
                         <span className="text-foreground font-medium">{c.company_name}</span>
-                        {c.manual_review_status === 'reviewed' || c.manual_review_status === 'locked' ? (
-                          <span className="px-1.5 py-0.5 bg-positive/10 text-positive text-[10px] rounded border border-positive/30 font-medium">Scored</span>
-                        ) : (
-                          <span className="px-1.5 py-0.5 bg-background text-tertiary text-[10px] rounded border border-border">Unscored</span>
-                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">{c.primary_industry_tag || '—'}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">{c.founding_year ?? '—'}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground capitalize">{c.current_status.replace('_', ' ')}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-xs" onClick={(e) => e.stopPropagation()}>
-                      {c.focus === 'hard_tech' ? (
-                        <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded border border-indigo-200 font-medium">Hard Tech</span>
-                      ) : c.focus === 'all_tech' ? (
-                        <span className="text-muted-foreground">All Tech</span>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <span className="px-1.5 py-0.5 bg-watch/10 text-watch rounded border border-watch/30 font-medium">Unreviewed</span>
-                          <button
-                            onClick={() => handleQuickPromote(c.company_id, 'hard_tech')}
-                            className="px-1.5 py-0.5 bg-card text-indigo-700 border border-indigo-200 rounded hover:bg-indigo-50 text-[10px]"
-                            title="Promote to Hard Tech"
-                          >
-                            →HT
-                          </button>
-                          <button
-                            onClick={() => handleQuickPromote(c.company_id, 'all_tech')}
-                            className="px-1.5 py-0.5 bg-card text-muted-foreground border border-border rounded hover:bg-background text-[10px]"
-                            title="Promote to All Tech"
-                          >
-                            →AT
-                          </button>
-                        </div>
-                      )}
-                    </td>
+                    {/* Stage (funding) */}
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">{(c as any).funding_stage || '—'}</td>
+                    {/* Size (headcount) */}
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">{(c as any).headcount_range || '—'}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">
                       {c.company_bucket ? c.company_bucket.replace(/_/g, ' ') : '—'}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">{renderYearScores(c.company_id)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">
-                      {(() => {
-                        const fScores = functionScoresAll.filter(fs => fs.company_id === c.company_id)
-                        if (fScores.length === 0) return <span className="text-tertiary">—</span>
-                        return (
-                          <div className="flex flex-wrap gap-1">
-                            {fScores.map(fs => (
-                              <span key={fs.function_normalized} className="px-1.5 py-0.5 bg-muted text-muted-foreground rounded border border-border text-[10px]" title={`${fs.function_normalized}: ${fs.function_score}/5`}>
-                                {COMPANY_FUNCTIONS.find(f => f.value === fs.function_normalized)?.label || fs.function_normalized}: {fs.function_score}
-                              </span>
-                            ))}
-                          </div>
-                        )
-                      })()}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm" onClick={(e) => e.stopPropagation()}>
                       {(() => {
@@ -596,18 +568,6 @@ export default function CompaniesListPage() {
                           </a>
                         )
                       })()}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm" onClick={(e) => e.stopPropagation()}>
-                      {c.linkedin_url ? (
-                        <a href={c.linkedin_url} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
-                          title={c.linkedin_url}
-                        >
-                          <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                        </a>
-                      ) : (
-                        <span className="text-disabled">—</span>
-                      )}
                     </td>
                   </tr>
                 ))
