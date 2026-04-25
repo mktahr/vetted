@@ -3,11 +3,20 @@
 // TODO: Refactor filter state to individual URL params when search-URL-sharing becomes a use case.
 // Currently uses a single JSON param for simplicity.
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { MultiSelect, MultiSelectOption } from '../components/MultiSelect'
 import { buildLocationOptions } from '@/lib/locations/us-locations'
+
+// Next.js 14 requires useSearchParams() to be inside a Suspense boundary.
+export default function SearchBuilderPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center items-center h-64"><div className="text-gray-500">Loading search builder...</div></div>}>
+      <SearchBuilderInner />
+    </Suspense>
+  )
+}
 
 const BUCKET_OPTIONS: MultiSelectOption[] = [
   { value: 'vetted_talent', label: 'Vetted Talent' }, { value: 'high_potential', label: 'High Potential' },
@@ -25,7 +34,7 @@ const CLEARANCE_OPTIONS: MultiSelectOption[] = [
   { value: 'other', label: 'Other' }, { value: 'unknown', label: 'Unknown' },
 ]
 
-export default function SearchBuilderPage() {
+function SearchBuilderInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
