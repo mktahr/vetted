@@ -47,6 +47,7 @@ export type SignalCategory =
   | 'career_changer'
   | 'self_taught'
   | 'language'
+  | 'competition'
   | 'other'
 
 export type SignalSource =
@@ -159,10 +160,21 @@ export interface WritingEvidence {
 }
 
 export interface MilitaryEvidence {
-  branch?: string
-  rank?: string
-  years_of_service?: number
-  mos?: string
+  branch?: 'army' | 'navy' | 'air_force' | 'marines' | 'space_force' | 'coast_guard'
+  rank_at_separation?: string
+  unit?: string
+  years_active?: string
+  combat_deployment?: boolean
+  commissioning_source?: 'service_academy' | 'rotc' | 'ocs' | 'ots' | 'occ' | 'direct_commission' | 'other'
+}
+
+export interface CompetitionEvidence {
+  event?: string
+  year?: number
+  placement?: string
+  division?: string
+  project_url?: string
+  team_size?: number
 }
 
 export interface LanguageEvidence {
@@ -190,6 +202,7 @@ export type EvidenceMetadata<C extends SignalCategory> =
   C extends 'speaking' ? SpeakingEvidence :
   C extends 'writing' ? WritingEvidence :
   C extends 'military' ? MilitaryEvidence :
+  C extends 'competition' ? CompetitionEvidence :
   C extends 'language' ? LanguageEvidence :
   GenericEvidence
 
@@ -200,6 +213,7 @@ export interface SignalDictionaryRow {
   canonical_name: string
   category: SignalCategory
   subcategory: string | null
+  tier_group: string | null
   aliases: string[]
   source_field_hints: SourceFieldHint[]
   canonical_url: string | null
@@ -238,6 +252,7 @@ export interface ActiveSignalRow {
   canonical_name: string
   category: SignalCategory
   subcategory: string | null
+  tier_group: string | null
   canonical_url: string | null
   evidence_url: string | null
   evidence_metadata: Record<string, unknown>
