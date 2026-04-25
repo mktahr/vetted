@@ -402,8 +402,8 @@ export default function ProfileTable() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <h1 style={{ fontSize: 'var(--fs-22)', fontWeight: 'var(--fw-semibold)', letterSpacing: '-0.01em' }}>Vetted Database</h1>
             <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 'var(--fs-13)' }}>
-              <a href="/admin/import" style={{ color: 'var(--accent)' }}>Import →</a>
-              <a href="/admin/companies" style={{ color: 'var(--accent)' }}>Companies →</a>
+              <a href="/admin/import" style={{ color: 'var(--fg-secondary)', textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.color = 'var(--fg-primary)')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--fg-secondary)')}>Import →</a>
+              <a href="/admin/companies" style={{ color: 'var(--fg-secondary)', textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.color = 'var(--fg-primary)')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--fg-secondary)')}>Companies →</a>
               <ThemeToggle />
             </div>
           </div>
@@ -523,7 +523,7 @@ export default function ProfileTable() {
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', color: 'var(--fg-secondary)' }}>{person.years_experience_estimate ?? '—'}</td>
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)' }}>{person.career_stage_assigned?.replace(/_/g, ' ') || '—'}</td>
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
-                        {person.linkedin_url ? <a href={person.linkedin_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: 'var(--accent)', fontSize: 'var(--fs-13)' }}>View</a> : <span style={{ color: 'var(--fg-tertiary)' }}>—</span>}
+                        {person.linkedin_url ? <a href={person.linkedin_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)', textDecoration: 'none' }} onMouseEnter={e => { e.currentTarget.style.color = 'var(--fg-primary)'; e.currentTarget.style.textDecoration = 'underline' }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--fg-secondary)'; e.currentTarget.style.textDecoration = 'none' }}>View</a> : <span style={{ color: 'var(--fg-tertiary)' }}>—</span>}
                       </td>
                     </tr>
                   ))}

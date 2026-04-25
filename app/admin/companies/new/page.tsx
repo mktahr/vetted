@@ -68,7 +68,7 @@ export default function NewCompanyPage() {
     <div style={{ padding: 24, maxWidth: 700, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
       <button
         onClick={() => router.push('/admin/companies')}
-        className="mb-6 text-primary hover:text-accent-strong"
+        className="mb-6 text-muted-foreground hover:text-foreground"
       >
         ← Back to companies
       </button>

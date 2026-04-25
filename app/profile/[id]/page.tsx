@@ -254,7 +254,7 @@ export default function ProfilePage() {
       <div className="mb-6 flex items-center justify-between">
         <button
           onClick={() => router.push('/')}
-          className="text-primary hover:text-accent-strong"
+          className="text-muted-foreground hover:text-foreground"
         >
           ← Back to List
         </button>
@@ -288,7 +288,7 @@ export default function ProfilePage() {
                     href={person.linkedin_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-primary hover:text-accent-strong underline"
+                    className="text-muted-foreground hover:text-foreground underline"
                   >
                     LinkedIn
                   </a>
@@ -311,11 +311,11 @@ export default function ProfilePage() {
         {/* AI narrative summary */}
         <div className="mb-6 p-4 bg-selected border border-primary rounded-lg">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-primary uppercase tracking-wide font-medium">Summary</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Summary</p>
             <button
               onClick={regenerateNarrative}
               disabled={narrativeLoading}
-              className="text-xs text-primary hover:text-accent-strong disabled:opacity-50 disabled:cursor-not-allowed underline"
+              className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed underline"
             >
               {narrativeLoading ? 'Generating…' : 'Regenerate'}
             </button>
@@ -348,7 +348,7 @@ export default function ProfilePage() {
               <>
                 <button
                   onClick={() => setBreakdownOpen(o => !o)}
-                  className="mt-3 inline-flex items-center gap-1 text-xs text-primary hover:text-accent-strong"
+                  className="mt-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
                   aria-expanded={breakdownOpen}
                 >
                   <span className="inline-block w-3">{breakdownOpen ? '▾' : '▸'}</span>

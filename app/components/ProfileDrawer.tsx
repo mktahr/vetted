@@ -119,7 +119,9 @@ export default function ProfileDrawer({ person, isOpen, onClose, onPrev, onNext 
             {person.linkedin_url && (
               <div>
                 <a href={person.linkedin_url} target="_blank" rel="noopener noreferrer"
-                  style={{ color: 'var(--accent)', fontSize: 'var(--fs-13)', textDecoration: 'none' }}>
+                  style={{ color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)', textDecoration: 'none' }}
+                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--fg-primary)'; e.currentTarget.style.textDecoration = 'underline' }}
+                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--fg-secondary)'; e.currentTarget.style.textDecoration = 'none' }}>
                   View LinkedIn Profile
                 </a>
               </div>

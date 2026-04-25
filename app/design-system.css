@@ -383,14 +383,28 @@ a:hover { color: var(--accent-strong); }
    COMPONENT RULES (reference documentation — enforced in code)
    ============================================================
 
+   ACCENT COLOR RULE (Ember / --accent-500):
+   Ember is reserved for exactly TWO use cases:
+   1. Primary CTAs — the single most important action button on a screen
+      (e.g., "Save", "+ Add Company", "Open full search builder").
+      Styled: bg-primary text-primary-foreground.
+   2. Active/selected state — currently-active toggle pills, the
+      currently-selected row in a list. Styled: bg-selected or
+      text-accent on the active element.
+
+   Ember is NOT used for:
+   - Navigation links ("← Back to…") → text-muted-foreground
+   - Inline action links ("Regenerate", "Edit", "View") → text-muted-foreground
+   - Entity names (candidates, companies) → text-foreground
+   - URLs and metadata → text-muted-foreground
+   - Destructive actions → text-destructive (red)
+   - Card borders or highlights → border-border (neutral)
+
    Entity names in lists:
-   Entity names (candidates, companies, schools) in table/list views
-   use --fg-primary by default. Brand accent (Ember) is reserved for
-   hover, active/selected state, and CTAs — never for default text.
-   - Default: --fg-primary, --fw-medium
-   - Hover: color transitions to --accent over 150ms
-   - Active/selected row: name uses --accent, row gets 2px left
-     --accent border + --bg-selected background tint
+   Entity names in table/list views use --fg-primary by default.
+   On hover: shift to --accent (this is the one place hover uses brand
+   color — it signals "this is the click target").
+   Active/selected row: name stays --accent, row gets 2px left border.
 
    Tailwind semantic tokens:
    All new components MUST use semantic Tailwind classes from the

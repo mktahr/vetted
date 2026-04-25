@@ -129,7 +129,7 @@ function SearchBuilderInner() {
     <div style={{ padding: 24, maxWidth: 1100, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <a href="/" className="text-sm text-primary hover:text-accent-strong">← Back to results</a>
+          <a href="/" className="text-sm text-muted-foreground hover:text-foreground">← Back to results</a>
           <h1 className="text-3xl font-bold mt-2">Build a Search</h1>
         </div>
       </div>

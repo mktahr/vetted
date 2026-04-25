@@ -252,7 +252,7 @@ export default function CompanyEditPage() {
       <div className="mb-6 flex items-center justify-between">
         <button
           onClick={() => router.push('/admin/companies')}
-          className="text-primary hover:text-accent-strong"
+          className="text-muted-foreground hover:text-foreground"
         >
           ← Back to companies
         </button>
@@ -278,12 +278,12 @@ export default function CompanyEditPage() {
               <h1 className="text-3xl font-bold">{company.company_name}</h1>
               <div className="flex items-center gap-3 mt-1 text-sm">
                 {company.linkedin_url && (
-                  <a href={company.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-accent-strong">
+                  <a href={company.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground hover:underline">
                     LinkedIn
                   </a>
                 )}
                 {(company.website_url || domain) && (
-                  <a href={company.website_url || `https://${domain}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-accent-strong">
+                  <a href={company.website_url || `https://${domain}`} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground hover:underline">
                     {domain}
                   </a>
                 )}
@@ -527,7 +527,7 @@ function YearScoreRow({ year, score, onSave, onDelete }: {
         <div className="flex gap-2">
           <button
             onClick={() => { onSave(parseInt(editScore, 10)); setEditing(false) }}
-            className="text-xs text-primary hover:text-accent-strong"
+            className="text-xs text-muted-foreground hover:text-foreground hover:underline"
           >
             Save
           </button>
@@ -547,7 +547,7 @@ function YearScoreRow({ year, score, onSave, onDelete }: {
       <span className="font-mono text-sm w-16">{year}</span>
       <span className="text-sm font-medium">{score}</span>
       <div className="flex gap-3">
-        <button onClick={() => setEditing(true)} className="text-xs text-primary hover:text-accent-strong">Edit</button>
+        <button onClick={() => setEditing(true)} className="text-xs text-muted-foreground hover:text-foreground hover:underline">Edit</button>
         <button onClick={onDelete} className="text-xs text-destructive hover:text-destructive">Delete</button>
       </div>
     </div>

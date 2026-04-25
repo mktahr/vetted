@@ -198,7 +198,7 @@ export default function ImportPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 1100, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
-      <a href="/" className="text-sm text-primary hover:text-accent-strong">← Back to people</a>
+      <a href="/" className="text-sm text-muted-foreground hover:text-foreground">← Back to people</a>
       <h1 className="text-3xl font-bold mt-2 mb-1">Import from Crust Data</h1>
       <p className="text-muted-foreground mb-6 text-sm">
         Search for candidates, preview a sample, then confirm to import all results.
@@ -335,7 +335,7 @@ export default function ImportPage() {
                     <td className="px-4 py-2 font-medium text-foreground whitespace-nowrap">
                       {row.linkedin_url ? (
                         <a href={row.linkedin_url} target="_blank" rel="noopener noreferrer"
-                          className="text-primary hover:underline">
+                          className="text-muted-foreground hover:text-foreground hover:underline">
                           {row.name}
                         </a>
                       ) : row.name}
@@ -355,7 +355,7 @@ export default function ImportPage() {
 
       {/* ── Import progress ──────────────────────────────────────────── */}
       {phase === 'importing' && progress && (
-        <div className="bg-selected border border-primary rounded-lg p-4 mb-6">
+        <div className="bg-selected border border-border rounded-lg p-4 mb-6">
           <p className="font-medium text-foreground mb-2">
             Importing… {progress.current}
             {progress.total !== null ? ` of ~${progress.total.toLocaleString()}` : ''} profiles
@@ -394,7 +394,7 @@ export default function ImportPage() {
               </ul>
             </details>
           )}
-          <button onClick={reset} className="mt-4 text-sm text-primary hover:text-accent-strong underline">
+          <button onClick={reset} className="mt-4 text-sm text-muted-foreground hover:text-foreground underline">
             Run another import
           </button>
         </div>
