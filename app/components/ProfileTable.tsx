@@ -478,15 +478,27 @@ export default function ProfileTable() {
                   ) : filteredPeople.map(person => (
                     <tr key={person.person_id}
                       onClick={() => { setSelectedPerson(person); setIsDrawerOpen(true) }}
-                      style={{ borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'background var(--dur-hover) var(--ease)' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      style={{
+                        borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer',
+                        transition: 'background var(--dur-hover) var(--ease)',
+                        borderLeft: selectedPerson?.person_id === person.person_id ? '2px solid var(--accent-500)' : '2px solid transparent',
+                        background: selectedPerson?.person_id === person.person_id ? 'var(--bg-selected)' : 'transparent',
+                      }}
+                      onMouseEnter={e => { if (selectedPerson?.person_id !== person.person_id) e.currentTarget.style.background = 'var(--bg-hover)' }}
+                      onMouseLeave={e => { if (selectedPerson?.person_id !== person.person_id) e.currentTarget.style.background = 'transparent' }}>
                       <td style={{ padding: '8px 8px' }} onClick={e => e.stopPropagation()}>
                         <input type="checkbox" checked={selectedIds.has(person.person_id)} onChange={() => toggleSelect(person.person_id)} style={{ accentColor: 'var(--accent-500)' }} />
                       </td>
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
                         <button onClick={e => { e.stopPropagation(); router.push(`/profile/${person.person_id}`) }}
-                          style={{ color: 'var(--accent)', fontWeight: 'var(--fw-medium)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-13)' }}>
+                          style={{
+                            color: selectedPerson?.person_id === person.person_id ? 'var(--accent)' : 'var(--fg-primary)',
+                            fontWeight: 'var(--fw-medium)', background: 'none', border: 'none', cursor: 'pointer',
+                            fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-13)',
+                            transition: 'color 150ms var(--ease)',
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+                          onMouseLeave={e => { if (selectedPerson?.person_id !== person.person_id) e.currentTarget.style.color = 'var(--fg-primary)' }}>
                           {person.full_name || 'N/A'}
                         </button>
                       </td>

@@ -379,6 +379,21 @@ a:hover { color: var(--accent-strong); }
 .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
 
 /* ============================================================
+   COMPONENT RULES (reference documentation — enforced in code)
+   ============================================================
+
+   Entity names in lists:
+   Entity names (candidates, companies, schools) in table/list views
+   use --fg-primary by default. Brand accent (Ember) is reserved for
+   hover, active/selected state, and CTAs — never for default text.
+   - Default: --fg-primary, --fw-medium
+   - Hover: color transitions to --accent over 150ms
+   - Active/selected row: name uses --accent, row gets 2px left
+     --accent border + --bg-selected background tint
+
+   ============================================================ */
+
+/* ============================================================
    Thin scrollbar (webkit) — matches the quiet aesthetic.
    ============================================================ */
 *::-webkit-scrollbar { width: 10px; height: 10px; }
