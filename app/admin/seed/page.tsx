@@ -227,7 +227,7 @@ const SENIOR_PAYLOAD = {
 
 const PROFILES = [
   { label: 'Send Junior Profile (Priya Nair)', payload: JUNIOR_PAYLOAD, color: 'bg-green-600 hover:bg-green-700' },
-  { label: 'Send Mid Profile (Marcus Webb)', payload: MID_PAYLOAD, color: 'bg-blue-600 hover:bg-blue-700' },
+  { label: 'Send Mid Profile (Marcus Webb)', payload: MID_PAYLOAD, color: 'bg-primary hover:bg-accent-strong' },
   { label: 'Send Senior Profile (Jennifer Tran)', payload: SENIOR_PAYLOAD, color: 'bg-purple-600 hover:bg-purple-700' },
 ]
 
@@ -260,7 +260,7 @@ export default function SeedPage() {
   return (
     <div style={{ padding: 32, maxWidth: 700, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
       <h1 className="text-2xl font-bold mb-2">Seed Test Profiles</h1>
-      <p className="text-gray-500 text-sm mb-6">
+      <p className="text-tertiary text-sm mb-6">
         Each button sends a realistic test payload to /api/ingest. Check the people table after sending.
       </p>
 
@@ -285,19 +285,19 @@ export default function SeedPage() {
               <div
                 key={i}
                 className={`p-3 rounded-lg border text-sm ${
-                  r.status === 200 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                  r.status === 200 ? 'bg-green-50 border-green-200' : 'bg-destructive/10 border-destructive/30'
                 }`}
               >
                 <div className="flex justify-between items-center mb-1">
                   <span className="font-medium">{r.label}</span>
-                  <span className="text-xs text-gray-500">{r.ts}</span>
+                  <span className="text-xs text-tertiary">{r.ts}</span>
                 </div>
                 <div className="text-xs">
-                  <span className={r.status === 200 ? 'text-green-700' : 'text-red-700'}>
+                  <span className={r.status === 200 ? 'text-green-700' : 'text-destructive'}>
                     HTTP {r.status}
                   </span>
                 </div>
-                <pre className="mt-1 text-xs text-gray-700 whitespace-pre-wrap overflow-x-auto">{r.body}</pre>
+                <pre className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">{r.body}</pre>
               </div>
             ))}
           </div>

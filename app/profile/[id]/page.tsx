@@ -12,11 +12,11 @@ function cleanCompanyName(name: string | null | undefined): string | null {
 }
 
 const BUCKET_STYLES: Record<CandidateBucket, { label: string; bg: string; text: string; border: string }> = {
-  vetted_talent:    { label: 'Vetted Talent',    bg: 'bg-emerald-50',  text: 'text-emerald-900', border: 'border-emerald-300' },
-  high_potential:   { label: 'High Potential',   bg: 'bg-blue-50',     text: 'text-blue-900',    border: 'border-blue-300' },
-  silver_medalist:  { label: 'Silver Medalist',  bg: 'bg-slate-50',    text: 'text-slate-900',   border: 'border-slate-300' },
-  non_vetted:       { label: 'Non-Vetted',       bg: 'bg-gray-50',     text: 'text-gray-700',    border: 'border-gray-300' },
-  needs_review:     { label: 'Needs Review',     bg: 'bg-amber-50',    text: 'text-amber-900',   border: 'border-amber-300' },
+  vetted_talent:    { label: 'Vetted Talent',    bg: 'bg-positive/10',  text: 'text-positive', border: 'border-positive/30' },
+  high_potential:   { label: 'High Potential',   bg: 'bg-selected',     text: 'text-foreground',    border: 'border-primary' },
+  silver_medalist:  { label: 'Silver Medalist',  bg: 'bg-muted',    text: 'text-foreground',   border: 'border-border' },
+  non_vetted:       { label: 'Non-Vetted',       bg: 'bg-background',     text: 'text-muted-foreground',    border: 'border-border' },
+  needs_review:     { label: 'Needs Review',     bg: 'bg-watch/10',    text: 'text-watch',   border: 'border-watch/30' },
 }
 
 function formatDuration(months: number | null): string {
@@ -254,7 +254,7 @@ export default function ProfilePage() {
       <div className="mb-6 flex items-center justify-between">
         <button
           onClick={() => router.push('/')}
-          className="text-blue-600 hover:text-blue-800"
+          className="text-primary hover:text-accent-strong"
         >
           ← Back to List
         </button>
@@ -264,8 +264,8 @@ export default function ProfilePage() {
           disabled={deleting}
           className={`px-3 py-1.5 text-sm rounded-lg border ${
             deleteConfirm
-              ? 'bg-red-600 text-white border-red-600 hover:bg-red-700'
-              : 'text-red-600 border-red-300 hover:bg-red-50'
+              ? 'bg-destructive text-white border-red-600 hover:bg-destructive'
+              : 'text-destructive border-destructive/30 hover:bg-destructive/10'
           } disabled:opacity-50`}
         >
           {deleting ? 'Deleting…' : deleteConfirm ? 'Click again to confirm' : 'Delete'}
@@ -279,16 +279,16 @@ export default function ProfilePage() {
             <div>
               <h1 className="text-3xl font-bold">{person.full_name}</h1>
               {person.headline_raw && (
-                <p className="text-gray-600 mt-1">{person.headline_raw}</p>
+                <p className="text-muted-foreground mt-1">{person.headline_raw}</p>
               )}
-              <div className="flex flex-wrap gap-4 mt-3 text-sm text-gray-500">
+              <div className="flex flex-wrap gap-4 mt-3 text-sm text-tertiary">
                 {person.location_name && <span>{person.location_name}</span>}
                 {person.linkedin_url && (
                   <a
                     href={person.linkedin_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 underline"
+                    className="text-primary hover:text-accent-strong underline"
                   >
                     LinkedIn
                   </a>
@@ -299,7 +299,7 @@ export default function ProfilePage() {
             {/* Bucket badge */}
             {bucket && (
               <div className={`px-4 py-2 rounded-lg border-2 ${BUCKET_STYLES[bucket.candidate_bucket].bg} ${BUCKET_STYLES[bucket.candidate_bucket].border}`}>
-                <p className="text-xs uppercase tracking-wide text-gray-500">Bucket</p>
+                <p className="text-xs uppercase tracking-wide text-tertiary">Bucket</p>
                 <p className={`text-lg font-bold ${BUCKET_STYLES[bucket.candidate_bucket].text}`}>
                   {BUCKET_STYLES[bucket.candidate_bucket].label}
                 </p>
@@ -309,30 +309,30 @@ export default function ProfilePage() {
         </div>
 
         {/* AI narrative summary */}
-        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="mb-6 p-4 bg-selected border border-primary rounded-lg">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-blue-700 uppercase tracking-wide font-medium">Summary</p>
+            <p className="text-xs text-primary uppercase tracking-wide font-medium">Summary</p>
             <button
               onClick={regenerateNarrative}
               disabled={narrativeLoading}
-              className="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50 disabled:cursor-not-allowed underline"
+              className="text-xs text-primary hover:text-accent-strong disabled:opacity-50 disabled:cursor-not-allowed underline"
             >
               {narrativeLoading ? 'Generating…' : 'Regenerate'}
             </button>
           </div>
           {narrativeError ? (
-            <p className="text-sm text-red-700">Could not generate summary: {narrativeError}</p>
+            <p className="text-sm text-destructive">Could not generate summary: {narrativeError}</p>
           ) : narrative ? (
             <>
-              <p className="text-sm text-gray-800 whitespace-pre-wrap">{narrative}</p>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{narrative}</p>
               {narrativeAt && (
-                <p className="text-xs text-gray-400 mt-2">
+                <p className="text-xs text-tertiary mt-2">
                   Generated {new Date(narrativeAt).toLocaleString()}
                 </p>
               )}
             </>
           ) : (
-            <p className="text-sm text-gray-500 italic">
+            <p className="text-sm text-tertiary italic">
               {narrativeLoading ? 'Generating summary…' : 'No summary yet.'}
             </p>
           )}
@@ -340,15 +340,15 @@ export default function ProfilePage() {
 
         {/* Score breakdown — one-line summary + expandable itemized view */}
         {bucket?.assignment_reason && (
-          <div className="mb-8 p-4 bg-gray-50 rounded-lg">
-            <p className="text-xs text-gray-500 uppercase mb-1">Score breakdown</p>
-            <p className="text-sm font-mono text-gray-700 whitespace-pre-wrap">{bucket.assignment_reason}</p>
+          <div className="mb-8 p-4 bg-background rounded-lg">
+            <p className="text-xs text-tertiary uppercase mb-1">Score breakdown</p>
+            <p className="text-sm font-mono text-muted-foreground whitespace-pre-wrap">{bucket.assignment_reason}</p>
 
             {bucket.score_breakdown ? (
               <>
                 <button
                   onClick={() => setBreakdownOpen(o => !o)}
-                  className="mt-3 inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+                  className="mt-3 inline-flex items-center gap-1 text-xs text-primary hover:text-accent-strong"
                   aria-expanded={breakdownOpen}
                 >
                   <span className="inline-block w-3">{breakdownOpen ? '▾' : '▸'}</span>
@@ -357,12 +357,12 @@ export default function ProfilePage() {
                 {breakdownOpen && <ScoreBreakdownTable bucket={bucket} />}
               </>
             ) : (
-              <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 inline-block">
+              <p className="mt-3 text-xs text-watch bg-watch/10 border border-watch/30 rounded px-2 py-1 inline-block">
                 No itemized breakdown on this assignment row — run batch rescore to populate.
               </p>
             )}
 
-            <p className="text-xs text-gray-400 mt-3">
+            <p className="text-xs text-tertiary mt-3">
               Assigned by {bucket.assigned_by} on {new Date(bucket.effective_at).toLocaleString()}
             </p>
           </div>
@@ -371,29 +371,29 @@ export default function ProfilePage() {
         {/* Derived signals */}
         <div className="flex flex-wrap gap-2 mb-6">
           {person.primary_specialty ? (
-            <span className="px-2 py-1 bg-cyan-50 text-cyan-700 rounded text-xs border border-cyan-200">
+            <span className="px-2 py-1 bg-info/10 text-info rounded text-xs border border-info/30">
               {person.primary_specialty.replace(/_/g, ' ')}
             </span>
           ) : (
-            <span className="px-2 py-1 bg-gray-50 text-gray-400 rounded text-xs border border-gray-200">
+            <span className="px-2 py-1 bg-background text-tertiary rounded text-xs border border-border">
               specialty: unknown
             </span>
           )}
           {person.secondary_specialty && (
-            <span className="px-2 py-1 bg-cyan-50 text-cyan-600 rounded text-xs border border-cyan-100">
+            <span className="px-2 py-1 bg-info/10 text-info rounded text-xs border border-info/20">
               also: {person.secondary_specialty.replace(/_/g, ' ')}
             </span>
           )}
           {person.specialty_transition_flag && person.historical_specialty && (
-            <span className="px-2 py-1 bg-amber-50 text-amber-700 rounded text-xs border border-amber-200">
+            <span className="px-2 py-1 bg-watch/10 text-watch rounded text-xs border border-watch/30">
               career transition — previously {person.historical_specialty.replace(/_/g, ' ')}
             </span>
           )}
           {person.title_level_slope && person.title_level_slope !== 'insufficient_data' && (
             <span className={`px-2 py-1 rounded text-xs border ${
-              person.title_level_slope === 'rising' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-              person.title_level_slope === 'declining' ? 'bg-red-50 text-red-700 border-red-200' :
-              'bg-gray-50 text-gray-600 border-gray-200'
+              person.title_level_slope === 'rising' ? 'bg-positive/10 text-positive border-positive/30' :
+              person.title_level_slope === 'declining' ? 'bg-destructive/10 text-destructive border-destructive/30' :
+              'bg-background text-muted-foreground border-border'
             }`}>
               progression: {person.title_level_slope}
             </span>
@@ -416,45 +416,45 @@ export default function ProfilePage() {
         </div>
 
         {/* Overview grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 p-4 bg-gray-50 rounded-lg">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 p-4 bg-background rounded-lg">
           <div>
-            <p className="text-xs text-gray-500 uppercase">Title</p>
+            <p className="text-xs text-tertiary uppercase">Title</p>
             <p className="font-medium text-sm">{person.current_title_normalized || person.current_title_raw || 'N/A'}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 uppercase">Company</p>
+            <p className="text-xs text-tertiary uppercase">Company</p>
             <div className="flex items-center gap-1.5 font-medium text-sm">
               <CompanyLogo domain={guessDomain(companyName)} companyName={companyName} size={18} />
               {companyName || 'N/A'}
             </div>
           </div>
           <div>
-            <p className="text-xs text-gray-500 uppercase">Experience</p>
+            <p className="text-xs text-tertiary uppercase">Experience</p>
             <p className="font-medium text-sm">{person.years_experience_estimate != null ? `${person.years_experience_estimate} years` : 'N/A'}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 uppercase">Stage</p>
+            <p className="text-xs text-tertiary uppercase">Stage</p>
             <p className="font-medium text-sm">{person.career_stage_assigned?.replace(/_/g, ' ') || 'N/A'}</p>
           </div>
         </div>
 
         {/* Admin — clearance */}
-        <div className="mb-8 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+        <div className="mb-8 p-4 bg-muted border border-border rounded-lg">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Clearance (admin)</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Clearance (admin)</h2>
             {clearanceMsg && (
-              <span className={`text-xs ${clearanceMsg.ok ? 'text-emerald-700' : 'text-red-700'}`}>
+              <span className={`text-xs ${clearanceMsg.ok ? 'text-positive' : 'text-destructive'}`}>
                 {clearanceMsg.text}
               </span>
             )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-[180px,1fr,auto] gap-3 items-end">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Level</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Level</label>
               <select
                 value={clearanceLevel}
                 onChange={e => setClearanceLevel(e.target.value as ClearanceLevel)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="unknown">Unknown</option>
                 <option value="none">None</option>
@@ -467,19 +467,19 @@ export default function ProfilePage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Notes</label>
               <input
                 type="text"
                 value={clearanceNotes}
                 onChange={e => setClearanceNotes(e.target.value)}
                 placeholder="e.g. active since 2021, requires polygraph"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
             <button
               onClick={handleSaveClearance}
               disabled={clearanceSaving}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-accent-strong disabled:opacity-50"
             >
               {clearanceSaving ? 'Saving…' : 'Save'}
             </button>
@@ -490,41 +490,41 @@ export default function ProfilePage() {
         {person.summary_raw && (
           <div className="mb-8">
             <h2 className="text-lg font-semibold mb-3">About</h2>
-            <p className="text-gray-700 whitespace-pre-wrap text-sm">{person.summary_raw}</p>
+            <p className="text-muted-foreground whitespace-pre-wrap text-sm">{person.summary_raw}</p>
           </div>
         )}
 
         {/* Experience */}
         <div className="mb-8">
           <h2 className="text-lg font-semibold mb-3">
-            Experience {experiences.length > 0 && <span className="text-gray-400 font-normal">({experiences.length})</span>}
+            Experience {experiences.length > 0 && <span className="text-tertiary font-normal">({experiences.length})</span>}
           </h2>
           {experiences.length === 0 ? (
-            <p className="text-gray-500 text-sm">No experience data yet</p>
+            <p className="text-tertiary text-sm">No experience data yet</p>
           ) : (
             <div className="space-y-4">
               {experiences.map((exp) => (
-                <div key={exp.person_experience_id} className="border-l-2 border-gray-200 pl-4 py-1">
+                <div key={exp.person_experience_id} className="border-l-2 border-border pl-4 py-1">
                   <p className="font-medium">
                     {exp.title_normalized || exp.title_raw || 'Unknown title'}
                   </p>
-                  <div className="flex items-center gap-1.5 text-gray-700 text-sm">
+                  <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
                     <CompanyLogo domain={guessDomain(exp.company_name)} companyName={exp.company_name} size={16} />
                     <span>
                       {cleanCompanyName(exp.company_name) || 'Unknown company'}
                       {exp.employment_type_normalized && exp.employment_type_normalized !== 'unknown' && (
-                        <span className="text-gray-500"> · {exp.employment_type_normalized.replace(/_/g, ' ')}</span>
+                        <span className="text-tertiary"> · {exp.employment_type_normalized.replace(/_/g, ' ')}</span>
                       )}
                     </span>
                   </div>
-                  <p className="text-gray-500 text-xs mt-0.5">
+                  <p className="text-tertiary text-xs mt-0.5">
                     {exp.start_date && formatDate(exp.start_date)}
                     {exp.start_date && ' — '}
                     {exp.is_current ? 'Present' : (exp.end_date ? formatDate(exp.end_date) : '')}
                     {exp.duration_months ? ` · ${formatDuration(exp.duration_months)}` : ''}
                   </p>
                   {exp.description_raw && (
-                    <p className="text-gray-600 text-sm mt-1">{exp.description_raw}</p>
+                    <p className="text-muted-foreground text-sm mt-1">{exp.description_raw}</p>
                   )}
                 </div>
               ))}
@@ -535,19 +535,19 @@ export default function ProfilePage() {
         {/* Education */}
         <div className="mb-8">
           <h2 className="text-lg font-semibold mb-3">
-            Education {education.length > 0 && <span className="text-gray-400 font-normal">({education.length})</span>}
+            Education {education.length > 0 && <span className="text-tertiary font-normal">({education.length})</span>}
           </h2>
           {education.length === 0 ? (
-            <p className="text-gray-500 text-sm">No education data yet</p>
+            <p className="text-tertiary text-sm">No education data yet</p>
           ) : (
             <div className="space-y-4">
               {education.map((edu) => (
-                <div key={edu.person_education_id} className="border-l-2 border-gray-200 pl-4 py-1">
+                <div key={edu.person_education_id} className="border-l-2 border-border pl-4 py-1">
                   <p className="font-medium">
                     {edu.school_name || edu.school_name_raw || 'Unknown school'}
                   </p>
                   {(edu.degree_normalized || edu.degree_raw || edu.field_of_study_raw) && (
-                    <p className="text-gray-700 text-sm">
+                    <p className="text-muted-foreground text-sm">
                       {edu.degree_normalized || edu.degree_raw}
                       {edu.field_of_study_normalized || edu.field_of_study_raw
                         ? `, ${edu.field_of_study_normalized || edu.field_of_study_raw}`
@@ -555,7 +555,7 @@ export default function ProfilePage() {
                     </p>
                   )}
                   {(edu.start_year || edu.end_year) && (
-                    <p className="text-gray-500 text-xs mt-0.5">
+                    <p className="text-tertiary text-xs mt-0.5">
                       {edu.start_year && `${edu.start_year}`}
                       {edu.start_year && edu.end_year && ' — '}
                       {edu.end_year && `${edu.end_year}`}
@@ -572,16 +572,16 @@ export default function ProfilePage() {
           <div className="mb-8">
             <button
               onClick={() => setSkillsOpen(o => !o)}
-              className="flex items-center gap-2 text-lg font-semibold hover:text-gray-600"
+              className="flex items-center gap-2 text-lg font-semibold hover:text-muted-foreground"
             >
               <span className="inline-block w-3 text-sm">{skillsOpen ? '▾' : '▸'}</span>
               Skills & Technologies
-              <span className="text-gray-400 font-normal text-sm">({skillsTags.length})</span>
+              <span className="text-tertiary font-normal text-sm">({skillsTags.length})</span>
             </button>
             {skillsOpen && (
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {skillsTags.map((skill, i) => (
-                  <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs border border-gray-200">
+                  <span key={i} className="px-2 py-0.5 bg-muted text-muted-foreground rounded text-xs border border-border">
                     {skill}
                   </span>
                 ))}
@@ -591,7 +591,7 @@ export default function ProfilePage() {
         )}
 
         {/* Timestamps */}
-        <div className="pt-6 border-t border-gray-200 text-xs text-gray-400">
+        <div className="pt-6 border-t border-border text-xs text-tertiary">
           <p>Added: {new Date(person.created_at).toLocaleString()}</p>
           <p>Updated: {new Date(person.updated_at).toLocaleString()}</p>
         </div>
@@ -606,9 +606,9 @@ export default function ProfilePage() {
 // exactly — no invented labels.
 
 const CATEGORY_STYLE: Record<ScoreComponent['category'], { label: string; cls: string }> = {
-  core:    { label: 'Core',    cls: 'bg-slate-100 text-slate-700 border-slate-300' },
+  core:    { label: 'Core',    cls: 'bg-muted text-muted-foreground border-border' },
   bonus:   { label: 'Bonus',   cls: 'bg-indigo-50 text-indigo-800 border-indigo-200' },
-  penalty: { label: 'Penalty', cls: 'bg-red-50 text-red-800 border-red-200' },
+  penalty: { label: 'Penalty', cls: 'bg-destructive/10 text-destructive border-destructive/30' },
 }
 
 function ScoreBreakdownTable({ bucket }: { bucket: BucketAssignment }) {
@@ -627,10 +627,10 @@ function ScoreBreakdownTable({ bucket }: { bucket: BucketAssignment }) {
   const fmtPts = (p: number) => (p >= 0 ? '+' : '') + p.toFixed(2)
 
   return (
-    <div className="mt-4 border border-gray-200 rounded-lg bg-white overflow-hidden">
+    <div className="mt-4 border border-border rounded-lg bg-card overflow-hidden">
       <table className="w-full text-xs">
-        <thead className="bg-gray-50 border-b border-gray-200">
-          <tr className="text-gray-500 uppercase tracking-wide">
+        <thead className="bg-background border-b border-border">
+          <tr className="text-tertiary uppercase tracking-wide">
             <th className="text-left px-3 py-2 w-20">Category</th>
             <th className="text-left px-3 py-2">Signal</th>
             <th className="text-right px-3 py-2 w-16">Weight</th>
@@ -639,12 +639,12 @@ function ScoreBreakdownTable({ bucket }: { bucket: BucketAssignment }) {
             <th className="text-left px-3 py-2">Note</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-border">
           {rows.map((c, i) => {
             const unsourced = c.category === 'bonus' && c.raw === null
             const style = CATEGORY_STYLE[c.category]
             return (
-              <tr key={i} className={unsourced ? 'text-gray-400' : 'text-gray-800'}>
+              <tr key={i} className={unsourced ? 'text-tertiary' : 'text-foreground'}>
                 <td className="px-3 py-2">
                   <span className={`inline-block px-2 py-0.5 rounded border text-[10px] font-medium ${style.cls}`}>
                     {style.label}
@@ -653,37 +653,37 @@ function ScoreBreakdownTable({ bucket }: { bucket: BucketAssignment }) {
                 <td className="px-3 py-2 font-mono">{c.name}</td>
                 <td className="px-3 py-2 text-right font-mono">{c.weight}</td>
                 <td className="px-3 py-2 text-right font-mono">{fmtRaw(c.raw)}</td>
-                <td className={`px-3 py-2 text-right font-mono font-semibold ${c.points < 0 ? 'text-red-600' : c.points > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
+                <td className={`px-3 py-2 text-right font-mono font-semibold ${c.points < 0 ? 'text-destructive' : c.points > 0 ? 'text-foreground' : 'text-tertiary'}`}>
                   {fmtPts(c.points)}
                 </td>
-                <td className="px-3 py-2 text-gray-500">{c.note || ''}</td>
+                <td className="px-3 py-2 text-tertiary">{c.note || ''}</td>
               </tr>
             )
           })}
         </tbody>
-        <tfoot className="bg-gray-50 border-t border-gray-200 font-medium">
+        <tfoot className="bg-background border-t border-border font-medium">
           <tr>
-            <td colSpan={4} className="px-3 py-2 text-right text-gray-500">Core</td>
+            <td colSpan={4} className="px-3 py-2 text-right text-tertiary">Core</td>
             <td className="px-3 py-2 text-right font-mono">{b.core_score.toFixed(2)}</td>
             <td />
           </tr>
           <tr>
-            <td colSpan={4} className="px-3 py-2 text-right text-gray-500">Bonus</td>
+            <td colSpan={4} className="px-3 py-2 text-right text-tertiary">Bonus</td>
             <td className="px-3 py-2 text-right font-mono">{(b.bonus_score >= 0 ? '+' : '') + b.bonus_score.toFixed(2)}</td>
             <td />
           </tr>
           <tr>
-            <td colSpan={4} className="px-3 py-2 text-right text-gray-500">Penalty</td>
+            <td colSpan={4} className="px-3 py-2 text-right text-tertiary">Penalty</td>
             <td className="px-3 py-2 text-right font-mono">{b.penalty_score.toFixed(2)}</td>
             <td />
           </tr>
-          <tr className="border-t border-gray-300">
+          <tr className="border-t border-border">
             <td colSpan={4} className="px-3 py-2 text-right font-semibold">Total</td>
             <td className="px-3 py-2 text-right font-mono font-semibold">{b.total_score.toFixed(2)}</td>
-            <td className="px-3 py-2 text-gray-500">
+            <td className="px-3 py-2 text-tertiary">
               stage: {b.scoring_stage}
               {b.applied_recruiting_override && <span className="ml-2 text-indigo-600">[recruiting override]</span>}
-              {b.applied_executive_override && <span className="ml-2 text-amber-600">[executive override]</span>}
+              {b.applied_executive_override && <span className="ml-2 text-watch">[executive override]</span>}
             </td>
           </tr>
         </tfoot>

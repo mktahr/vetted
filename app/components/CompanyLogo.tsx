@@ -42,7 +42,7 @@ export default function CompanyLogo({ domain, companyName, size = 24, className 
   // Placeholder: colored initial letter
   return (
     <div
-      className={`flex items-center justify-center rounded bg-gray-200 text-gray-500 font-semibold flex-shrink-0 ${className}`}
+      className={`flex items-center justify-center rounded bg-muted text-tertiary font-semibold flex-shrink-0 ${className}`}
       style={{ width: size, height: size, fontSize: size * 0.45 }}
       title={companyName || undefined}
     >

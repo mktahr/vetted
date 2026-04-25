@@ -262,15 +262,15 @@ export default function CompaniesListPage() {
   // Compact renderer for year scores in the table
   function renderYearScores(companyId: string): JSX.Element {
     const rows = scoresByCompany[companyId] || []
-    if (rows.length === 0) return <span className="text-xs text-gray-400">—</span>
+    if (rows.length === 0) return <span className="text-xs text-tertiary">—</span>
     const latest = rows[0]
     const min = Math.min(...rows.map(r => r.company_score))
     const max = Math.max(...rows.map(r => r.company_score))
     const label = min === max ? `${min}` : `${min}–${max}`
     return (
-      <span className="text-xs text-gray-700" title={rows.map(r => `${r.year}: ${r.company_score}`).join('\n')}>
+      <span className="text-xs text-muted-foreground" title={rows.map(r => `${r.year}: ${r.company_score}`).join('\n')}>
         <span className="font-semibold">{latest.year}: {latest.company_score}</span>
-        <span className="text-gray-500 ml-2">({rows.length}yrs, range {label})</span>
+        <span className="text-tertiary ml-2">({rows.length}yrs, range {label})</span>
       </span>
     )
   }
@@ -298,12 +298,12 @@ export default function CompaniesListPage() {
     <div style={{ padding: 24, background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <a href="/" className="text-sm text-blue-600 hover:text-blue-800">← Back to people</a>
+          <a href="/" className="text-sm text-primary hover:text-accent-strong">← Back to people</a>
           <h1 className="text-3xl font-bold mt-2">Companies</h1>
         </div>
         <button
           onClick={() => router.push('/admin/companies/new')}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-accent-strong"
         >
           + Add Company
         </button>
@@ -316,18 +316,18 @@ export default function CompaniesListPage() {
           placeholder="Search by name..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-4 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
         />
       </div>
 
       {/* Filters + Sort */}
       <div className="mb-6 flex flex-wrap gap-3 items-end">
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Industry</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">Industry</label>
           <select
             value={industryFilter}
             onChange={(e) => setIndustryFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="">All industries</option>
             {industryOptions.map(i => <option key={i} value={i}>{i}</option>)}
@@ -335,11 +335,11 @@ export default function CompaniesListPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Bucket</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">Bucket</label>
           <select
             value={bucketFilter}
             onChange={(e) => setBucketFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="">All buckets</option>
             {BUCKET_OPTIONS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
@@ -347,11 +347,11 @@ export default function CompaniesListPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">Status</label>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="">All statuses</option>
             {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -359,11 +359,11 @@ export default function CompaniesListPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Review Status</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">Review Status</label>
           <select
             value={reviewFilter}
             onChange={(e) => setReviewFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="">All</option>
             <option value="scored">Scored only</option>
@@ -372,11 +372,11 @@ export default function CompaniesListPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Focus</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">Focus</label>
           <select
             value={focusFilter}
             onChange={(e) => setFocusFilter(e.target.value as FocusFilter)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="">All Tech (default)</option>
             <option value="hard_tech">Hard Tech only</option>
@@ -385,13 +385,13 @@ export default function CompaniesListPage() {
           </select>
         </div>
 
-        <div className="border-l border-gray-300 pl-3 ml-2 flex gap-3 items-end">
+        <div className="border-l border-border pl-3 ml-2 flex gap-3 items-end">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Sort by</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Sort by</label>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortBy)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="name_asc">Name (A→Z)</option>
               <option value="name_desc">Name (Z→A)</option>
@@ -402,11 +402,11 @@ export default function CompaniesListPage() {
 
           {sortBy === 'year_score' && (
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Year</label>
               <select
                 value={sortYear}
                 onChange={(e) => setSortYear(parseInt(e.target.value, 10))}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 {yearRange.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
@@ -415,11 +415,11 @@ export default function CompaniesListPage() {
 
           {sortBy === 'function_score' && (
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Function</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Function</label>
               <select
                 value={sortFunction}
                 onChange={(e) => setSortFunction(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">Pick one…</option>
                 {COMPANY_FUNCTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
@@ -431,30 +431,30 @@ export default function CompaniesListPage() {
         {(activeFilters > 0 || searchQuery) && (
           <button
             onClick={clearAll}
-            className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg bg-white hover:bg-gray-50"
+            className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg bg-card hover:bg-background"
           >
             Clear filters
           </button>
         )}
       </div>
 
-      <div className="mb-4 text-sm text-gray-600">
+      <div className="mb-4 text-sm text-muted-foreground">
         Showing {filtered.length} of {companies.length} companies
       </div>
 
       {selectedIds.size > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-          <span className="text-sm text-amber-900 font-medium">{selectedIds.size} selected</span>
+        <div className="mb-3 flex flex-wrap items-center gap-3 p-3 bg-watch/10 border border-watch/30 rounded-lg">
+          <span className="text-sm text-watch font-medium">{selectedIds.size} selected</span>
 
           {/* Bulk focus change */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-700">Set focus:</span>
+            <span className="text-xs text-muted-foreground">Set focus:</span>
             {FOCUS_OPTIONS.map(f => (
               <button
                 key={f.value}
                 onClick={() => handleBulkSetFocus(f.value)}
                 disabled={bulkFocusing}
-                className="px-2 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                className="px-2 py-1 text-xs bg-card border border-border rounded hover:bg-background disabled:opacity-50"
               >
                 {f.label}
               </button>
@@ -469,15 +469,15 @@ export default function CompaniesListPage() {
             disabled={bulkDeleting}
             className={`px-3 py-1 text-sm rounded ${
               bulkDeleteConfirm
-                ? 'bg-red-600 text-white hover:bg-red-700'
-                : 'bg-white text-red-600 border border-red-300 hover:bg-red-50'
+                ? 'bg-destructive text-white hover:bg-destructive'
+                : 'bg-card text-destructive border border-destructive/30 hover:bg-destructive/10'
             } disabled:opacity-50`}
           >
             {bulkDeleting ? 'Deleting…' : bulkDeleteConfirm ? 'Click again to confirm' : 'Delete selected'}
           </button>
           <button
             onClick={() => { setSelectedIds(new Set()); setBulkDeleteConfirm(false) }}
-            className="text-sm text-gray-500 hover:text-gray-700"
+            className="text-sm text-tertiary hover:text-muted-foreground"
           >
             Cancel
           </button>
@@ -485,39 +485,39 @@ export default function CompaniesListPage() {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-card rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-background">
               <tr>
                 <th className="px-2 py-3 w-8">
                   <input
                     type="checkbox"
                     checked={filtered.length > 0 && selectedIds.size === filtered.length}
                     onChange={toggleSelectAll}
-                    className="rounded border-gray-300"
+                    className="rounded border-border"
                   />
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Industry</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Founded</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Focus</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bucket</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year Scores</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Function Scores</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Website</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">LinkedIn</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Industry</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Founded</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Focus</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Bucket</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Year Scores</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Function Scores</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Website</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">LinkedIn</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-card divide-y divide-border">
               {filtered.length === 0 ? (
-                <tr><td colSpan={11} className="px-4 py-4 text-center text-gray-500">No companies found</td></tr>
+                <tr><td colSpan={11} className="px-4 py-4 text-center text-tertiary">No companies found</td></tr>
               ) : (
                 filtered.map(c => (
                   <tr
                     key={c.company_id}
-                    className="hover:bg-gray-50 cursor-pointer"
+                    className="hover:bg-background cursor-pointer"
                     onClick={() => router.push(`/admin/companies/${c.company_id}`)}
                   >
                     <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
@@ -525,41 +525,41 @@ export default function CompaniesListPage() {
                         type="checkbox"
                         checked={selectedIds.has(c.company_id)}
                         onChange={() => toggleSelect(c.company_id)}
-                        className="rounded border-gray-300"
+                        className="rounded border-border"
                       />
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <CompanyLogo domain={guessDomain(c.company_name)} companyName={c.company_name} size={20} />
-                        <span className="text-blue-600 font-medium">{c.company_name}</span>
+                        <span className="text-primary font-medium">{c.company_name}</span>
                         {c.manual_review_status === 'reviewed' || c.manual_review_status === 'locked' ? (
-                          <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] rounded border border-emerald-200 font-medium">Scored</span>
+                          <span className="px-1.5 py-0.5 bg-positive/10 text-positive text-[10px] rounded border border-positive/30 font-medium">Scored</span>
                         ) : (
-                          <span className="px-1.5 py-0.5 bg-gray-50 text-gray-400 text-[10px] rounded border border-gray-200">Unscored</span>
+                          <span className="px-1.5 py-0.5 bg-background text-tertiary text-[10px] rounded border border-border">Unscored</span>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">{c.primary_industry_tag || '—'}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">{c.founding_year ?? '—'}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 capitalize">{c.current_status.replace('_', ' ')}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">{c.primary_industry_tag || '—'}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">{c.founding_year ?? '—'}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground capitalize">{c.current_status.replace('_', ' ')}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs" onClick={(e) => e.stopPropagation()}>
                       {c.focus === 'hard_tech' ? (
                         <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded border border-indigo-200 font-medium">Hard Tech</span>
                       ) : c.focus === 'all_tech' ? (
-                        <span className="text-gray-600">All Tech</span>
+                        <span className="text-muted-foreground">All Tech</span>
                       ) : (
                         <div className="flex items-center gap-1">
-                          <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded border border-amber-200 font-medium">Unreviewed</span>
+                          <span className="px-1.5 py-0.5 bg-watch/10 text-watch rounded border border-watch/30 font-medium">Unreviewed</span>
                           <button
                             onClick={() => handleQuickPromote(c.company_id, 'hard_tech')}
-                            className="px-1.5 py-0.5 bg-white text-indigo-700 border border-indigo-200 rounded hover:bg-indigo-50 text-[10px]"
+                            className="px-1.5 py-0.5 bg-card text-indigo-700 border border-indigo-200 rounded hover:bg-indigo-50 text-[10px]"
                             title="Promote to Hard Tech"
                           >
                             →HT
                           </button>
                           <button
                             onClick={() => handleQuickPromote(c.company_id, 'all_tech')}
-                            className="px-1.5 py-0.5 bg-white text-gray-700 border border-gray-200 rounded hover:bg-gray-50 text-[10px]"
+                            className="px-1.5 py-0.5 bg-card text-muted-foreground border border-border rounded hover:bg-background text-[10px]"
                             title="Promote to All Tech"
                           >
                             →AT
@@ -567,18 +567,18 @@ export default function CompaniesListPage() {
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">
                       {c.company_bucket ? c.company_bucket.replace(/_/g, ' ') : '—'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">{renderYearScores(c.company_id)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-700">
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">
                       {(() => {
                         const fScores = functionScoresAll.filter(fs => fs.company_id === c.company_id)
-                        if (fScores.length === 0) return <span className="text-gray-400">—</span>
+                        if (fScores.length === 0) return <span className="text-tertiary">—</span>
                         return (
                           <div className="flex flex-wrap gap-1">
                             {fScores.map(fs => (
-                              <span key={fs.function_normalized} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200 text-[10px]" title={`${fs.function_normalized}: ${fs.function_score}/5`}>
+                              <span key={fs.function_normalized} className="px-1.5 py-0.5 bg-selected text-primary rounded border border-primary text-[10px]" title={`${fs.function_normalized}: ${fs.function_score}/5`}>
                                 {COMPANY_FUNCTIONS.find(f => f.value === fs.function_normalized)?.label || fs.function_normalized}: {fs.function_score}
                               </span>
                             ))}
@@ -589,9 +589,9 @@ export default function CompaniesListPage() {
                     <td className="px-4 py-3 whitespace-nowrap text-sm" onClick={(e) => e.stopPropagation()}>
                       {(() => {
                         const domain = c.website_url?.replace(/^https?:\/\//, '').replace(/\/+$/, '') || guessDomain(c.company_name)
-                        if (!domain) return <span className="text-gray-400">—</span>
+                        if (!domain) return <span className="text-tertiary">—</span>
                         return (
-                          <a href={c.website_url || `https://${domain}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline">
+                          <a href={c.website_url || `https://${domain}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-accent-strong hover:underline">
                             {domain}
                           </a>
                         )
@@ -600,13 +600,13 @@ export default function CompaniesListPage() {
                     <td className="px-4 py-3 whitespace-nowrap text-sm" onClick={(e) => e.stopPropagation()}>
                       {c.linkedin_url ? (
                         <a href={c.linkedin_url} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800"
+                          className="inline-flex items-center gap-1 text-primary hover:text-accent-strong"
                           title={c.linkedin_url}
                         >
                           <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                         </a>
                       ) : (
-                        <span className="text-gray-300">—</span>
+                        <span className="text-disabled">—</span>
                       )}
                     </td>
                   </tr>

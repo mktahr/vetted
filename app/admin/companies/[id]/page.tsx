@@ -238,7 +238,7 @@ export default function CompanyEditPage() {
     return (
       <div style={{ padding: 24, background: 'var(--bg-canvas)', minHeight: '100vh', fontFamily: 'var(--font-sans)', color: 'var(--fg-primary)' }}>
         <p style={{ color: 'var(--red-400)', marginBottom: 16 }}>Company not found.</p>
-        <button onClick={() => router.push('/admin/companies')} className="px-4 py-2 bg-blue-600 text-white rounded-lg">
+        <button onClick={() => router.push('/admin/companies')} className="px-4 py-2 bg-primary text-white rounded-lg">
           Back to list
         </button>
       </div>
@@ -252,7 +252,7 @@ export default function CompanyEditPage() {
       <div className="mb-6 flex items-center justify-between">
         <button
           onClick={() => router.push('/admin/companies')}
-          className="text-blue-600 hover:text-blue-800"
+          className="text-primary hover:text-accent-strong"
         >
           ← Back to companies
         </button>
@@ -262,15 +262,15 @@ export default function CompanyEditPage() {
           disabled={deleting}
           className={`px-3 py-1.5 text-sm rounded-lg border ${
             deleteConfirm
-              ? 'bg-red-600 text-white border-red-600 hover:bg-red-700'
-              : 'text-red-600 border-red-300 hover:bg-red-50'
+              ? 'bg-destructive text-white border-red-600 hover:bg-destructive'
+              : 'text-destructive border-destructive/30 hover:bg-destructive/10'
           } disabled:opacity-50`}
         >
           {deleting ? 'Deleting…' : deleteConfirm ? 'Click again to confirm' : 'Delete Company'}
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow-lg p-8">
+      <div className="bg-card rounded-lg shadow-lg p-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <CompanyLogo domain={domain} companyName={company.company_name} size={40} />
@@ -278,12 +278,12 @@ export default function CompanyEditPage() {
               <h1 className="text-3xl font-bold">{company.company_name}</h1>
               <div className="flex items-center gap-3 mt-1 text-sm">
                 {company.linkedin_url && (
-                  <a href={company.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
+                  <a href={company.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-accent-strong">
                     LinkedIn
                   </a>
                 )}
                 {(company.website_url || domain) && (
-                  <a href={company.website_url || `https://${domain}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
+                  <a href={company.website_url || `https://${domain}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-accent-strong">
                     {domain}
                   </a>
                 )}
@@ -291,7 +291,7 @@ export default function CompanyEditPage() {
             </div>
           </div>
           {saveMsg && (
-            <span className={`text-sm px-3 py-1 rounded-full ${saveMsg.ok ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+            <span className={`text-sm px-3 py-1 rounded-full ${saveMsg.ok ? 'bg-positive/20 text-positive' : 'bg-destructive/20 text-destructive'}`}>
               {saveMsg.text}
             </span>
           )}
@@ -302,77 +302,77 @@ export default function CompanyEditPage() {
           <h2 className="text-lg font-semibold mb-3">Details</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Name</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Name</label>
               <input
                 type="text"
                 value={form.company_name}
                 onChange={(e) => setForm({ ...form, company_name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Industry Tag</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Industry Tag</label>
               <input
                 type="text"
                 value={form.primary_industry_tag}
                 onChange={(e) => setForm({ ...form, primary_industry_tag: e.target.value })}
                 placeholder="e.g. FinTech, Consumer, SaaS"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Website URL</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Website URL</label>
               <input
                 type="text"
                 value={form.website_url}
                 onChange={(e) => setForm({ ...form, website_url: e.target.value })}
                 placeholder="https://example.com"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">LinkedIn URL</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">LinkedIn URL</label>
               <input
                 type="text"
                 value={form.linkedin_url}
                 onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })}
                 placeholder="https://linkedin.com/company/example"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Founding Year</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Founding Year</label>
               <input
                 type="number"
                 min="1800"
                 max="2100"
                 value={form.founding_year}
                 onChange={(e) => setForm({ ...form, founding_year: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Status</label>
               <select
                 value={form.current_status}
                 onChange={(e) => setForm({ ...form, current_status: e.target.value as CompanyStatus })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Company Bucket</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Company Bucket</label>
               <select
                 value={form.company_bucket}
                 onChange={(e) => setForm({ ...form, company_bucket: e.target.value as CompanyBucket })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">— none —</option>
                 {BUCKET_OPTIONS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
@@ -380,16 +380,16 @@ export default function CompanyEditPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Focus
-                <span className="ml-1 text-gray-400 font-normal normal-case">
+                <span className="ml-1 text-tertiary font-normal normal-case">
                   (hard_tech = hardware/defense/aerospace/robotics; all_tech = default searchable universe)
                 </span>
               </label>
               <select
                 value={form.focus}
                 onChange={(e) => setForm({ ...form, focus: e.target.value as CompanyFocus })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 {FOCUS_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
               </select>
@@ -399,7 +399,7 @@ export default function CompanyEditPage() {
           <button
             onClick={handleSaveCompany}
             disabled={saving}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-accent-strong disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save Details'}
           </button>
@@ -408,12 +408,12 @@ export default function CompanyEditPage() {
         {/* Year scores */}
         <div className="mb-8 border-t pt-6">
           <h2 className="text-lg font-semibold mb-3">Year Scores</h2>
-          <p className="text-xs text-gray-500 mb-3">Scale: 1 = weak, 2 = mixed, 3 = solid, 4 = excellent, 5 = elite</p>
+          <p className="text-xs text-tertiary mb-3">Scale: 1 = weak, 2 = mixed, 3 = solid, 4 = excellent, 5 = elite</p>
 
           {yearScores.length === 0 ? (
-            <p className="text-sm text-gray-500 mb-4">No year scores yet.</p>
+            <p className="text-sm text-tertiary mb-4">No year scores yet.</p>
           ) : (
-            <div className="mb-4 bg-gray-50 rounded-lg divide-y divide-gray-200">
+            <div className="mb-4 bg-background rounded-lg divide-y divide-border">
               {yearScores.map(ys => (
                 <YearScoreRow
                   key={ys.year}
@@ -426,29 +426,29 @@ export default function CompanyEditPage() {
             </div>
           )}
 
-          <div className="flex items-center gap-3 mt-4 p-3 bg-gray-50 rounded-lg">
+          <div className="flex items-center gap-3 mt-4 p-3 bg-background rounded-lg">
             <div>
-              <label className="block text-xs text-gray-500">Year</label>
+              <label className="block text-xs text-tertiary">Year</label>
               <input
                 type="number"
                 value={newYear}
                 onChange={(e) => setNewYear(e.target.value)}
-                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                className="w-20 px-2 py-1 border border-border rounded text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500">Score (1-5)</label>
+              <label className="block text-xs text-tertiary">Score (1-5)</label>
               <select
                 value={newScore}
                 onChange={(e) => setNewScore(e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+                className="px-2 py-1 border border-border rounded text-sm bg-card"
               >
                 {[1,2,3,4,5].map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <button
               onClick={handleAddYearScore}
-              className="mt-3 px-4 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+              className="mt-3 px-4 py-1.5 bg-primary text-white rounded hover:bg-accent-strong text-sm"
             >
               Add / Update
             </button>
@@ -458,7 +458,7 @@ export default function CompanyEditPage() {
         {/* Function Scores */}
         <div className="mb-8 border-t pt-6">
           <h2 className="text-lg font-semibold mb-3">Function Scores</h2>
-          <p className="text-xs text-gray-500 mb-3">
+          <p className="text-xs text-tertiary mb-3">
             Per-function quality (0-5). Only set when a company is notably strong or weak for a specific function.
             When not set, the scoring engine falls back to the overall year score.
           </p>
@@ -466,8 +466,8 @@ export default function CompanyEditPage() {
             {COMPANY_FUNCTIONS.map(fn => {
               const existing = functionScores.find(fs => fs.function_normalized === fn.value)
               return (
-                <div key={fn.value} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <span className="text-sm font-medium text-gray-700">{fn.label}</span>
+                <div key={fn.value} className="flex items-center justify-between p-3 bg-background rounded-lg">
+                  <span className="text-sm font-medium text-muted-foreground">{fn.label}</span>
                   <div className="flex items-center gap-2">
                     <select
                       value={existing?.function_score ?? ''}
@@ -479,7 +479,7 @@ export default function CompanyEditPage() {
                           upsertFunctionScore(fn.value, parseInt(val, 10))
                         }
                       }}
-                      className="px-2 py-1 border border-gray-300 rounded text-sm bg-white w-20"
+                      className="px-2 py-1 border border-border rounded text-sm bg-card w-20"
                     >
                       <option value="">—</option>
                       {[1,2,3,4,5].map(s => <option key={s} value={s}>{s}</option>)}
@@ -492,7 +492,7 @@ export default function CompanyEditPage() {
         </div>
 
         {/* Footer */}
-        <div className="pt-4 border-t text-xs text-gray-400">
+        <div className="pt-4 border-t text-xs text-tertiary">
           <p>company_id: {company.company_id}</p>
           <p>Created: {new Date(company.created_at).toLocaleString()}</p>
           <p>Updated: {new Date(company.updated_at).toLocaleString()}</p>
@@ -520,20 +520,20 @@ function YearScoreRow({ year, score, onSave, onDelete }: {
         <select
           value={editScore}
           onChange={(e) => setEditScore(e.target.value)}
-          className="px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+          className="px-2 py-1 border border-border rounded text-sm bg-card"
         >
           {[1,2,3,4,5].map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         <div className="flex gap-2">
           <button
             onClick={() => { onSave(parseInt(editScore, 10)); setEditing(false) }}
-            className="text-xs text-blue-600 hover:text-blue-800"
+            className="text-xs text-primary hover:text-accent-strong"
           >
             Save
           </button>
           <button
             onClick={() => setEditing(false)}
-            className="text-xs text-gray-500 hover:text-gray-700"
+            className="text-xs text-tertiary hover:text-muted-foreground"
           >
             Cancel
           </button>
@@ -547,8 +547,8 @@ function YearScoreRow({ year, score, onSave, onDelete }: {
       <span className="font-mono text-sm w-16">{year}</span>
       <span className="text-sm font-medium">{score}</span>
       <div className="flex gap-3">
-        <button onClick={() => setEditing(true)} className="text-xs text-blue-600 hover:text-blue-800">Edit</button>
-        <button onClick={onDelete} className="text-xs text-red-600 hover:text-red-800">Delete</button>
+        <button onClick={() => setEditing(true)} className="text-xs text-primary hover:text-accent-strong">Edit</button>
+        <button onClick={onDelete} className="text-xs text-destructive hover:text-destructive">Delete</button>
       </div>
     </div>
   )

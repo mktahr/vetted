@@ -12,7 +12,7 @@ import { buildLocationOptions } from '@/lib/locations/us-locations'
 // Next.js 14 requires useSearchParams() to be inside a Suspense boundary.
 export default function SearchBuilderPage() {
   return (
-    <Suspense fallback={<div className="flex justify-center items-center h-64"><div className="text-gray-500">Loading search builder...</div></div>}>
+    <Suspense fallback={<div className="flex justify-center items-center h-64"><div className="text-tertiary">Loading search builder...</div></div>}>
       <SearchBuilderInner />
     </Suspense>
   )
@@ -129,16 +129,16 @@ function SearchBuilderInner() {
     <div style={{ padding: 24, maxWidth: 1100, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <a href="/" className="text-sm text-blue-600 hover:text-blue-800">← Back to results</a>
+          <a href="/" className="text-sm text-primary hover:text-accent-strong">← Back to results</a>
           <h1 className="text-3xl font-bold mt-2">Build a Search</h1>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Search Scope */}
-        <div className="bg-white rounded-lg shadow p-5">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Search Scope</h2>
-          <select value={focusScope} onChange={e => setFocusScope(e.target.value as any)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+        <div className="bg-card rounded-lg shadow p-5">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Search Scope</h2>
+          <select value={focusScope} onChange={e => setFocusScope(e.target.value as any)} className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card">
             <option value="all">All candidates</option>
             <option value="hard_tech">Hard tech experience</option>
             <option value="all_tech">All tech experience</option>
@@ -146,8 +146,8 @@ function SearchBuilderInner() {
         </div>
 
         {/* Who They Are */}
-        <div className="bg-white rounded-lg shadow p-5 md:col-span-2">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Who They Are</h2>
+        <div className="bg-card rounded-lg shadow p-5 md:col-span-2">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Who They Are</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <MultiSelect label="Role" options={roleOptions} selected={roleSel} onChange={setRoleSel} placeholder="Any role" />
             <MultiSelect label="Specialty" options={specialtyOptions} selected={specialtySel} onChange={setSpecialtySel} placeholder="Any specialty" />
@@ -155,11 +155,11 @@ function SearchBuilderInner() {
             <MultiSelect label="Bucket" options={BUCKET_OPTIONS} selected={bucketSel} onChange={setBucketSel} placeholder="Any bucket" />
             <MultiSelect label="Career Stage" options={STAGE_OPTIONS} selected={stageSel} onChange={setStageSel} placeholder="Any stage" />
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Years of Experience</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Years of Experience</label>
               <div className="flex items-center gap-2">
-                <input type="number" min="0" step="0.5" value={yearsMin} onChange={e => setYearsMin(e.target.value)} placeholder="min" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                <span className="text-gray-400">–</span>
-                <input type="number" min="0" step="0.5" value={yearsMax} onChange={e => setYearsMax(e.target.value)} placeholder="max" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                <input type="number" min="0" step="0.5" value={yearsMin} onChange={e => setYearsMin(e.target.value)} placeholder="min" className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
+                <span className="text-tertiary">–</span>
+                <input type="number" min="0" step="0.5" value={yearsMax} onChange={e => setYearsMax(e.target.value)} placeholder="max" className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
               </div>
             </div>
             <MultiSelect label="Clearance" options={CLEARANCE_OPTIONS} selected={clearanceSel} onChange={setClearanceSel} placeholder="Any clearance" />
@@ -168,18 +168,18 @@ function SearchBuilderInner() {
         </div>
 
         {/* Where They Worked */}
-        <div className="bg-white rounded-lg shadow p-5">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Where They Worked</h2>
+        <div className="bg-card rounded-lg shadow p-5">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Where They Worked</h2>
           <MultiSelect label="Company" options={companyOptions} selected={compoundCompany ? [compoundCompany] : []} onChange={v => setCompoundCompany(v[0] || '')} placeholder="Search companies…" />
           {compoundCompany && (
             <div className="mt-3 space-y-3">
               <MultiSelect label="Specialty there" options={specialtyOptions} selected={compoundSpecialties} onChange={setCompoundSpecialties} placeholder="Any" />
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Year range</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Year range</label>
                 <div className="flex items-center gap-2">
-                  <input type="number" min="1950" max="2100" value={compoundYearMin} onChange={e => setCompoundYearMin(e.target.value)} placeholder="from" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                  <span className="text-gray-400">–</span>
-                  <input type="number" min="1950" max="2100" value={compoundYearMax} onChange={e => setCompoundYearMax(e.target.value)} placeholder="to" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                  <input type="number" min="1950" max="2100" value={compoundYearMin} onChange={e => setCompoundYearMin(e.target.value)} placeholder="from" className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
+                  <span className="text-tertiary">–</span>
+                  <input type="number" min="1950" max="2100" value={compoundYearMax} onChange={e => setCompoundYearMax(e.target.value)} placeholder="to" className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
                 </div>
               </div>
             </div>
@@ -187,33 +187,33 @@ function SearchBuilderInner() {
         </div>
 
         {/* Where They Studied */}
-        <div className="bg-white rounded-lg shadow p-5">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Where They Studied</h2>
+        <div className="bg-card rounded-lg shadow p-5">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Where They Studied</h2>
           <MultiSelect label="School" options={schoolOptions} selected={schoolSel} onChange={setSchoolSel} placeholder="Search ranked schools…" />
         </div>
 
         {/* Keyword Search */}
-        <div className="bg-white rounded-lg shadow p-5">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">Keyword Search</h2>
+        <div className="bg-card rounded-lg shadow p-5">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Keyword Search</h2>
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Title keywords</label>
-              <input type="text" value={titleBoolean} onChange={e => setTitleBoolean(e.target.value)} placeholder='e.g. "staff engineer" OR principal' className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Title keywords</label>
+              <input type="text" value={titleBoolean} onChange={e => setTitleBoolean(e.target.value)} placeholder='e.g. "staff engineer" OR principal' className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Experience & skills keywords</label>
-              <input type="text" value={experienceBoolean} onChange={e => setExperienceBoolean(e.target.value)} placeholder='e.g. MATLAB OR Simulink' className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-              <p className="text-[10px] text-gray-400 mt-1">Use AND, OR, NOT, quotes for exact phrases.</p>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Experience & skills keywords</label>
+              <input type="text" value={experienceBoolean} onChange={e => setExperienceBoolean(e.target.value)} placeholder='e.g. MATLAB OR Simulink' className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
+              <p className="text-[10px] text-tertiary mt-1">Use AND, OR, NOT, quotes for exact phrases.</p>
             </div>
           </div>
         </div>
       </div>
 
       <div className="mt-8 flex items-center gap-4">
-        <button onClick={runSearch} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+        <button onClick={runSearch} className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-accent-strong font-medium">
           Run Search
         </button>
-        <a href="/" className="text-sm text-gray-500 hover:text-gray-700">Cancel</a>
+        <a href="/" className="text-sm text-tertiary hover:text-muted-foreground">Cancel</a>
       </div>
     </div>
   )

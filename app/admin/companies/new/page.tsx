@@ -68,73 +68,73 @@ export default function NewCompanyPage() {
     <div style={{ padding: 24, maxWidth: 700, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
       <button
         onClick={() => router.push('/admin/companies')}
-        className="mb-6 text-blue-600 hover:text-blue-800"
+        className="mb-6 text-primary hover:text-accent-strong"
       >
         ← Back to companies
       </button>
 
-      <div className="bg-white rounded-lg shadow-lg p-8">
+      <div className="bg-card rounded-lg shadow-lg p-8">
         <h1 className="text-3xl font-bold mb-6">Add Company</h1>
 
         {error && (
-          <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+          <div className="mb-4 bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-sm text-destructive">
             {error}
           </div>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Name *</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Name *</label>
             <input
               type="text"
               value={form.company_name}
               onChange={(e) => setForm({ ...form, company_name: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="e.g. Anthropic"
               autoFocus
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Industry Tag</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Industry Tag</label>
             <input
               type="text"
               value={form.primary_industry_tag}
               onChange={(e) => setForm({ ...form, primary_industry_tag: e.target.value })}
               placeholder="e.g. AI, FinTech, SaaS"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Founding Year</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Founding Year</label>
             <input
               type="number"
               min="1800"
               max="2100"
               value={form.founding_year}
               onChange={(e) => setForm({ ...form, founding_year: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Status</label>
             <select
               value={form.current_status}
               onChange={(e) => setForm({ ...form, current_status: e.target.value as CompanyStatus })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
             >
               {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Company Bucket</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Company Bucket</label>
             <select
               value={form.company_bucket}
               onChange={(e) => setForm({ ...form, company_bucket: e.target.value as CompanyBucket })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">— none —</option>
               {BUCKET_OPTIONS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
@@ -142,7 +142,7 @@ export default function NewCompanyPage() {
           </div>
         </div>
 
-        <p className="text-xs text-gray-500 mb-4">
+        <p className="text-xs text-tertiary mb-4">
           After creating the company, you can add year scores on the edit page.
         </p>
 
@@ -150,13 +150,13 @@ export default function NewCompanyPage() {
           <button
             onClick={handleCreate}
             disabled={submitting || !form.company_name.trim()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-accent-strong disabled:opacity-50"
           >
             {submitting ? 'Creating...' : 'Create Company'}
           </button>
           <button
             onClick={() => router.push('/admin/companies')}
-            className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+            className="px-4 py-2 text-muted-foreground border border-border rounded-lg hover:bg-background"
           >
             Cancel
           </button>
