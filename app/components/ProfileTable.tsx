@@ -18,18 +18,19 @@ function cleanCompanyName(name: string | null | undefined): string | null {
   return name.split('·')[0].split('•')[0].trim() || null
 }
 
-const BUCKET_STYLES: Record<CandidateBucket, { label: string; className: string }> = {
-  vetted_talent:    { label: 'Vetted Talent',    className: 'bg-emerald-100 text-emerald-800 border border-emerald-300' },
-  high_potential:   { label: 'High Potential',   className: 'bg-blue-100 text-blue-800 border border-blue-300' },
-  silver_medalist:  { label: 'Silver Medalist',  className: 'bg-slate-200 text-slate-800 border border-slate-300' },
-  non_vetted:       { label: 'Non-Vetted',       className: 'bg-gray-100 text-gray-600 border border-gray-300' },
-  needs_review:     { label: 'Needs Review',     className: 'bg-amber-100 text-amber-800 border border-amber-300' },
+// Bucket chip using design system tag palette
+const BUCKET_TAG: Record<CandidateBucket, { label: string; bg: string; border: string; text: string }> = {
+  vetted_talent:    { label: 'Vetted Talent',    bg: 'var(--tag-sage-bg)',  border: 'var(--tag-sage-border)',  text: 'var(--tag-sage-text)' },
+  high_potential:   { label: 'High Potential',   bg: 'var(--tag-steel-bg)', border: 'var(--tag-steel-border)', text: 'var(--tag-steel-text)' },
+  silver_medalist:  { label: 'Silver Medalist',  bg: 'var(--tag-slate-bg)', border: 'var(--tag-slate-border)', text: 'var(--tag-slate-text)' },
+  non_vetted:       { label: 'Non-Vetted',       bg: 'var(--tag-sand-bg)',  border: 'var(--tag-sand-border)',  text: 'var(--tag-sand-text)' },
+  needs_review:     { label: 'Needs Review',     bg: 'var(--tag-clay-bg)',  border: 'var(--tag-clay-border)',  text: 'var(--tag-clay-text)' },
 }
 
 function BucketChip({ bucket }: { bucket: CandidateBucket | null | undefined }) {
-  if (!bucket) return <span className="text-xs text-gray-400">Unscored</span>
-  const s = BUCKET_STYLES[bucket]
-  return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${s.className}`}>{s.label}</span>
+  if (!bucket) return <span style={{ fontSize: 'var(--fs-12)', color: 'var(--fg-tertiary)' }}>Unscored</span>
+  const s = BUCKET_TAG[bucket]
+  return <span style={{ display: 'inline-block', padding: '1px 8px', borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)', fontWeight: 'var(--fw-medium)', fontFamily: 'var(--font-sans)', background: s.bg, border: `1px solid ${s.border}`, color: s.text }}>{s.label}</span>
 }
 
 type FocusScope = 'all' | 'hard_tech' | 'all_tech'
@@ -356,11 +357,14 @@ export default function ProfileTable() {
 
   // ─── Render ───────────────────────────────────────────────────────────
 
-  if (loading) return <div className="flex justify-center items-center h-64"><div className="text-gray-500">Loading people...</div></div>
-  if (error) return <div className="p-6"><div className="bg-red-50 border border-red-200 rounded-lg p-4"><p className="text-red-700 text-sm">{error}</p></div></div>
+  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '64vh', color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)' }}>Loading people...</div>
+  if (error) return <div style={{ padding: 24 }}><div style={{ background: 'var(--red-950)', border: '1px solid var(--red-800)', borderRadius: 'var(--r-card)', padding: 16 }}><p style={{ color: 'var(--red-400)', fontSize: 'var(--fs-13)' }}>{error}</p></div></div>
+
+  // Import theme toggle
+  const ThemeToggle = require('./ThemeToggle').default
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)' }}>
       <FilterSidebar
         roleSel={roleSel} setRoleSel={setRoleSel} roleOptions={roleOptions}
         specialtySel={specialtySel} setSpecialtySel={setSpecialtySel}
@@ -392,87 +396,122 @@ export default function ProfileTable() {
         }}
       />
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold">Vetted Database</h1>
-            <div className="flex gap-4 text-sm">
-              <a href="/admin/import" className="text-blue-600 hover:text-blue-800 underline">Import →</a>
-              <a href="/admin/companies" className="text-blue-600 hover:text-blue-800 underline">Companies →</a>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ padding: '16px 24px' }}>
+          {/* Top bar */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h1 style={{ fontSize: 'var(--fs-22)', fontWeight: 'var(--fw-semibold)', letterSpacing: '-0.01em' }}>Vetted Database</h1>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 'var(--fs-13)' }}>
+              <a href="/admin/import" style={{ color: 'var(--accent)' }}>Import →</a>
+              <a href="/admin/companies" style={{ color: 'var(--accent)' }}>Companies →</a>
+              <ThemeToggle />
             </div>
           </div>
 
+          {/* Search */}
           <input type="text" placeholder="Search by name, company, title, or location..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3" />
+            style={{
+              width: '100%', padding: '8px 12px', marginBottom: 12,
+              border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-button)',
+              background: 'var(--bg-surface)', color: 'var(--fg-primary)',
+              fontSize: 'var(--fs-14)', fontFamily: 'var(--font-sans)', outline: 'none',
+            }} />
 
           {chips.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-3">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
               {chips.map((c, i) => (
-                <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs border border-blue-200">
-                  {c.label}<button onClick={c.onRemove} className="text-blue-500 hover:text-blue-800 font-bold ml-0.5">×</button>
+                <span key={i} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
+                  background: 'var(--accent-950)', color: 'var(--accent-400)',
+                  borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)',
+                  border: '1px solid var(--accent-900)',
+                }}>
+                  {c.label}
+                  <button onClick={c.onRemove} style={{ color: 'var(--accent-500)', fontWeight: 700, cursor: 'pointer', background: 'none', border: 'none', fontSize: 'var(--fs-12)' }}>×</button>
                 </span>
               ))}
             </div>
           )}
 
-          <div className="mb-3 text-sm text-gray-600">
-            <span className="font-semibold text-gray-900">{filteredPeople.length}</span> of <span className="text-gray-500">{people.length}</span> candidates
+          <div style={{ marginBottom: 12, fontSize: 'var(--fs-13)', color: 'var(--fg-secondary)' }}>
+            <span style={{ fontWeight: 'var(--fw-semibold)', color: 'var(--fg-primary)', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>{filteredPeople.length}</span>
+            {' '}of <span style={{ fontFamily: 'var(--font-mono)' }}>{people.length}</span> candidates
           </div>
 
           {selectedIds.size > 0 && (
-            <div className="mb-3 flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <span className="text-sm text-red-800 font-medium">{selectedIds.size} selected</span>
+            <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: 'var(--red-950)', border: '1px solid var(--red-800)', borderRadius: 'var(--r-card)' }}>
+              <span style={{ fontSize: 'var(--fs-13)', color: 'var(--red-400)', fontWeight: 'var(--fw-medium)' }}>{selectedIds.size} selected</span>
               <button onClick={handleBulkDelete} onBlur={() => setBulkDeleteConfirm(false)} disabled={bulkDeleting}
-                className={`px-3 py-1 text-sm rounded ${bulkDeleteConfirm ? 'bg-red-600 text-white' : 'bg-white text-red-600 border border-red-300'} disabled:opacity-50`}>
+                style={{ padding: '4px 12px', fontSize: 'var(--fs-13)', borderRadius: 'var(--r-button)', cursor: 'pointer', border: 'none',
+                  background: bulkDeleteConfirm ? 'var(--red-600)' : 'transparent', color: bulkDeleteConfirm ? 'white' : 'var(--red-400)',
+                  ...(bulkDeleteConfirm ? {} : { border: '1px solid var(--red-700)' }), opacity: bulkDeleting ? 0.5 : 1 }}>
                 {bulkDeleting ? 'Deleting…' : bulkDeleteConfirm ? 'Click again to confirm' : 'Delete selected'}
               </button>
-              <button onClick={() => { setSelectedIds(new Set()); setBulkDeleteConfirm(false) }} className="text-sm text-gray-500">Cancel</button>
+              <button onClick={() => { setSelectedIds(new Set()); setBulkDeleteConfirm(false) }} style={{ fontSize: 'var(--fs-13)', color: 'var(--fg-tertiary)', background: 'none', border: 'none', cursor: 'pointer' }}>Cancel</button>
             </div>
           )}
 
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-2 py-3 w-8"><input type="checkbox" checked={filteredPeople.length > 0 && selectedIds.size === filteredPeople.length} onChange={toggleSelectAll} className="rounded border-gray-300" /></th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bucket</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => handleSort('years_experience_estimate')}>
-                      Yrs {sortField === 'years_experience_estimate' && (sortDirection === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stage</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">LinkedIn</th>
+          {/* Results table */}
+          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-card)', overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-13)', fontFamily: 'var(--font-sans)' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-strong)' }}>
+                    <th style={{ padding: '8px 8px', width: 32 }}><input type="checkbox" checked={filteredPeople.length > 0 && selectedIds.size === filteredPeople.length} onChange={toggleSelectAll} style={{ accentColor: 'var(--accent-500)' }} /></th>
+                    {['Name','Bucket','Location','Company','Title','Yrs','Stage','LinkedIn'].map((h, i) => (
+                      <th key={h} onClick={h === 'Yrs' ? () => handleSort('years_experience_estimate') : undefined}
+                        style={{
+                          padding: '8px 12px', textAlign: 'left',
+                          fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)', fontFamily: 'var(--font-sans)',
+                          textTransform: 'uppercase', letterSpacing: 'var(--tr-eyebrow)',
+                          color: 'var(--fg-tertiary)', whiteSpace: 'nowrap',
+                          cursor: h === 'Yrs' ? 'pointer' : 'default',
+                        }}>
+                        {h}{h === 'Yrs' && sortField === 'years_experience_estimate' && (sortDirection === 'asc' ? ' ↑' : ' ↓')}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody>
                   {filteredPeople.length === 0 ? (
-                    <tr><td colSpan={9} className="px-4 py-4 text-center text-gray-500">No candidates match these filters</td></tr>
+                    <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: 'var(--fg-tertiary)' }}>No candidates match these filters</td></tr>
                   ) : filteredPeople.map(person => (
-                    <tr key={person.person_id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { setSelectedPerson(person); setIsDrawerOpen(true) }}>
-                      <td className="px-2 py-3" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(person.person_id)} onChange={() => toggleSelect(person.person_id)} className="rounded border-gray-300" /></td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <button onClick={e => { e.stopPropagation(); router.push(`/profile/${person.person_id}`) }} className="text-blue-600 hover:text-blue-800 font-medium">{person.full_name || 'N/A'}</button>
+                    <tr key={person.person_id}
+                      onClick={() => { setSelectedPerson(person); setIsDrawerOpen(true) }}
+                      style={{ borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'background var(--dur-hover) var(--ease)' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <td style={{ padding: '8px 8px' }} onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={selectedIds.has(person.person_id)} onChange={() => toggleSelect(person.person_id)} style={{ accentColor: 'var(--accent-500)' }} />
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap"><BucketChip bucket={person.latest_bucket} /></td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{person.location_name || '—'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center gap-2">
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                        <button onClick={e => { e.stopPropagation(); router.push(`/profile/${person.person_id}`) }}
+                          style={{ color: 'var(--accent)', fontWeight: 'var(--fw-medium)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-13)' }}>
+                          {person.full_name || 'N/A'}
+                        </button>
+                      </td>
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}><BucketChip bucket={person.latest_bucket} /></td>
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)' }}>{person.location_name || '—'}</td>
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <CompanyLogo domain={guessDomain(person.current_company_name)} companyName={person.current_company_name} size={20} />
-                          {cleanCompanyName(person.current_company_name) || '—'}
+                          <span style={{ color: 'var(--fg-primary)' }}>{cleanCompanyName(person.current_company_name) || '—'}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        <div className="truncate max-w-[220px]">{(person.current_title_normalized || person.current_title_raw || '—').split(/\s*[|–—]\s*/)[0].split(/,\s*/)[0]}</div>
-                        {person.primary_specialty && <span className="inline-block mt-0.5 px-1.5 py-0.5 bg-cyan-50 text-cyan-700 rounded text-[10px] border border-cyan-200">{person.primary_specialty.replace(/_/g, ' ')}</span>}
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                        <div style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--fg-primary)' }}>
+                          {(person.current_title_normalized || person.current_title_raw || '—').split(/\s*[|–—]\s*/)[0].split(/,\s*/)[0]}
+                        </div>
+                        {person.primary_specialty && (
+                          <span style={{ display: 'inline-block', marginTop: 2, padding: '1px 6px', background: 'var(--tag-mist-bg)', color: 'var(--tag-mist-text)', border: '1px solid var(--tag-mist-border)', borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-11)' }}>
+                            {person.primary_specialty.replace(/_/g, ' ')}
+                          </span>
+                        )}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{person.years_experience_estimate ?? '—'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{person.career_stage_assigned?.replace(/_/g, ' ') || '—'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm">
-                        {person.linkedin_url ? <a href={person.linkedin_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-blue-600 hover:text-blue-800">View</a> : '—'}
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', color: 'var(--fg-secondary)' }}>{person.years_experience_estimate ?? '—'}</td>
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)' }}>{person.career_stage_assigned?.replace(/_/g, ' ') || '—'}</td>
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                        {person.linkedin_url ? <a href={person.linkedin_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: 'var(--accent)', fontSize: 'var(--fs-13)' }}>View</a> : <span style={{ color: 'var(--fg-tertiary)' }}>—</span>}
                       </td>
                     </tr>
                   ))}
