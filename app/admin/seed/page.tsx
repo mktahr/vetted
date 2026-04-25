@@ -258,7 +258,7 @@ export default function SeedPage() {
   }
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
+    <div style={{ padding: 32, maxWidth: 700, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
       <h1 className="text-2xl font-bold mb-2">Seed Test Profiles</h1>
       <p className="text-gray-500 text-sm mb-6">
         Each button sends a realistic test payload to /api/ingest. Check the people table after sending.

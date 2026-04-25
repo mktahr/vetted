@@ -123,10 +123,10 @@ function SearchBuilderInner() {
     router.push('/')
   }
 
-  if (loading) return <div className="flex justify-center items-center h-64"><div className="text-gray-500">Loading search builder...</div></div>
+  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '64vh', color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)', background: 'var(--bg-canvas)' }}>Loading search builder...</div>
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div style={{ padding: 24, maxWidth: 1100, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
       <div className="flex items-center justify-between mb-6">
         <div>
           <a href="/" className="text-sm text-blue-600 hover:text-blue-800">← Back to results</a>

@@ -227,19 +227,19 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="text-gray-500">Loading profile...</div>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '64vh', color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)', background: 'var(--bg-canvas)' }}>
+        Loading profile...
       </div>
     )
   }
 
   if (!person) {
     return (
-      <div className="p-6">
-        <div className="text-red-600">Person not found</div>
+      <div style={{ padding: 24, background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
+        <div style={{ color: 'var(--red-400)' }}>Person not found</div>
         <button
           onClick={() => router.push('/')}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          style={{ marginTop: 16, padding: '8px 16px', background: 'var(--accent-500)', color: 'var(--fg-on-accent)', border: 'none', borderRadius: 'var(--r-button)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
         >
           Back to List
         </button>
@@ -250,7 +250,7 @@ export default function ProfilePage() {
   const companyName = cleanCompanyName(person.current_company_name)
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div style={{ padding: 24, maxWidth: 900, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
       <div className="mb-6 flex items-center justify-between">
         <button
           onClick={() => router.push('/')}
@@ -272,7 +272,7 @@ export default function ProfilePage() {
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow-lg p-8">
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-card)', padding: 32 }}>
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-start justify-between gap-4">

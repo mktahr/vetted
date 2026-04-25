@@ -229,15 +229,15 @@ export default function CompanyEditPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="text-gray-500">Loading company...</div>
+        <div style={{ color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)' }}>Loading company...</div>
       </div>
     )
   }
 
   if (!company) {
     return (
-      <div className="p-6">
-        <p className="text-red-600 mb-4">Company not found.</p>
+      <div style={{ padding: 24, background: 'var(--bg-canvas)', minHeight: '100vh', fontFamily: 'var(--font-sans)', color: 'var(--fg-primary)' }}>
+        <p style={{ color: 'var(--red-400)', marginBottom: 16 }}>Company not found.</p>
         <button onClick={() => router.push('/admin/companies')} className="px-4 py-2 bg-blue-600 text-white rounded-lg">
           Back to list
         </button>
@@ -248,7 +248,7 @@ export default function CompanyEditPage() {
   const domain = company.website_url?.replace(/^https?:\/\//, '').replace(/\/+$/, '') || guessDomain(company.company_name)
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div style={{ padding: 24, maxWidth: 900, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
       <div className="mb-6 flex items-center justify-between">
         <button
           onClick={() => router.push('/admin/companies')}

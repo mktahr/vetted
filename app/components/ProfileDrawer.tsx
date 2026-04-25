@@ -16,12 +16,18 @@ function cleanCompanyName(name: string | null | undefined): string | null {
   return name.split('·')[0].split('•')[0].trim() || null
 }
 
-const BUCKET_STYLES: Record<CandidateBucket, { label: string; className: string }> = {
-  vetted_talent:    { label: 'Vetted Talent',    className: 'bg-emerald-100 text-emerald-800 border border-emerald-300' },
-  high_potential:   { label: 'High Potential',   className: 'bg-blue-100 text-blue-800 border border-blue-300' },
-  silver_medalist:  { label: 'Silver Medalist',  className: 'bg-slate-200 text-slate-800 border border-slate-300' },
-  non_vetted:       { label: 'Non-Vetted',       className: 'bg-gray-100 text-gray-600 border border-gray-300' },
-  needs_review:     { label: 'Needs Review',     className: 'bg-amber-100 text-amber-800 border border-amber-300' },
+const BUCKET_TAG: Record<CandidateBucket, { label: string; bg: string; border: string; text: string }> = {
+  vetted_talent:    { label: 'Vetted Talent',    bg: 'var(--tag-sage-bg)',  border: 'var(--tag-sage-border)',  text: 'var(--tag-sage-text)' },
+  high_potential:   { label: 'High Potential',   bg: 'var(--tag-steel-bg)', border: 'var(--tag-steel-border)', text: 'var(--tag-steel-text)' },
+  silver_medalist:  { label: 'Silver Medalist',  bg: 'var(--tag-slate-bg)', border: 'var(--tag-slate-border)', text: 'var(--tag-slate-text)' },
+  non_vetted:       { label: 'Non-Vetted',       bg: 'var(--tag-sand-bg)',  border: 'var(--tag-sand-border)',  text: 'var(--tag-sand-text)' },
+  needs_review:     { label: 'Needs Review',     bg: 'var(--tag-clay-bg)',  border: 'var(--tag-clay-border)',  text: 'var(--tag-clay-text)' },
+}
+
+const navBtn: React.CSSProperties = {
+  width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+  borderRadius: 'var(--r-button)', color: 'var(--fg-tertiary)', cursor: 'pointer',
+  background: 'none', border: 'none', fontSize: 18,
 }
 
 export default function ProfileDrawer({ person, isOpen, onClose, onPrev, onNext }: ProfileDrawerProps) {
@@ -33,132 +39,87 @@ export default function ProfileDrawer({ person, isOpen, onClose, onPrev, onNext 
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black bg-opacity-50 z-40"
-        onClick={onClose}
-      />
+      <div style={{ position: 'fixed', inset: 0, background: 'var(--bg-overlay)', zIndex: 40 }} onClick={onClose} />
 
-      {/* Drawer */}
-      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-50 overflow-y-auto">
-        <div className="p-6">
-          {/* Header with nav arrows */}
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex-1">
-              <h2 className="text-2xl font-bold">{person.full_name}</h2>
-              {person.latest_bucket && (
-                <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${BUCKET_STYLES[person.latest_bucket].className}`}>
-                  {BUCKET_STYLES[person.latest_bucket].label}
-                </span>
-              )}
+      <div style={{
+        position: 'fixed', right: 0, top: 0, height: '100%', width: '100%', maxWidth: 420,
+        background: 'var(--bg-surface)', boxShadow: 'var(--shadow-float)',
+        borderLeft: '1px solid var(--border-subtle)', zIndex: 50, overflowY: 'auto',
+        fontFamily: 'var(--font-sans)',
+      }}>
+        <div style={{ padding: 20 }}>
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+            <div style={{ flex: 1 }}>
+              <h2 style={{ fontSize: 'var(--fs-22)', fontWeight: 'var(--fw-semibold)', color: 'var(--fg-primary)', letterSpacing: '-0.01em' }}>{person.full_name}</h2>
+              {person.latest_bucket && (() => {
+                const s = BUCKET_TAG[person.latest_bucket]
+                return <span style={{ display: 'inline-block', marginTop: 8, padding: '2px 10px', borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)', fontWeight: 'var(--fw-medium)', background: s.bg, border: `1px solid ${s.border}`, color: s.text }}>{s.label}</span>
+              })()}
             </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={onPrev ?? undefined}
-                disabled={!onPrev}
-                className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Previous profile"
-              >
-                ‹
-              </button>
-              <button
-                onClick={onNext ?? undefined}
-                disabled={!onNext}
-                className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Next profile"
-              >
-                ›
-              </button>
-              <button
-                onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 text-2xl"
-              >
-                ×
-              </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <button onClick={onPrev ?? undefined} disabled={!onPrev} style={{ ...navBtn, opacity: onPrev ? 1 : 0.3, cursor: onPrev ? 'pointer' : 'not-allowed' }} title="Previous">‹</button>
+              <button onClick={onNext ?? undefined} disabled={!onNext} style={{ ...navBtn, opacity: onNext ? 1 : 0.3, cursor: onNext ? 'pointer' : 'not-allowed' }} title="Next">›</button>
+              <button onClick={onClose} style={{ ...navBtn, fontSize: 22 }}>×</button>
             </div>
           </div>
 
-          {/* Score breakdown */}
+          {/* Score */}
           {person.latest_bucket_reason && (
-            <div className="mb-4 p-2 bg-gray-50 rounded text-xs font-mono text-gray-600">
+            <div style={{ marginBottom: 16, padding: 8, background: 'var(--bg-surface-raised)', borderRadius: 'var(--r-button)', border: '1px solid var(--border-subtle)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-mono)', color: 'var(--fg-secondary)' }}>
               {person.latest_bucket_reason}
             </div>
           )}
 
-          {/* Content */}
-          <div className="space-y-4">
-            {/* Current role */}
+          {/* Fields */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {(person.current_title_raw || companyName) && (
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">Current Role</h3>
-                <p className="text-gray-900 font-medium">{displayTitle}</p>
+              <Field label="Current role">
+                <div style={{ color: 'var(--fg-primary)', fontWeight: 'var(--fw-medium)' }}>{displayTitle}</div>
                 {companyName && (
-                  <div className="flex items-center gap-2 mt-0.5">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                     <CompanyLogo domain={guessDomain(companyName)} companyName={companyName} size={20} />
-                    <p className="text-gray-700">{companyName}</p>
+                    <span style={{ color: 'var(--fg-secondary)' }}>{companyName}</span>
                   </div>
                 )}
-              </div>
+              </Field>
             )}
 
-            {/* Specialty */}
             {person.primary_specialty && (
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">Specialty</h3>
-                <span className="inline-block px-2 py-0.5 bg-cyan-50 text-cyan-700 rounded text-xs border border-cyan-200">
+              <Field label="Specialty">
+                <span style={{ padding: '2px 8px', background: 'var(--tag-mist-bg)', color: 'var(--tag-mist-text)', border: '1px solid var(--tag-mist-border)', borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)' }}>
                   {person.primary_specialty.replace(/_/g, ' ')}
                 </span>
-              </div>
+              </Field>
             )}
 
-            {/* Location */}
-            {person.location_name && (
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">Location</h3>
-                <p className="text-gray-900">{person.location_name}</p>
-              </div>
-            )}
+            {person.location_name && <Field label="Location"><span style={{ color: 'var(--fg-primary)' }}>{person.location_name}</span></Field>}
 
-            {/* Experience */}
             {person.years_experience_estimate != null && (
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">Experience</h3>
-                <p className="text-gray-900">
-                  {person.years_experience_estimate} years
+              <Field label="Experience">
+                <span style={{ color: 'var(--fg-primary)' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>{person.years_experience_estimate}</span> years
                   {person.career_stage_assigned && (
-                    <span className="ml-2 text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+                    <span style={{ marginLeft: 8, padding: '1px 8px', background: 'var(--bg-surface-raised)', color: 'var(--fg-tertiary)', borderRadius: 'var(--r-full)', fontSize: 'var(--fs-12)', border: '1px solid var(--border-subtle)' }}>
                       {person.career_stage_assigned.replace(/_/g, ' ')}
                     </span>
                   )}
-                </p>
-              </div>
+                </span>
+              </Field>
             )}
 
-            {/* Function */}
             {person.current_function_normalized && (
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">Function</h3>
-                <p className="text-gray-900">{person.current_function_normalized.replace(/_/g, ' ')}</p>
-              </div>
+              <Field label="Function"><span style={{ color: 'var(--fg-primary)' }}>{person.current_function_normalized.replace(/_/g, ' ')}</span></Field>
             )}
 
-            {/* Headline */}
             {person.headline_raw && (
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">Headline</h3>
-                <p className="text-gray-700 text-sm">{person.headline_raw}</p>
-              </div>
+              <Field label="Headline"><span style={{ color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)' }}>{person.headline_raw}</span></Field>
             )}
 
-            {/* LinkedIn */}
             {person.linkedin_url && (
               <div>
-                <a
-                  href={person.linkedin_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:text-blue-800 underline text-sm"
-                >
+                <a href={person.linkedin_url} target="_blank" rel="noopener noreferrer"
+                  style={{ color: 'var(--accent)', fontSize: 'var(--fs-13)', textDecoration: 'none' }}>
                   View LinkedIn Profile
                 </a>
               </div>
@@ -167,5 +128,14 @@ export default function ProfileDrawer({ person, isOpen, onClose, onPrev, onNext 
         </div>
       </div>
     </>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div style={{ fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)', color: 'var(--fg-tertiary)', textTransform: 'uppercase', letterSpacing: 'var(--tr-eyebrow)', marginBottom: 4, fontFamily: 'var(--font-sans)' }}>{label}</div>
+      <div style={{ fontSize: 'var(--fs-14)', fontFamily: 'var(--font-sans)' }}>{children}</div>
+    </div>
   )
 }

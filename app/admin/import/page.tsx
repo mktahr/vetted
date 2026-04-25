@@ -197,7 +197,7 @@ export default function ImportPage() {
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div style={{ padding: 24, maxWidth: 1100, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
       <a href="/" className="text-sm text-blue-600 hover:text-blue-800">← Back to people</a>
       <h1 className="text-3xl font-bold mt-2 mb-1">Import from Crust Data</h1>
       <p className="text-gray-600 mb-6 text-sm">
