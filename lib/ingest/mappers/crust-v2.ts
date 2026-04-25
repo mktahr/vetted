@@ -173,6 +173,9 @@ export function mapPersonSearchToCanonical(record: PersonSearchResult): IngestPa
     undergrad_university: null,
     secondary_university: null,
     phd_university: null,
+    // TODO: Crust Person Search v2 API does not return skills data.
+    // Pass 3 of the specialty resolver (technology_signals) is skipped for v2 imports.
+    // Contact Crust to request skills in v2 response, or add a post-processing enrichment step.
     skills_tags: null,
     experiences,
     education,

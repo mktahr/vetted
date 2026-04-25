@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Person, SortField, SortDirection, CandidateBucket } from '../types'
-import ProfileDrawer from './ProfileDrawer'
+import ProfileDrawer, { DrawerExperience } from './ProfileDrawer'
 import { MultiSelectOption } from './MultiSelect'
 import CompanyLogo, { guessDomain } from './CompanyLogo'
 import FilterSidebar from './FilterSidebar'
@@ -124,6 +124,7 @@ export default function ProfileTable() {
   const [allSpecialtyOptions, setAllSpecialtyOptions] = useState<MultiSelectOption[]>([])
   // Role→specialty mapping for contextual filtering
   const [roleSpecialtyMap, setRoleSpecialtyMap] = useState<Record<string, string[]>>({})
+  const [companyNameMap, setCompanyNameMap] = useState<Record<string, string>>({})
 
   const locationOptions = useMemo(() => buildLocationOptions(), [])
 
@@ -192,6 +193,9 @@ export default function ProfileTable() {
 
         setSeniorityOptions((srs || []).map(s => ({ value: s.seniority_normalized, label: s.seniority_normalized.replace(/_/g, ' ') })))
         setCompanyOptions((companies || []).filter((c: any) => c.focus === 'hard_tech' || c.focus === 'all_tech').map((c: any) => ({ value: c.company_id, label: c.company_name, sublabel: c.primary_industry_tag || undefined })))
+        const cMap: Record<string, string> = {}
+        for (const c of companies || []) cMap[c.company_id] = c.company_name
+        setCompanyNameMap(cMap)
         setSchoolOptions((schools || []).filter((s: any) => s.school_score != null).map((s: any) => ({ value: s.school_id, label: s.school_name, sublabel: s.is_foreign ? "Int'l" : undefined })))
 
         // Roles
@@ -539,6 +543,20 @@ export default function ProfileTable() {
       </div>
 
       <ProfileDrawer person={selectedPerson} isOpen={isDrawerOpen}
+        experiences={(() => {
+          if (!selectedPerson) return []
+          const sp = people.find(p => p.person_id === selectedPerson.person_id)
+          if (!sp) return []
+          return sp.experiences_lite.map(e => ({
+            company_id: e.company_id,
+            company_name: e.company_id ? (companyNameMap[e.company_id] ?? null) : null,
+            title_raw: e.title_raw,
+            start_date: e.start_date,
+            end_date: e.end_date,
+            is_current: e.is_current,
+            employment_type: e.employment_type,
+          } satisfies DrawerExperience))
+        })()}
         onClose={() => { setIsDrawerOpen(false); setSelectedPerson(null) }}
         onPrev={(() => { if (!selectedPerson) return null; const i = filteredPeople.findIndex(p => p.person_id === selectedPerson.person_id); return i <= 0 ? null : () => setSelectedPerson(filteredPeople[i-1]) })()}
         onNext={(() => { if (!selectedPerson) return null; const i = filteredPeople.findIndex(p => p.person_id === selectedPerson.person_id); return i < 0 || i >= filteredPeople.length-1 ? null : () => setSelectedPerson(filteredPeople[i+1]) })()}

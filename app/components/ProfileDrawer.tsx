@@ -3,8 +3,19 @@
 import { Person, CandidateBucket } from '../types'
 import CompanyLogo, { guessDomain } from './CompanyLogo'
 
+export interface DrawerExperience {
+  company_id: string | null
+  company_name: string | null
+  title_raw: string | null
+  start_date: string | null
+  end_date: string | null
+  is_current: boolean
+  employment_type: string | null
+}
+
 interface ProfileDrawerProps {
   person: Person | null
+  experiences: DrawerExperience[]
   isOpen: boolean
   onClose: () => void
   onPrev: (() => void) | null
@@ -30,7 +41,33 @@ const navBtn: React.CSSProperties = {
   background: 'none', border: 'none', fontSize: 18,
 }
 
-export default function ProfileDrawer({ person, isOpen, onClose, onPrev, onNext }: ProfileDrawerProps) {
+function formatDateRange(start: string | null, end: string | null, isCurrent: boolean): string {
+  const fmt = (d: string) => {
+    const [y, m] = d.split('-')
+    if (!m) return y
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    return `${months[parseInt(m, 10) - 1]} ${y}`
+  }
+  const s = start ? fmt(start) : '?'
+  const e = isCurrent ? 'Present' : end ? fmt(end) : '?'
+  return `${s} – ${e}`
+}
+
+function computeDuration(start: string | null, end: string | null, isCurrent: boolean): string | null {
+  if (!start) return null
+  const s = new Date(start)
+  const e = isCurrent ? new Date() : end ? new Date(end) : null
+  if (!e) return null
+  let months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth())
+  if (months < 0) months = 0
+  const yrs = Math.floor(months / 12)
+  const mos = months % 12
+  if (yrs === 0) return `${mos} mo`
+  if (mos === 0) return `${yrs} yr`
+  return `${yrs} yr ${mos} mo`
+}
+
+export default function ProfileDrawer({ person, experiences, isOpen, onClose, onPrev, onNext }: ProfileDrawerProps) {
   if (!isOpen || !person) return null
 
   const companyName = cleanCompanyName(person.current_company_name)
@@ -127,6 +164,47 @@ export default function ProfileDrawer({ person, isOpen, onClose, onPrev, onNext 
               </div>
             )}
           </div>
+
+          {/* Work History */}
+          {(() => {
+            // Skip the most recent role (already shown above as "Current role")
+            const pastRoles = experiences
+              .slice()
+              .sort((a, b) => (b.start_date ?? '').localeCompare(a.start_date ?? ''))
+              .filter((_, i) => i > 0)
+            if (pastRoles.length === 0) return null
+            return (
+              <div style={{ marginTop: 24 }}>
+                <div style={{ fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)', color: 'var(--fg-tertiary)', textTransform: 'uppercase', letterSpacing: 'var(--tr-eyebrow)', marginBottom: 12, fontFamily: 'var(--font-sans)' }}>Work History</div>
+                <div style={{ position: 'relative', paddingLeft: 20 }}>
+                  {/* Timeline line */}
+                  <div style={{ position: 'absolute', left: 4, top: 6, bottom: 6, width: 1, background: 'var(--border-subtle)' }} />
+                  {pastRoles.map((exp, i) => {
+                    const title = (exp.title_raw || 'Untitled Role').split(/\s*[|–—]\s*/)[0].split(/,\s*/)[0]
+                    const company = cleanCompanyName(exp.company_name)
+                    const dateRange = formatDateRange(exp.start_date, exp.end_date, exp.is_current)
+                    const duration = computeDuration(exp.start_date, exp.end_date, exp.is_current)
+                    return (
+                      <div key={i} style={{ position: 'relative', marginBottom: i < pastRoles.length - 1 ? 16 : 0 }}>
+                        {/* Timeline dot */}
+                        <div style={{ position: 'absolute', left: -20, top: 6, width: 9, height: 9, borderRadius: 'var(--r-full)', border: '2px solid var(--border-default)', background: 'var(--bg-surface)' }} />
+                        <div style={{ color: 'var(--fg-primary)', fontSize: 'var(--fs-14)', fontWeight: 'var(--fw-medium)', fontFamily: 'var(--font-sans)' }}>{title}</div>
+                        {company && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                            <CompanyLogo domain={guessDomain(company)} companyName={company} size={16} />
+                            <span style={{ color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)' }}>{company}</span>
+                          </div>
+                        )}
+                        <div style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)', marginTop: 2, fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
+                          {dateRange}{duration ? ` · ${duration}` : ''}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
         </div>
       </div>
     </>
