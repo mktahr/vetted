@@ -26,15 +26,21 @@ export function MultiSelect({ label, options, selected, onChange, placeholder, e
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Click-outside close
+  // Click-outside close — fires on both mousedown and focusin to catch
+  // clicks on other inputs, sidebar scroll area, etc.
   useEffect(() => {
-    function onClick(e: MouseEvent) {
+    if (!open) return
+    function onClickOrFocus(e: Event) {
       if (!containerRef.current) return
       if (!containerRef.current.contains(e.target as Node)) setOpen(false)
     }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [])
+    document.addEventListener('mousedown', onClickOrFocus)
+    document.addEventListener('focusin', onClickOrFocus)
+    return () => {
+      document.removeEventListener('mousedown', onClickOrFocus)
+      document.removeEventListener('focusin', onClickOrFocus)
+    }
+  }, [open])
 
   const selectedSet = new Set(selected)
   const q = query.trim().toLowerCase()
@@ -75,7 +81,7 @@ export function MultiSelect({ label, options, selected, onChange, placeholder, e
           setOpen(next)
           if (next) setTimeout(() => inputRef.current?.focus(), 0)
         }}
-        className={`min-w-[10rem] max-w-xs px-3 py-2 border rounded-lg text-sm bg-white text-left flex items-center gap-2 min-h-[38px] ${
+        className={`w-full px-3 py-2 border rounded-lg text-sm bg-white text-left flex items-center gap-2 min-h-[34px] ${
           open ? 'border-blue-500 ring-2 ring-blue-500 ring-opacity-50' : 'border-gray-300'
         } hover:border-gray-400`}
       >
@@ -109,7 +115,7 @@ export function MultiSelect({ label, options, selected, onChange, placeholder, e
       </button>
 
       {open && (
-        <div className="absolute z-40 mt-1 w-72 max-w-[90vw] bg-white border border-gray-300 rounded-lg shadow-lg">
+        <div className="absolute z-40 mt-1 w-full min-w-[200px] bg-white border border-gray-300 rounded-lg shadow-lg">
           <div className="p-2 border-b border-gray-100">
             <input
               ref={inputRef}
