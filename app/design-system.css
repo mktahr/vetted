@@ -228,24 +228,25 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
-  /* Surfaces */
-  --bg-canvas:         var(--neutral-1000);   /* page */
-  --bg-surface:        var(--neutral-950);    /* cards, panels */
-  --bg-surface-raised: var(--neutral-900);    /* menus, popovers */
-  --bg-hover:          oklch(17% 0.005 65);   /* row hover */
-  --bg-selected:       color-mix(in oklch, var(--accent-500) 8%, var(--neutral-950));
+  /* Surfaces — subtle elevation steps, never pure black.
+     Reference: Linear, Claude.ai, VS Code default dark. */
+  --bg-canvas:         #0a0a0b;               /* page background — base level */
+  --bg-surface:        #131316;               /* cards, drawer, sidebar — one step up */
+  --bg-surface-raised: #1c1c20;               /* popovers, dropdowns, modals — two steps up */
+  --bg-hover:          #18181c;               /* row hover, button hover */
+  --bg-selected:       #1f1f24;               /* active row, selected item */
   --bg-overlay:        rgb(0 0 0 / 0.55);     /* modal backdrop */
 
-  /* Text */
-  --fg-primary:        var(--neutral-50);
-  --fg-secondary:      var(--neutral-300);
-  --fg-tertiary:       var(--neutral-400);
-  --fg-disabled:       var(--neutral-600);
-  --fg-on-accent:      var(--neutral-1000);
+  /* Text — warm off-white, never pure #fff for body text */
+  --fg-primary:        #f5f5f7;
+  --fg-secondary:      #a1a1a6;
+  --fg-tertiary:       #6e6e73;
+  --fg-disabled:       #48484d;
+  --fg-on-accent:      #ffffff;               /* text on Ember buttons — pure white ok */
 
-  /* Borders */
-  --border-subtle:     oklch(28% 0.006 65);   /* stronger — data UI needs edges */
-  --border-strong:     oklch(36% 0.007 65);
+  /* Borders — alpha-based for consistency across surface levels */
+  --border-subtle:     rgba(255, 255, 255, 0.08);
+  --border-strong:     rgba(255, 255, 255, 0.14);
   --border-focus:      var(--accent-500);
 
   --shadow-float:      var(--shadow-float-dark);
@@ -257,21 +258,21 @@
 [data-theme="light"] {
   color-scheme: light;
 
-  --bg-canvas:         var(--neutral-50);     /* warm off-white */
-  --bg-surface:        var(--neutral-0);
-  --bg-surface-raised: var(--neutral-0);
-  --bg-hover:          var(--neutral-100);
-  --bg-selected:       color-mix(in oklch, var(--accent-500) 10%, var(--neutral-50));
+  --bg-canvas:         #fafafa;               /* warm off-white */
+  --bg-surface:        #ffffff;               /* cards — pure white */
+  --bg-surface-raised: #fafafa;               /* elevated popover — very light gray */
+  --bg-hover:          #f0f0f0;               /* row hover */
+  --bg-selected:       #eef0f2;               /* active/selected row */
   --bg-overlay:        rgb(20 18 15 / 0.35);
 
-  --fg-primary:        var(--neutral-1000);
-  --fg-secondary:      var(--neutral-700);
-  --fg-tertiary:       var(--neutral-500);
-  --fg-disabled:       var(--neutral-400);
-  --fg-on-accent:      var(--neutral-0);
+  --fg-primary:        #1a1a1a;               /* near-black, not pure #000 */
+  --fg-secondary:      #666666;
+  --fg-tertiary:       #999999;
+  --fg-disabled:       #cccccc;
+  --fg-on-accent:      #ffffff;
 
-  --border-subtle:     oklch(87% 0.007 70);   /* stronger — data UI needs edges */
-  --border-strong:     oklch(80% 0.008 70);
+  --border-subtle:     rgba(0, 0, 0, 0.08);
+  --border-strong:     rgba(0, 0, 0, 0.14);
   --border-focus:      var(--accent-600);
 
   --shadow-float:      var(--shadow-float-light);
