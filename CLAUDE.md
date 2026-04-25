@@ -130,16 +130,40 @@ Added in migration 016. Every company has a `focus` column (enum `company_focus_
 
 ---
 
-## Specialty as the Primary Search Filter (Post-Migration 016)
+## Role Dictionary + Specialty Taxonomy (Post-Migration 017)
 
-Recruiters search by **specialty** (mechanical_engineering, avionics, backend, gnc…), not by function (engineering, product…). The `ProfileTable` filter bar reflects this:
+### Role Dictionary
+`role_dictionary` — 26 roles that group specialties into recruiter-friendly categories. Roles are the primary search filter; selecting a role expands to all mapped specialties via `role_specialty_map`.
 
-- Specialty is the widest, most prominent filter, with a "Any past specialty" (default) / "Current only" scope toggle. Default mode scans all of a person's experiences, capturing career switchers. "Current only" queries `people.primary_specialty`.
-- Function remains available but is labeled "(secondary)" and visually demoted. Function still drives the scoring engine internally and powers `company_function_scores`; it's not the recruiter's primary search axis.
+Roles (in display_order): Software Engineer, Embedded/Firmware Engineer, Hardware Engineer, Electrical Engineer, Mechanical Engineer, RF/Wireless Engineer, FPGA/ASIC/Chip Engineer, Aerospace Engineer, Systems Engineer, Controls Engineer, Robotics Engineer, Manufacturing/Production Engineer, Test/Reliability/Quality Engineer, Optics/Photonics Engineer, Materials Engineer, Mechatronics Engineer, Engineering Leadership, Product Manager, Designer, Operator, Sales/GTM, Marketing/Growth, Recruiter/Talent, Finance, Legal, Founder.
 
-The specialty picker displays all active specialties grouped: **Hardware engineering** (first — matches the hard-tech focus), **Software engineering**, then non-engineering by parent_function (operations, product_management, product_design, recruiting).
+### Specialty Dictionary
+~215 specialties across all roles. Migration 017 added ~165 new specialties covering deep-tech disciplines (avionics sub-specialties, chip design, manufacturing, test engineering, robotics perception, etc.) plus non-engineering functions (finance, legal, founder). All use `ON CONFLICT DO NOTHING` to preserve existing entries.
 
-Migration 016 added 23 hardware-oriented specialties (mechanical_engineering, electrical_engineering, firmware, flight_software, avionics, gnc, propulsion, controls_engineering, rf_engineering, fpga_engineering, asic_engineering, hardware_engineering, systems_engineering, test_engineering, manufacturing_engineering, reliability_engineering, quality_engineering, structural_engineering, thermal_engineering, materials_engineering, power_electronics, optics_engineering, mechatronics). Title→specialty mappings for these are **not yet seeded** — they appear in the filter UI but candidates won't be auto-tagged from raw LinkedIn titles until a follow-up session adds the title_dictionary entries.
+### Role-Specialty Mapping
+`role_specialty_map` — join table with `is_primary` flag. Most specialties map to exactly one role. Cross-role specialties (e.g., `flight_software` primary to Software Engineer, secondary to Aerospace Engineer) have two rows with `is_primary = true/false`.
+
+### Search UI (Post-Migration 017)
+Two-column layout: persistent left sidebar (300px, collapsible) + results main area.
+
+Sidebar filter groups:
+- **Search Scope**: company focus (all/hard_tech/all_tech)
+- **Who They Are**: Role (primary), Specialty (contextually filtered by role), Seniority, Bucket, Stage, Years, Clearance, Location (US states + cities from static list)
+- **Where They Worked**: compound filter (company + relationship + specialty + year range)
+- **Where They Studied**: ranked schools only (school_score IS NOT NULL), US/All toggle
+- **Keyword Search**: Boolean title search + experience/skills keyword search (AND, OR, NOT, quoted phrases)
+
+Active filter chips appear above results. Full-page search builder at `/search-builder` provides a wider grid layout of the same filters.
+
+Function is no longer a recruiter-facing filter — it stays internal for scoring only.
+
+### Boolean Search
+Client-side implementation. Simple AND/OR/NOT parser with quoted phrase support. Title Boolean matches against `person_experiences.title_raw` (any past) or `people.current_title_raw` (current only). Experience Boolean matches against `description_raw`, `headline_raw`, `summary_raw`, `narrative_summary`.
+
+TODO: Move to server-side API when people count exceeds ~500.
+
+### Location Typeahead
+Static list at `lib/locations/us-locations.ts` — all 50 US states + DC + top 50 cities. Matches as ILIKE substring against `people.location_name`.
 
 ---
 
