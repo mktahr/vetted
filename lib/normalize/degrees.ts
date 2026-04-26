@@ -9,6 +9,24 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { normalizeForLookup } from './titles';
 
+// Word-boundary pattern matching. Substring matching produced false
+// positives where short dictionary patterns like 'ma' (Master of Arts)
+// matched inside common words like 'diploma'. Word-boundary regex makes
+// 'ma' only match the standalone token, so 'International Baccalaureate
+// Diploma' no longer normalizes to MA / master.
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+const PATTERN_RE_CACHE = new Map<string, RegExp>();
+function matchesDictionaryPattern(text: string, pattern: string): boolean {
+  let re = PATTERN_RE_CACHE.get(pattern);
+  if (!re) {
+    re = new RegExp(`\\b${escapeRegex(pattern)}\\b`, 'i');
+    PATTERN_RE_CACHE.set(pattern, re);
+  }
+  return re.test(text);
+}
+
 export interface DegreeMatch {
   degree_normalized: string;
   degree_level: string | null;
@@ -49,7 +67,7 @@ export async function normalizeDegree(
     // Sort by pattern length descending so we match the most specific pattern
     const sorted = patterns.sort((a, b) => b.degree_pattern.length - a.degree_pattern.length);
     for (const row of sorted) {
-      if (normalized.includes(row.degree_pattern)) {
+      if (matchesDictionaryPattern(normalized, row.degree_pattern)) {
         return {
           degree_normalized: row.degree_normalized,
           degree_level: row.degree_level,
