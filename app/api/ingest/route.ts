@@ -433,7 +433,48 @@ export async function POST(req: NextRequest) {
       const firstSpec = resolveSpecialty(first.title, first.description, canonical.skills_tags, specialtyEntries);
       currentSpecialty = firstSpec?.specialty_normalized ?? firstTitleData?.specialty_normalized ?? null;
       currentTitleNormalized = firstTitleData?.title_normalized || null;
-      // Seniority requires more context; leave null if not the current role
+    }
+  }
+
+  // ── Step 6b: Derive current role from inserted experiences ─────────────
+  // Don't trust canonical.current_company/current_title — derive from
+  // the actual is_current=true experiences, preferring non-student roles
+  // with the latest start_date.
+  {
+    const { data: currentExps } = await supabase
+      .from('person_experiences')
+      .select('title_raw, company_id, start_date')
+      .eq('person_id', personId)
+      .eq('is_current', true)
+      .order('start_date', { ascending: false });
+
+    if (currentExps && currentExps.length > 0) {
+      const isStudentTitle = (t: string | null) =>
+        !!t && /\bintern\b|\binternship\b|\bco-?op\b|\bstudent\b/i.test(t);
+
+      // Prefer non-student current role with a title; fall back gracefully
+      const bestCurrent = currentExps.find(e => e.title_raw && !isStudentTitle(e.title_raw))
+        ?? currentExps.find(e => !isStudentTitle(e.title_raw))
+        ?? currentExps.find(e => e.title_raw)
+        ?? currentExps[0];
+
+      // If derived experience has no title_raw, keep the existing title
+      const derivedTitleRaw = bestCurrent.title_raw || canonical.current_title || null;
+      const derivedTitleData = await normalizeTitle(supabase, derivedTitleRaw);
+
+      await supabase.from('people').update({
+        current_title_raw: derivedTitleRaw,
+        current_title_normalized: derivedTitleData?.title_normalized || null,
+        current_function_normalized: derivedTitleData?.function_normalized || null,
+        current_company_id: bestCurrent.company_id || currentCompanyId || null,
+      }).eq('person_id', personId);
+
+      // Update response tags to match derived role
+      if (bestCurrent.title_raw) {
+        currentTitleNormalized = derivedTitleData?.title_normalized || currentTitleNormalized;
+        const derivedSpec = resolveSpecialty(bestCurrent.title_raw, null, canonical.skills_tags, specialtyEntries);
+        if (derivedSpec) currentSpecialty = derivedSpec.specialty_normalized;
+      }
     }
   }
 
