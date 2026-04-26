@@ -117,7 +117,7 @@ export async function normalizeFieldOfStudy(
   if (patterns) {
     const sorted = patterns.sort((a, b) => b.field_pattern.length - a.field_pattern.length);
     for (const row of sorted) {
-      if (normalized.includes(row.field_pattern)) {
+      if (matchesDictionaryPattern(normalized, row.field_pattern)) {
         return {
           field_of_study_normalized: row.field_of_study_normalized,
           domain_group: row.domain_group,

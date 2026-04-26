@@ -10,6 +10,23 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { normalizeForLookup } from './titles';
 
+// Word-boundary pattern matching — same fix applied to lib/normalize/
+// degrees.ts and specialty.ts. Substring matching against short
+// dictionary patterns (e.g. 'coop' inside 'cooperative') produces
+// false positives.
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+const PATTERN_RE_CACHE = new Map<string, RegExp>();
+function matchesDictionaryPattern(text: string, pattern: string): boolean {
+  let re = PATTERN_RE_CACHE.get(pattern);
+  if (!re) {
+    re = new RegExp(`\\b${escapeRegex(pattern)}\\b`, 'i');
+    PATTERN_RE_CACHE.set(pattern, re);
+  }
+  return re.test(text);
+}
+
 export type EmploymentTypeNorm =
   | 'full_time'
   | 'contract'
@@ -59,7 +76,7 @@ export async function normalizeEmploymentType(
   if (patterns) {
     const sorted = patterns.sort((a, b) => b.employment_type_pattern.length - a.employment_type_pattern.length);
     for (const row of sorted) {
-      if (normalized.includes(row.employment_type_pattern)) {
+      if (matchesDictionaryPattern(normalized, row.employment_type_pattern)) {
         return {
           employment_type_normalized: row.employment_type_normalized as EmploymentTypeNorm,
           match_method: 'contains',
