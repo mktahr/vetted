@@ -146,13 +146,30 @@ export function mapPersonSearchToCanonical(record: PersonSearchResult): IngestPa
   // Prefer is_default=true; fall back to the first current role.
   const primaryCurrent = currentEmployers.find(e => e.is_default === true) ?? currentEmployers[0]
 
-  const experiences = [
+  const experiencesRaw = [
     ...currentEmployers.map(e => mapEmployer(e, true)),
     ...pastEmployers.map(e => mapEmployer(e, false)),
   ].filter(e => e.company_name || e.title)
 
+  // Deduplicate: Crust position groups can list the same role multiple times
+  const seenExp = new Set<string>()
+  const experiences = experiencesRaw.filter(e => {
+    const key = `${(e.company_name || '').toLowerCase()}|${(e.title || '').toLowerCase()}|${e.start_date || ''}|${e.end_date || ''}`
+    if (seenExp.has(key)) return false
+    seenExp.add(key)
+    return true
+  })
+
   const schools = record.education?.schools ?? []
-  const education = schools.map(mapSchool).filter(e => e.school_name)
+  const educationRaw = schools.map(mapSchool).filter(e => e.school_name)
+
+  const seenEdu = new Set<string>()
+  const education = educationRaw.filter(e => {
+    const key = `${(e.school_name || '').toLowerCase()}|${(e.degree || '').toLowerCase()}|${e.start_year ?? ''}|${e.end_year ?? ''}`
+    if (seenEdu.has(key)) return false
+    seenEdu.add(key)
+    return true
+  })
 
   const graduationDate = graduationDateFromEducation(education)
   const yearsExperience = computeYearsSpan(experiences, graduationDate)
