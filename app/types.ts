@@ -120,6 +120,9 @@ export interface Education {
   field_of_study_normalized: string | null
   start_year: number | null
   end_year: number | null
+  description_raw: string | null
+  activities_raw: string | null
+  grade_raw: string | null
   // Joined
   school_name?: string | null
 }

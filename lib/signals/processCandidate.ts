@@ -11,6 +11,7 @@ import { SourceFieldHint } from '@/types/signals'
 
 export interface ProcessResult {
   experiences_processed: number
+  education_processed: number
   signals_written: number
   signals_skipped_existing: number
 }
@@ -59,6 +60,7 @@ export async function processCandidateSignals(
 
   const result: ProcessResult = {
     experiences_processed: 0,
+    education_processed: 0,
     signals_written: 0,
     signals_skipped_existing: 0,
   }
@@ -76,8 +78,15 @@ export async function processCandidateSignals(
     .select('person_experience_id, title_raw, description_raw, companies:company_id(company_name)')
     .eq('person_id', personId)
 
-  // Collect all matches across all text fields
-  const allMatches: Array<{ match: PatternMatch; expId: string | null }> = []
+  // Fetch education with new text fields
+  const { data: educations } = await supabase
+    .from('person_education')
+    .select('person_education_id, description_raw, activities_raw, grade_raw')
+    .eq('person_id', personId)
+
+  // Match item: tracks which experience or education row produced the match
+  type MatchItem = { match: PatternMatch; expId: string | null; eduId: string | null }
+  const allMatches: MatchItem[] = []
 
   // Process experience descriptions and titles
   for (const exp of experiences || []) {
@@ -86,14 +95,14 @@ export async function processCandidateSignals(
     if (exp.description_raw) {
       const descMatches = extractSignalsFromText(exp.description_raw, 'experience_description')
       for (const m of descMatches) {
-        allMatches.push({ match: m, expId: exp.person_experience_id })
+        allMatches.push({ match: m, expId: exp.person_experience_id, eduId: null })
       }
     }
 
     if (exp.title_raw) {
       const titleMatches = extractSignalsFromText(exp.title_raw, 'title')
       for (const m of titleMatches) {
-        allMatches.push({ match: m, expId: exp.person_experience_id })
+        allMatches.push({ match: m, expId: exp.person_experience_id, eduId: null })
       }
     }
 
@@ -102,7 +111,36 @@ export async function processCandidateSignals(
     if (companyName) {
       const companyMatches = extractSignalsFromText(companyName, 'company_name')
       for (const m of companyMatches) {
-        allMatches.push({ match: m, expId: exp.person_experience_id })
+        allMatches.push({ match: m, expId: exp.person_experience_id, eduId: null })
+      }
+    }
+  }
+
+  // Process education text fields
+  for (const edu of educations || []) {
+    result.education_processed++
+
+    if (edu.description_raw) {
+      for (const m of extractSignalsFromText(edu.description_raw, 'education_description')) {
+        allMatches.push({ match: m, expId: null, eduId: edu.person_education_id })
+      }
+    }
+
+    if (edu.activities_raw) {
+      // activities_raw maps to 'activities_honors' hint — this is LinkedIn's
+      // "Activities and Societies" field, which is where greek_life, athletics,
+      // engineering_team, academic_distinction signals most commonly appear.
+      for (const m of extractSignalsFromText(edu.activities_raw, 'activities_honors')) {
+        allMatches.push({ match: m, expId: null, eduId: edu.person_education_id })
+      }
+    }
+
+    if (edu.grade_raw) {
+      // grade_raw contains "Summa Cum Laude", "3.95 GPA", etc. — scan with
+      // 'education_description' hint since academic_distinction entries
+      // already list that hint.
+      for (const m of extractSignalsFromText(edu.grade_raw, 'education_description')) {
+        allMatches.push({ match: m, expId: null, eduId: edu.person_education_id })
       }
     }
   }
@@ -111,7 +149,7 @@ export async function processCandidateSignals(
   if (person?.headline_raw) {
     const headlineMatches = extractSignalsFromText(person.headline_raw, 'headline')
     for (const m of headlineMatches) {
-      allMatches.push({ match: m, expId: null })
+      allMatches.push({ match: m, expId: null, eduId: null })
     }
   }
 
@@ -119,16 +157,16 @@ export async function processCandidateSignals(
   if (person?.summary_raw) {
     const summaryMatches = extractSignalsFromText(person.summary_raw, 'about')
     for (const m of summaryMatches) {
-      allMatches.push({ match: m, expId: null })
+      allMatches.push({ match: m, expId: null, eduId: null })
     }
   }
 
-  // Deduplicate: for the same (signal_id, expId) keep highest confidence.
-  // Different experiences produce separate rows — the unique index includes
-  // source_experience_id, so the same signal from two experiences = two rows.
-  const deduped = new Map<string, { match: PatternMatch; expId: string | null }>()
+  // Deduplicate: for the same (signal_id, expId, eduId) keep highest confidence.
+  // The unique index includes source_experience_id and source_education_id,
+  // so the same signal from different source rows = separate person_signals rows.
+  const deduped = new Map<string, MatchItem>()
   for (const item of allMatches) {
-    const key = `${item.match.signal_id}|${item.expId ?? 'null'}`
+    const key = `${item.match.signal_id}|${item.expId ?? 'null'}|${item.eduId ?? 'null'}`
     const existing = deduped.get(key)
     if (!existing || item.match.confidence > existing.match.confidence) {
       deduped.set(key, item)
@@ -136,7 +174,7 @@ export async function processCandidateSignals(
   }
 
   // Write to database
-  const itemsToWrite: Array<{ match: PatternMatch; expId: string | null }> = []
+  const itemsToWrite: MatchItem[] = []
   deduped.forEach((item) => { itemsToWrite.push(item) })
 
   for (const item of itemsToWrite) {
@@ -145,7 +183,7 @@ export async function processCandidateSignals(
       personId,
       item.match,
       item.expId,
-      null, // source_education_id
+      item.eduId,
     )
     if (status === 'written') {
       result.signals_written++

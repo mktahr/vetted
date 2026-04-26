@@ -77,6 +77,9 @@ interface RawEducation {
   field_of_study?: string;
   start_year?: number;
   end_year?: number;
+  description?: string;
+  activities?: string;
+  grade?: string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -433,6 +436,9 @@ export async function POST(req: NextRequest) {
     field_of_study?: string;
     start_year?: number;
     end_year?: number;
+    description?: string;
+    activities?: string;
+    grade?: string;
   }> = [];
 
   if (canonical.undergrad_university) {
@@ -469,7 +475,7 @@ export async function POST(req: NextRequest) {
     const degreeData = await normalizeDegree(supabase, edu.degree);
     const fieldData = await normalizeFieldOfStudy(supabase, edu.field_of_study);
 
-    const eduRecord = {
+    const eduRecord: Record<string, unknown> = {
       person_id: personId,
       school_id: schoolId,
       school_name_raw: edu.school_name,
@@ -485,6 +491,11 @@ export async function POST(req: NextRequest) {
       is_certificate_only: degreeData?.is_certificate || false,
       updated_at: new Date().toISOString(),
     };
+
+    // Persist education text fields when present (Chrome extension Voyager scrape)
+    if (edu.description && edu.description.trim()) eduRecord.description_raw = edu.description.trim();
+    if (edu.activities && edu.activities.trim()) eduRecord.activities_raw = edu.activities.trim();
+    if (edu.grade && edu.grade.trim()) eduRecord.grade_raw = edu.grade.trim();
 
     const { error: eduError } = await supabase
       .from('person_education')
