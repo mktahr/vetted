@@ -18,6 +18,22 @@ const env = Object.fromEntries(
 )
 const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY)
 
+// ─── Word-boundary keyword matching ─────────────────────────────────────────
+// Mirrors lib/normalize/specialty.ts. Substring matching produced false
+// positives where 2-char signals like 'si'/'pi' matched inside 'television',
+// 'developing', etc.
+
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+const KW_RE_CACHE = new Map()
+function matchesKeyword(text, kw) {
+  const k = kw.toLowerCase()
+  let re = KW_RE_CACHE.get(k)
+  if (!re) { re = new RegExp(`\\b${escapeRegex(k)}\\b`, 'i'); KW_RE_CACHE.set(k, re) }
+  return re.test(text)
+}
+
 // ─── Load specialty_dictionary ──────────────────────────────────────────────
 
 const { data: dictRaw, error: dictErr } = await supabase
@@ -28,13 +44,16 @@ if (dictErr) { console.error('Failed to load dictionary:', dictErr); process.exi
 const dict = dictRaw || []
 console.log(`Loaded ${dict.length} specialty entries`)
 
-// Build title→specialty map
+// Build title→{specialty,function} map
 const titleMap = new Map()
 for (const entry of dict) {
   if (!entry.title_patterns) continue
   for (const pattern of entry.title_patterns) {
     const key = pattern.toLowerCase().trim()
-    if (!titleMap.has(key)) titleMap.set(key, entry.specialty_normalized)
+    if (!titleMap.has(key)) titleMap.set(key, {
+      specialty: entry.specialty_normalized,
+      function_norm: entry.function_normalized,
+    })
   }
 }
 console.log(`Title map: ${titleMap.size} patterns`)
@@ -92,27 +111,30 @@ function resolveSpecialty(titleRaw, descriptionRaw, skillsTags) {
     const variants = stripTitle(titleRaw)
     for (const v of variants) {
       const hit = titleMap.get(v)
-      if (hit) return hit
+      if (hit) return { specialty: hit.specialty, function_norm: hit.function_norm }
     }
     // Pass 1b: separator fragments against keyword_signals
     for (const v of variants) {
       for (const entry of dict) {
         if (!entry.keyword_signals?.length) continue
         for (const kw of entry.keyword_signals) {
-          if (v === kw.toLowerCase()) return entry.specialty_normalized
+          if (v === kw.toLowerCase()) return { specialty: entry.specialty_normalized, function_norm: entry.function_normalized }
         }
       }
     }
   }
-  // Pass 2: keywords in description (need ≥2 matches)
+  // Pass 2: keywords in description (need ≥2 matches, word-boundary match)
   if (descriptionRaw) {
     const dl = descriptionRaw.toLowerCase()
     let best = null, bestCount = 0
     for (const entry of dict) {
       if (!entry.keyword_signals?.length) continue
       let count = 0
-      for (const kw of entry.keyword_signals) if (dl.includes(kw.toLowerCase())) count++
-      if (count >= 2 && count > bestCount) { best = entry.specialty_normalized; bestCount = count }
+      for (const kw of entry.keyword_signals) if (matchesKeyword(dl, kw)) count++
+      if (count >= 2 && count > bestCount) {
+        best = { specialty: entry.specialty_normalized, function_norm: entry.function_normalized }
+        bestCount = count
+      }
     }
     if (best) return best
   }
@@ -124,7 +146,10 @@ function resolveSpecialty(titleRaw, descriptionRaw, skillsTags) {
       if (!entry.technology_signals?.length) continue
       let count = 0
       for (const t of entry.technology_signals) if (sl.has(t.toLowerCase())) count++
-      if (count >= 2 && count > bestCount) { best = entry.specialty_normalized; bestCount = count }
+      if (count >= 2 && count > bestCount) {
+        best = { specialty: entry.specialty_normalized, function_norm: entry.function_normalized }
+        bestCount = count
+      }
     }
     if (best) return best
   }
@@ -135,7 +160,7 @@ function resolveSpecialty(titleRaw, descriptionRaw, skillsTags) {
 
 const { data: exps, error: expErr } = await supabase
   .from('person_experiences')
-  .select('person_experience_id, person_id, title_raw, description_raw, specialty_normalized')
+  .select('person_experience_id, person_id, title_raw, description_raw, specialty_normalized, function_normalized')
   .order('person_id')
 if (expErr) { console.error('Failed to load experiences:', expErr); process.exit(1) }
 console.log(`Processing ${exps.length} experiences...`)
@@ -145,11 +170,13 @@ console.log(`Processing ${exps.length} experiences...`)
 
 let updated = 0, unchanged = 0, cleared = 0
 for (const exp of exps) {
-  const newSpec = resolveSpecialty(exp.title_raw, exp.description_raw, null)
-  if (newSpec !== exp.specialty_normalized) {
+  const match = resolveSpecialty(exp.title_raw, exp.description_raw, null)
+  const newSpec = match?.specialty ?? null
+  const newFn = match?.function_norm ?? null
+  if (newSpec !== exp.specialty_normalized || newFn !== exp.function_normalized) {
     const { error } = await supabase
       .from('person_experiences')
-      .update({ specialty_normalized: newSpec })
+      .update({ specialty_normalized: newSpec, function_normalized: newFn })
       .eq('person_experience_id', exp.person_experience_id)
     if (error) console.error(`  Failed ${exp.person_experience_id}:`, error.message)
     else {

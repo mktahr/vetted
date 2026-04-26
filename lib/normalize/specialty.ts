@@ -77,6 +77,27 @@ export async function loadSpecialtyDictionary(
   return cachedEntries
 }
 
+// ─── Word-boundary keyword matching ────────────────────────────────────────
+// Substring matching produced false positives where 2-char signals like 'si'
+// or 'pi' matched inside 'television', 'developing', etc. Word-boundary
+// regex avoids that while still matching multi-word phrases like
+// 'high-speed design' as a whole.
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+const KEYWORD_REGEX_CACHE = new Map<string, RegExp>()
+function matchesKeyword(text: string, keyword: string): boolean {
+  const kw = keyword.toLowerCase()
+  let re = KEYWORD_REGEX_CACHE.get(kw)
+  if (!re) {
+    re = new RegExp(`\\b${escapeRegex(kw)}\\b`, 'i')
+    KEYWORD_REGEX_CACHE.set(kw, re)
+  }
+  return re.test(text)
+}
+
 // ─── Noise stripping (same as seniority.ts) ─────────────────────────────────
 
 const NOISE_SUFFIX_PATTERNS = [
@@ -193,7 +214,7 @@ export function resolveSpecialty(
       if (!entry.keyword_signals?.length) continue
       let count = 0
       for (const kw of entry.keyword_signals) {
-        if (descLower.includes(kw.toLowerCase())) count++
+        if (matchesKeyword(descLower, kw)) count++
       }
       if (count > 0 && (!bestMatch || count > bestMatch.signal_count)) {
         bestMatch = {
