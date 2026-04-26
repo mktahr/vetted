@@ -13,9 +13,21 @@ export interface DrawerExperience {
   employment_type: string | null
 }
 
+export interface DrawerSignal {
+  signal_id: string
+  canonical_name: string
+  category: string
+  canonical_url: string | null
+  evidence_url: string | null
+  source_text: string | null
+  source: string
+  confidence: number
+}
+
 interface ProfileDrawerProps {
   person: Person | null
   experiences: DrawerExperience[]
+  signals: DrawerSignal[]
   isOpen: boolean
   onClose: () => void
   onPrev: (() => void) | null
@@ -67,7 +79,28 @@ function computeDuration(start: string | null, end: string | null, isCurrent: bo
   return `${yrs} yr ${mos} mo`
 }
 
-export default function ProfileDrawer({ person, experiences, isOpen, onClose, onPrev, onNext }: ProfileDrawerProps) {
+// Category display order for signals section
+const SIGNAL_CATEGORY_ORDER = [
+  'founder', 'military', 'fellowship', 'scholarship', 'academic_distinction',
+  'competition', 'hackathon', 'athletics', 'engineering_team',
+  'student_leadership', 'greek_life',
+]
+
+const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
+  founder: 'Founder',
+  military: 'Military',
+  fellowship: 'Fellowship',
+  scholarship: 'Scholarship',
+  academic_distinction: 'Academic',
+  competition: 'Competition',
+  hackathon: 'Hackathon',
+  athletics: 'Athletics',
+  engineering_team: 'Engineering Team',
+  student_leadership: 'Leadership',
+  greek_life: 'Greek Life',
+}
+
+export default function ProfileDrawer({ person, experiences, signals, isOpen, onClose, onPrev, onNext }: ProfileDrawerProps) {
   if (!isOpen || !person) return null
 
   const companyName = cleanCompanyName(person.current_company_name)
@@ -164,6 +197,71 @@ export default function ProfileDrawer({ person, experiences, isOpen, onClose, on
               </div>
             )}
           </div>
+
+          {/* Signals */}
+          {signals.length > 0 && (() => {
+            const MAX_DISPLAY = 10
+            const displayed = signals.slice(0, MAX_DISPLAY)
+            const overflow = signals.length - MAX_DISPLAY
+
+            // Group by category in display order
+            const grouped: Array<{ category: string; label: string; items: DrawerSignal[] }> = []
+            for (const cat of SIGNAL_CATEGORY_ORDER) {
+              const items = displayed.filter(s => s.category === cat)
+              if (items.length > 0) {
+                grouped.push({ category: cat, label: SIGNAL_CATEGORY_LABELS[cat] || cat.replace(/_/g, ' '), items })
+              }
+            }
+            // Catch any categories not in the order list
+            const coveredCats = new Set(SIGNAL_CATEGORY_ORDER)
+            const uncovered = displayed.filter(s => !coveredCats.has(s.category))
+            if (uncovered.length > 0) {
+              const byCat: Record<string, DrawerSignal[]> = {}
+              for (const s of uncovered) { if (!byCat[s.category]) byCat[s.category] = []; byCat[s.category].push(s) }
+              for (const [cat, items] of Object.entries(byCat)) {
+                grouped.push({ category: cat, label: cat.replace(/_/g, ' '), items })
+              }
+            }
+
+            return (
+              <div style={{ marginTop: 24 }}>
+                <div style={{ fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)', color: 'var(--fg-tertiary)', textTransform: 'uppercase', letterSpacing: 'var(--tr-eyebrow)', marginBottom: 12, fontFamily: 'var(--font-sans)' }}>Signals</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {grouped.map(group => (
+                    <div key={group.category}>
+                      <div style={{ fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', marginBottom: 4, fontFamily: 'var(--font-sans)' }}>{group.label}</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {group.items.map(sig => {
+                          const isCatchall = sig.canonical_name.endsWith('(generic)')
+                          const displayName = isCatchall ? sig.canonical_name.replace(/\s*\(generic\)$/, '') : sig.canonical_name
+                          const url = sig.evidence_url || sig.canonical_url
+                          const tooltip = `${sig.category.replace(/_/g, ' ')} · ${sig.source.replace(/_/g, ' ')}${sig.source_text ? ` · "${sig.source_text}"` : ''}`
+
+                          const chipStyle: React.CSSProperties = isCatchall
+                            ? { padding: '1px 7px', fontSize: 'var(--fs-11)', background: 'var(--bg-surface-raised)', color: 'var(--fg-tertiary)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-chip)', fontFamily: 'var(--font-sans)', cursor: url ? 'pointer' : 'default', textDecoration: 'none', lineHeight: '1.5' }
+                            : { padding: '1px 7px', fontSize: 'var(--fs-12)', background: 'var(--tag-mist-bg)', color: 'var(--tag-mist-text)', border: '1px solid var(--tag-mist-border)', borderRadius: 'var(--r-chip)', fontFamily: 'var(--font-sans)', cursor: url ? 'pointer' : 'default', textDecoration: 'none', lineHeight: '1.5' }
+
+                          if (url) {
+                            return (
+                              <a key={sig.signal_id} href={url} target="_blank" rel="noopener noreferrer" title={tooltip} style={chipStyle}>
+                                {displayName}
+                              </a>
+                            )
+                          }
+                          return <span key={sig.signal_id} title={tooltip} style={chipStyle}>{displayName}</span>
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {overflow > 0 && (
+                  <div style={{ marginTop: 6, fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)' }}>
+                    +{overflow} more
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Work History */}
           {(() => {

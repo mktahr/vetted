@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Person, SortField, SortDirection, CandidateBucket } from '../types'
-import ProfileDrawer, { DrawerExperience } from './ProfileDrawer'
+import ProfileDrawer, { DrawerExperience, DrawerSignal } from './ProfileDrawer'
 import { MultiSelectOption } from './MultiSelect'
 import CompanyLogo, { guessDomain } from './CompanyLogo'
 import FilterSidebar from './FilterSidebar'
@@ -125,6 +125,7 @@ export default function ProfileTable() {
   // Role→specialty mapping for contextual filtering
   const [roleSpecialtyMap, setRoleSpecialtyMap] = useState<Record<string, string[]>>({})
   const [companyNameMap, setCompanyNameMap] = useState<Record<string, string>>({})
+  const [signalsByPerson, setSignalsByPerson] = useState<Record<string, DrawerSignal[]>>({})
 
   const locationOptions = useMemo(() => buildLocationOptions(), [])
 
@@ -144,6 +145,7 @@ export default function ProfileTable() {
           { data: specDict },
           { data: roles },
           { data: rsMap },
+          { data: signalsData },
         ] = await Promise.all([
           supabase.from('people').select('*, companies:current_company_id ( company_name )').order('created_at', { ascending: false }),
           supabase.from('candidate_bucket_assignments').select('person_id, candidate_bucket, assignment_reason, effective_at').order('effective_at', { ascending: false }),
@@ -155,6 +157,7 @@ export default function ProfileTable() {
           supabase.from('specialty_dictionary').select('specialty_normalized, parent_function').eq('active', true).order('specialty_normalized'),
           supabase.from('role_dictionary').select('role_id, role_name, display_order').eq('active', true).order('display_order'),
           supabase.from('role_specialty_map').select('role_id, specialty_normalized, is_primary'),
+          supabase.from('person_signals_active').select('person_id, signal_id, canonical_name, category, canonical_url, evidence_url, source_text, source, confidence').order('confidence', { ascending: false }),
         ])
 
         if (peopleErr) { setError(`Database error: ${peopleErr.message}`); return }
@@ -197,6 +200,24 @@ export default function ProfileTable() {
         for (const c of companies || []) cMap[c.company_id] = c.company_name
         setCompanyNameMap(cMap)
         setSchoolOptions((schools || []).filter((s: any) => s.school_score != null).map((s: any) => ({ value: s.school_id, label: s.school_name, sublabel: s.is_foreign ? "Int'l" : undefined })))
+
+        // Signals: group by person, deduplicate by signal_id (keep highest confidence)
+        const sigMap: Record<string, DrawerSignal[]> = {}
+        for (const r of signalsData || []) {
+          if (!sigMap[r.person_id]) sigMap[r.person_id] = []
+          const existing = sigMap[r.person_id].find(s => s.signal_id === r.signal_id)
+          if (!existing) {
+            sigMap[r.person_id].push({
+              signal_id: r.signal_id, canonical_name: r.canonical_name,
+              category: r.category, canonical_url: r.canonical_url,
+              evidence_url: r.evidence_url, source_text: r.source_text,
+              source: r.source, confidence: r.confidence,
+            })
+          } else if (r.confidence > existing.confidence) {
+            Object.assign(existing, { confidence: r.confidence, evidence_url: r.evidence_url || existing.evidence_url, source_text: r.source_text || existing.source_text })
+          }
+        }
+        setSignalsByPerson(sigMap)
 
         // Roles
         setRoleOptions((roles || []).map((r: any) => ({ value: r.role_id, label: r.role_name })))
@@ -543,6 +564,7 @@ export default function ProfileTable() {
       </div>
 
       <ProfileDrawer person={selectedPerson} isOpen={isDrawerOpen}
+        signals={selectedPerson ? (signalsByPerson[selectedPerson.person_id] || []) : []}
         experiences={(() => {
           if (!selectedPerson) return []
           const sp = people.find(p => p.person_id === selectedPerson.person_id)
