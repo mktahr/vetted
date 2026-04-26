@@ -17,7 +17,7 @@ export interface FilterSidebarProps {
   roleSel: string[];             setRoleSel: (v: string[]) => void
   roleOptions: MultiSelectOption[]
   specialtySel: string[];        setSpecialtySel: (v: string[]) => void
-  specialtyScope: 'current' | 'any'; setSpecialtyScope: (v: 'current' | 'any') => void
+  specialtyScope: 'ever' | 'currently' | 'previously'; setSpecialtyScope: (v: 'ever' | 'currently' | 'previously') => void
   specialtyOptions: MultiSelectOption[]
   allSpecialtyOptions: MultiSelectOption[]
   senioritySel: string[];        setSenioritySel: (v: string[]) => void
@@ -133,8 +133,9 @@ export default function FilterSidebar(props: FilterSidebarProps) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
             <Lbl>Specialty</Lbl>
             <div style={{ display: 'flex', gap: 2 }}>
-              <ToggleBtn active={props.specialtyScope === 'any'} onClick={() => props.setSpecialtyScope('any')}>Any past</ToggleBtn>
-              <ToggleBtn active={props.specialtyScope === 'current'} onClick={() => props.setSpecialtyScope('current')}>Current</ToggleBtn>
+              <ToggleBtn active={props.specialtyScope === 'ever'} onClick={() => props.setSpecialtyScope('ever')}>Ever</ToggleBtn>
+              <ToggleBtn active={props.specialtyScope === 'currently'} onClick={() => props.setSpecialtyScope('currently')}>Currently</ToggleBtn>
+              <ToggleBtn active={props.specialtyScope === 'previously'} onClick={() => props.setSpecialtyScope('previously')}>Previously</ToggleBtn>
             </div>
           </div>
           <MultiSelect label="" options={displayedSpecialties} selected={props.specialtySel} onChange={props.setSpecialtySel}

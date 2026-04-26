@@ -39,6 +39,7 @@ interface ExperienceLite {
   company_id: string | null
   company_focus: 'hard_tech' | 'all_tech' | 'unreviewed' | null
   specialty: string | null
+  seniority: string | null
   start_date: string | null
   end_date: string | null
   is_current: boolean
@@ -47,10 +48,16 @@ interface ExperienceLite {
   description_raw: string | null
 }
 
+interface EducationLite {
+  school_id: string
+  end_year: number | null
+}
+
 interface PersonWithFilters extends Person {
   company_ids_all: Set<string>
   school_ids_all: Set<string>
   experiences_lite: ExperienceLite[]
+  education_lite: EducationLite[]
   all_specialties: Set<string>
 }
 
@@ -103,9 +110,13 @@ export default function ProfileTable() {
   const [locationSel, setLocationSel] = useState<string[]>([])
   const [specialtySel, setSpecialtySel] = useState<string[]>([])
   const [clearanceSel, setClearanceSel] = useState<string[]>([])
-  const [specialtyScope, setSpecialtyScope] = useState<'current' | 'any'>('any')
+  // Temporal scope type: 'ever' (default) | 'currently' | 'previously'
+  type TemporalScope = 'ever' | 'currently' | 'previously'
+  const [specialtyScope, setSpecialtyScope] = useState<TemporalScope>('ever')
+  const [seniorityScope, setSeniorityScope] = useState<TemporalScope>('ever')
   const [focusScope, setFocusScope] = useState<FocusScope>('all')
   const [compoundCompany, setCompoundCompany] = useState<string>('')
+  const [compoundCompanyScope, setCompoundCompanyScope] = useState<TemporalScope>('ever')
   const [compoundSpecialties, setCompoundSpecialties] = useState<string[]>([])
   const [compoundYearMin, setCompoundYearMin] = useState<string>('')
   const [compoundYearMax, setCompoundYearMax] = useState<string>('')
@@ -113,7 +124,11 @@ export default function ProfileTable() {
   const [yearsMin, setYearsMin] = useState<string>('')
   const [yearsMax, setYearsMax] = useState<string>('')
   const [schoolScope, setSchoolScope] = useState<'us' | 'all'>('us')
+  const [schoolTemporalScope, setSchoolTemporalScope] = useState<TemporalScope>('ever')
+  const [schoolGroupScope, setSchoolGroupScope] = useState<TemporalScope>('ever')
+  const [companyGroupScope, setCompanyGroupScope] = useState<TemporalScope>('ever')
   const [titleBoolean, setTitleBoolean] = useState('')
+  const [titleBooleanScope, setTitleBooleanScope] = useState<TemporalScope>('ever')
   const [experienceBoolean, setExperienceBoolean] = useState('')
 
   // Options
@@ -160,8 +175,8 @@ export default function ProfileTable() {
         ] = await Promise.all([
           supabase.from('people').select('*, companies:current_company_id ( company_name )').order('created_at', { ascending: false }),
           supabase.from('candidate_bucket_assignments').select('person_id, candidate_bucket, assignment_reason, effective_at').order('effective_at', { ascending: false }),
-          supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, start_date, end_date, is_current, employment_type_normalized, title_raw, description_raw'),
-          supabase.from('person_education').select('person_id, school_id'),
+          supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, seniority_normalized, start_date, end_date, is_current, employment_type_normalized, title_raw, description_raw'),
+          supabase.from('person_education').select('person_id, school_id, end_year'),
           supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
           supabase.from('companies').select('company_id, company_name, primary_industry_tag, focus, company_groups').order('company_name'),
           supabase.from('schools').select('school_id, school_name, school_score, is_foreign, school_groups').order('school_name'),
@@ -188,7 +203,8 @@ export default function ProfileTable() {
           if (!expLite[pid]) expLite[pid] = []
           expLite[pid].push({
             company_id: r.company_id, company_focus: r.company_id ? (companyFocus[r.company_id] as any ?? null) : null,
-            specialty: (r as any).specialty_normalized ?? null, start_date: (r as any).start_date ?? null,
+            specialty: (r as any).specialty_normalized ?? null, seniority: (r as any).seniority_normalized ?? null,
+            start_date: (r as any).start_date ?? null,
             end_date: (r as any).end_date ?? null, is_current: (r as any).is_current ?? false,
             employment_type: (r as any).employment_type_normalized ?? null,
             title_raw: (r as any).title_raw ?? null, description_raw: (r as any).description_raw ?? null,
@@ -196,13 +212,22 @@ export default function ProfileTable() {
           if ((r as any).specialty_normalized) { if (!allSpecs[pid]) allSpecs[pid] = new Set(); allSpecs[pid].add((r as any).specialty_normalized) }
         }
         const schoolIds: Record<string, Set<string>> = {}
-        for (const r of eduData || []) { if (r.school_id) { if (!schoolIds[r.person_id]) schoolIds[r.person_id] = new Set(); schoolIds[r.person_id].add(r.school_id) } }
+        const eduLite: Record<string, EducationLite[]> = {}
+        for (const r of eduData || []) {
+          if (r.school_id) {
+            if (!schoolIds[r.person_id]) schoolIds[r.person_id] = new Set()
+            schoolIds[r.person_id].add(r.school_id)
+            if (!eduLite[r.person_id]) eduLite[r.person_id] = []
+            eduLite[r.person_id].push({ school_id: r.school_id, end_year: (r as any).end_year ?? null })
+          }
+        }
 
         setPeople((peopleData || []).map((r: any) => ({
           ...r, current_company_name: r.companies?.company_name || null,
           latest_bucket: latestBucket[r.person_id]?.bucket ?? null, latest_bucket_reason: latestBucket[r.person_id]?.reason ?? null,
           company_ids_all: companyIds[r.person_id] || new Set(), school_ids_all: schoolIds[r.person_id] || new Set(),
-          experiences_lite: expLite[r.person_id] || [], all_specialties: allSpecs[r.person_id] || new Set(),
+          experiences_lite: expLite[r.person_id] || [], education_lite: eduLite[r.person_id] || [],
+          all_specialties: allSpecs[r.person_id] || new Set(),
         })))
 
         setSeniorityOptions((srs || []).map(s => ({ value: s.seniority_normalized, label: s.seniority_normalized.replace(/_/g, ' ') })))
@@ -316,36 +341,82 @@ export default function ProfileTable() {
     if (searchQuery) { const q = searchQuery.toLowerCase(); rows = rows.filter(p => p.full_name?.toLowerCase().includes(q) || p.current_company_name?.toLowerCase().includes(q) || p.current_title_raw?.toLowerCase().includes(q) || p.location_name?.toLowerCase().includes(q)) }
     if (bucketSel.length > 0) { const s = new Set(bucketSel); rows = rows.filter(p => p.latest_bucket && s.has(p.latest_bucket)) }
     if (stageSel.length > 0) { const s = new Set(stageSel); rows = rows.filter(p => p.career_stage_assigned && s.has(p.career_stage_assigned)) }
-    if (senioritySel.length > 0) { const s = new Set(senioritySel); rows = rows.filter(p => p.highest_seniority_reached && s.has(p.highest_seniority_reached)) }
-    if (schoolSel.length > 0) { const s = new Set(schoolSel); rows = rows.filter(p => Array.from(p.school_ids_all).some(id => s.has(id))) }
+    // Seniority with temporal scope
+    if (senioritySel.length > 0) {
+      const s = new Set(senioritySel)
+      if (seniorityScope === 'currently') {
+        // Match current role's seniority (from experiences_lite where is_current)
+        rows = rows.filter(p => p.experiences_lite.some(e => e.is_current && e.seniority && s.has(e.seniority)))
+      } else if (seniorityScope === 'previously') {
+        // Had seniority in past but NOT in current role
+        rows = rows.filter(p => {
+          const hasPast = p.experiences_lite.some(e => !e.is_current && e.seniority && s.has(e.seniority))
+          const hasCurrent = p.experiences_lite.some(e => e.is_current && e.seniority && s.has(e.seniority))
+          return hasPast && !hasCurrent
+        })
+      } else {
+        rows = rows.filter(p => p.highest_seniority_reached && s.has(p.highest_seniority_reached))
+      }
+    }
 
-    // Location: match state or city name as substring of people.location_name
+    // School with temporal scope (infer current from end_year)
+    if (schoolSel.length > 0) {
+      const s = new Set(schoolSel)
+      const currentYear = new Date().getFullYear()
+      if (schoolTemporalScope === 'currently') {
+        rows = rows.filter(p => p.education_lite?.some(e => s.has(e.school_id) && (e.end_year == null || e.end_year >= currentYear)))
+      } else if (schoolTemporalScope === 'previously') {
+        rows = rows.filter(p => {
+          const hasEver = p.education_lite?.some(e => s.has(e.school_id))
+          const hasCurrent = p.education_lite?.some(e => s.has(e.school_id) && (e.end_year == null || e.end_year >= currentYear))
+          return hasEver && !hasCurrent
+        })
+      } else {
+        rows = rows.filter(p => Array.from(p.school_ids_all).some(id => s.has(id)))
+      }
+    }
+
+    // Location
     if (locationSel.length > 0) {
       rows = rows.filter(p => { if (!p.location_name) return false; return locationSel.some(sel => p.location_name!.toLowerCase().includes(sel.toLowerCase())) })
     }
 
-    // Role filter: expand selected roles to all mapped specialties, then filter
-    // people who have ANY of those specialties
+    // Role filter with specialty scope
     if (roleSel.length > 0) {
       const roleSpecs = new Set<string>()
       for (const rid of roleSel) { for (const s of roleSpecialtyMap[rid] || []) roleSpecs.add(s) }
-      if (specialtyScope === 'current') {
+      if (specialtyScope === 'currently') {
         rows = rows.filter(p => p.primary_specialty && roleSpecs.has(p.primary_specialty))
+      } else if (specialtyScope === 'previously') {
+        rows = rows.filter(p => {
+          const hasPast = p.experiences_lite.some(e => !e.is_current && e.specialty && roleSpecs.has(e.specialty))
+          const hasCurrent = p.primary_specialty && roleSpecs.has(p.primary_specialty)
+          return hasPast && !hasCurrent
+        })
       } else {
         rows = rows.filter(p => Array.from(p.all_specialties).some(s => roleSpecs.has(s)))
       }
     }
 
-    // Specialty filter (in addition to role, or standalone)
+    // Specialty filter with temporal scope
     if (specialtySel.length > 0) {
       const s = new Set(specialtySel)
-      if (specialtyScope === 'current') rows = rows.filter(p => p.primary_specialty && s.has(p.primary_specialty))
-      else rows = rows.filter(p => Array.from(p.all_specialties).some(spec => s.has(spec)))
+      if (specialtyScope === 'currently') {
+        rows = rows.filter(p => p.primary_specialty && s.has(p.primary_specialty))
+      } else if (specialtyScope === 'previously') {
+        rows = rows.filter(p => {
+          const hasPast = p.experiences_lite.some(e => !e.is_current && e.specialty && s.has(e.specialty))
+          const hasCurrent = p.primary_specialty && s.has(p.primary_specialty)
+          return hasPast && !hasCurrent
+        })
+      } else {
+        rows = rows.filter(p => Array.from(p.all_specialties).some(spec => s.has(spec)))
+      }
     }
 
     if (clearanceSel.length > 0) { const s = new Set(clearanceSel); rows = rows.filter(p => p.clearance_level && s.has(p.clearance_level)) }
 
-    // Signals filter: match candidates with selected signals or signal categories
+    // Signals filter (no temporal scope — achievements are timeless)
     if (signalSel.length > 0) {
       const selectedCats = signalSel.filter(v => v.startsWith('cat:')).map(v => v.slice(4))
       const selectedIds = new Set(signalSel.filter(v => !v.startsWith('cat:')))
@@ -355,42 +426,61 @@ export default function ProfileTable() {
       })
     }
 
-    // School groups filter: candidates who attended a school in any selected group
+    // School groups filter with temporal scope
     if (schoolGroupSel.length > 0) {
       const selGroups = new Set(schoolGroupSel)
-      rows = rows.filter(p => Array.from(p.school_ids_all).some(sid => {
-        const groups = schoolGroupsMap[sid] || []
-        return groups.some(g => selGroups.has(g))
-      }))
+      const matchesGroup = (sid: string) => { const g = schoolGroupsMap[sid] || []; return g.some(v => selGroups.has(v)) }
+      const currentYear = new Date().getFullYear()
+      if (schoolGroupScope === 'currently') {
+        rows = rows.filter(p => p.education_lite?.some(e => matchesGroup(e.school_id) && (e.end_year == null || e.end_year >= currentYear)))
+      } else if (schoolGroupScope === 'previously') {
+        rows = rows.filter(p => {
+          const hasEver = p.education_lite?.some(e => matchesGroup(e.school_id))
+          const hasCurrent = p.education_lite?.some(e => matchesGroup(e.school_id) && (e.end_year == null || e.end_year >= currentYear))
+          return hasEver && !hasCurrent
+        })
+      } else {
+        rows = rows.filter(p => Array.from(p.school_ids_all).some(sid => matchesGroup(sid)))
+      }
     }
 
-    // Company groups filter: candidates who worked at a company in any selected group
+    // Company groups filter with temporal scope
     if (companyGroupSel.length > 0) {
       const selGroups = new Set(companyGroupSel)
-      rows = rows.filter(p => p.experiences_lite.some(e => {
-        if (!e.company_id) return false
-        const groups = companyGroupsMap[e.company_id] || []
-        return groups.some(g => selGroups.has(g))
-      }))
+      const matchesGroup = (cid: string) => { const g = companyGroupsMap[cid] || []; return g.some(v => selGroups.has(v)) }
+      if (companyGroupScope === 'currently') {
+        rows = rows.filter(p => p.experiences_lite.some(e => e.company_id && e.is_current && matchesGroup(e.company_id)))
+      } else if (companyGroupScope === 'previously') {
+        rows = rows.filter(p => {
+          const hasEver = p.experiences_lite.some(e => e.company_id && matchesGroup(e.company_id))
+          const hasCurrent = p.experiences_lite.some(e => e.company_id && e.is_current && matchesGroup(e.company_id))
+          return hasEver && !hasCurrent
+        })
+      } else {
+        rows = rows.filter(p => p.experiences_lite.some(e => e.company_id && matchesGroup(e.company_id)))
+      }
     }
 
     if (focusScope === 'hard_tech') rows = rows.filter(p => p.experiences_lite.some(e => e.company_focus === 'hard_tech'))
     else if (focusScope === 'all_tech') rows = rows.filter(p => p.experiences_lite.some(e => e.company_focus === 'hard_tech' || e.company_focus === 'all_tech'))
 
-    // Compound filter with relationship
+    // Compound company filter with temporal scope
     if (compoundCompany) {
       const y1 = compoundYearMin ? parseInt(compoundYearMin, 10) : null
       const y2 = compoundYearMax ? parseInt(compoundYearMax, 10) : null
       const needSpecs = compoundSpecialties.length > 0 ? new Set(compoundSpecialties) : null
       const rStart = y1 && !isNaN(y1) ? new Date(y1, 0, 1).getTime() : null
       const rEnd = y2 && !isNaN(y2) ? new Date(y2, 11, 31).getTime() : null
-      rows = rows.filter(p => p.experiences_lite.some(e => {
+      const matchesExp = (e: typeof rows[0]['experiences_lite'][0]) => {
         if (e.company_id !== compoundCompany) return false
         if (needSpecs && !(e.specialty && needSpecs.has(e.specialty))) return false
-        // Relationship filter
+        // Legacy relationship filter (sidebar still uses this)
         if (compoundRelationship === 'current' && !e.is_current) return false
         if (compoundRelationship === 'previous' && (e.is_current || e.employment_type === 'internship')) return false
         if (compoundRelationship === 'intern' && e.employment_type !== 'internship') return false
+        // Temporal scope (from search builder)
+        if (compoundCompanyScope === 'currently' && !e.is_current) return false
+        if (compoundCompanyScope === 'previously' && e.is_current) return false
         // Date range
         if (rStart || rEnd) {
           const eS = e.start_date ? new Date(e.start_date).getTime() : null
@@ -399,7 +489,17 @@ export default function ProfileTable() {
           if (rStart && eE && eE < rStart) return false
         }
         return true
-      }))
+      }
+      if (compoundCompanyScope === 'previously') {
+        // "Previously" = had a match in the past but NOT currently at that company
+        rows = rows.filter(p => {
+          const hasMatch = p.experiences_lite.some(e => matchesExp(e))
+          const hasCurrent = p.experiences_lite.some(e => e.company_id === compoundCompany && e.is_current)
+          return hasMatch && !hasCurrent
+        })
+      } else {
+        rows = rows.filter(p => p.experiences_lite.some(e => matchesExp(e)))
+      }
     }
 
     const minN = yearsMin ? parseFloat(yearsMin) : null
@@ -407,14 +507,19 @@ export default function ProfileTable() {
     if (minN && !isNaN(minN)) rows = rows.filter(p => p.years_experience_estimate != null && p.years_experience_estimate >= minN)
     if (maxN && !isNaN(maxN)) rows = rows.filter(p => p.years_experience_estimate != null && p.years_experience_estimate <= maxN)
 
-    // Boolean title search
+    // Boolean title search with temporal scope
     if (titleBoolean.trim()) {
       rows = rows.filter(p => {
-        if (specialtyScope === 'current') return matchesBoolean(p.current_title_raw || '', titleBoolean)
+        if (titleBooleanScope === 'currently') return matchesBoolean(p.current_title_raw || '', titleBoolean)
+        if (titleBooleanScope === 'previously') {
+          const hasPast = p.experiences_lite.some(e => !e.is_current && matchesBoolean(e.title_raw || '', titleBoolean))
+          const hasCurrent = matchesBoolean(p.current_title_raw || '', titleBoolean)
+          return hasPast && !hasCurrent
+        }
         return p.experiences_lite.some(e => matchesBoolean(e.title_raw || '', titleBoolean))
       })
     }
-    // Boolean experience/skills search
+    // Boolean experience/skills search (no temporal scope — searches all text)
     if (experienceBoolean.trim()) {
       rows = rows.filter(p => {
         const texts = [p.headline_raw || '', p.summary_raw || '', p.narrative_summary || '']
@@ -425,7 +530,7 @@ export default function ProfileTable() {
 
     if (sortField) rows.sort((a, b) => { const av = (a[sortField] as number) ?? -1, bv = (b[sortField] as number) ?? -1; return sortDirection === 'asc' ? av - bv : bv - av })
     return rows
-  }, [people, searchQuery, bucketSel, stageSel, roleSel, senioritySel, schoolSel, locationSel, specialtySel, specialtyScope, clearanceSel, focusScope, compoundCompany, compoundSpecialties, compoundYearMin, compoundYearMax, compoundRelationship, yearsMin, yearsMax, titleBoolean, experienceBoolean, signalSel, schoolGroupSel, companyGroupSel, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap])
+  }, [people, searchQuery, bucketSel, stageSel, roleSel, senioritySel, seniorityScope, schoolSel, schoolTemporalScope, locationSel, specialtySel, specialtyScope, clearanceSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, compoundRelationship, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap])
 
   const activeFilterCount =
     (roleSel.length > 0 ? 1 : 0) + (bucketSel.length > 0 ? 1 : 0) + (stageSel.length > 0 ? 1 : 0) +
@@ -436,11 +541,13 @@ export default function ProfileTable() {
 
   const clearAllFilters = () => {
     setSearchQuery(''); setRoleSel([]); setBucketSel([]); setStageSel([]); setSenioritySel([])
-    setSchoolSel([]); setLocationSel([]); setSpecialtySel([]); setSpecialtyScope('any')
+    setSchoolSel([]); setLocationSel([]); setSpecialtySel([])
     setClearanceSel([]); setFocusScope('all'); setCompoundCompany(''); setCompoundSpecialties([])
     setCompoundYearMin(''); setCompoundYearMax(''); setCompoundRelationship('any')
-    setYearsMin(''); setYearsMax(''); setTitleBoolean(''); setExperienceBoolean('')
+    setYearsMin(''); setYearsMax(''); setTitleBoolean(''); setTitleBooleanScope('ever'); setExperienceBoolean('')
     setSignalSel([]); setSchoolGroupSel([]); setCompanyGroupSel([])
+    setSpecialtyScope('ever'); setSeniorityScope('ever'); setCompoundCompanyScope('ever')
+    setSchoolTemporalScope('ever'); setSchoolGroupScope('ever'); setCompanyGroupScope('ever')
   }
 
   const handleSort = (field: SortField) => {
@@ -513,7 +620,7 @@ export default function ProfileTable() {
         clearAllFilters={clearAllFilters} activeFilterCount={activeFilterCount}
         onOpenBuilder={() => {
           // Encode current filter state as JSON in URL param
-          const state = { roleSel, specialtySel, specialtyScope, senioritySel, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, focusScope, compoundCompany, compoundSpecialties, compoundYearMin, compoundYearMax, compoundRelationship, schoolSel, titleBoolean, experienceBoolean }
+          const state = { roleSel, specialtySel, specialtyScope, senioritySel, seniorityScope, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, compoundRelationship, schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope }
           // TODO: Refactor to individual URL params when search-URL-sharing becomes a use case.
           router.push(`/search-builder?filters=${encodeURIComponent(JSON.stringify(state))}`)
         }}
