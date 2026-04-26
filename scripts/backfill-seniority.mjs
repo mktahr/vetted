@@ -90,6 +90,41 @@ function isInternshipTitle(t) {
   return /\bintern\b|\binternship\b|\bco-?op\b/i.test(t)
 }
 
+// Title is explicitly a student identity — always filter from years calc.
+function isExplicitStudentTitle(t) {
+  if (!t) return false
+  return /\b(student|undergrad|undergraduate|doctoral candidate|phd candidate|m\.?s\.? candidate|m\.?a\.? candidate|masters? candidate)\b/i.test(t)
+}
+
+// Assistantship-style titles (RA / TA / grad assistant) — only filter when
+// the role overlaps an education period. A postdoc RA at a research lab
+// (no concurrent degree) keeps their experience.
+function isAssistantshipTitle(t) {
+  if (!t) return false
+  return /\b(graduate assistant|grad assistant|teaching assistant|research assistant|graduate research assistant|graduate teaching assistant)\b/i.test(t)
+}
+
+function roleOverlapsEducation(role, education) {
+  if (!role.start_date) return false
+  const roleStart = new Date(role.start_date).getFullYear()
+  if (isNaN(roleStart)) return false
+  const roleEnd = role.is_current
+    ? new Date().getFullYear()
+    : (role.end_date ? new Date(role.end_date).getFullYear() : roleStart)
+  for (const edu of education || []) {
+    if (!edu.start_year || !edu.end_year) continue
+    if (roleStart <= edu.end_year && roleEnd >= edu.start_year) return true
+  }
+  return false
+}
+
+function isBachelorOrHigher(e) {
+  const lvl = (e.degree_level || '').toLowerCase()
+  if (['bachelor','master','phd','doctorate','jd','md','mba'].includes(lvl)) return true
+  const name = ((e.degree_raw || e.degree_normalized) || '').toLowerCase()
+  return /\b(bachelor|b\.?s\.?|b\.?a\.?|b\.?eng|master|m\.?s\.?|m\.?a\.?|m\.?eng|mba|phd|ph\.?d|doctorate|doctoral|md|jd)\b/.test(name)
+}
+
 // career_stage thresholds — canonical scoring-engine boundaries (0.5/2/5).
 function inferCareerStage(years) {
   if (years === null || years === undefined) return null
@@ -117,34 +152,48 @@ for (const person of people || []) {
 
   const { data: edus } = await supabase
     .from('person_education')
-    .select('end_year, degree_raw, degree_normalized, degree_level')
+    .select('start_year, end_year, degree_raw, degree_normalized, degree_level')
     .eq('person_id', person.person_id)
 
-  // Graduation date = earliest POST-SECONDARY end_year. Skip high school,
-  // certificates, and coursework so we don't anchor graduation at ~18 and
-  // count undergrad-era student jobs as real experience.
-  // Matches lib/normalize/seniority.ts graduationDateFromEducation().
-  const isHighSchoolOrLower = (e) => {
-    const lvl = (e.degree_level || '').toLowerCase()
-    if (lvl === 'high_school' || lvl === 'certificate' || lvl === 'coursework') return true
-    const name = ((e.degree_raw || e.degree_normalized) || '').toLowerCase()
-    return /high school|secondary school|\bged\b/.test(name)
-  }
-
-  let earliest = null
+  // Graduation date = earliest COMPLETED bachelor+ end_year. Earliest (not
+  // latest) so pre-MBA pro experience for returners still counts. Completed-
+  // only so a returnship/part-time degree-completer with end_year in the
+  // future doesn't anchor the future and zero everything out — they fall
+  // through to the existing fallback below. Mirrors
+  // lib/normalize/seniority.ts graduationDateFromEducation().
+  const nowYear = new Date().getFullYear()
+  let earliestBachelorPlus = null
   for (const e of edus || []) {
     if (!e.end_year) continue
-    if (isHighSchoolOrLower(e)) continue
-    if (earliest === null || e.end_year < earliest) earliest = e.end_year
-  }
-  // Fallback: no post-secondary — use earliest overall
-  if (earliest === null) {
-    for (const e of edus || []) {
-      if (!e.end_year) continue
-      if (earliest === null || e.end_year < earliest) earliest = e.end_year
+    if (!isBachelorOrHigher(e)) continue
+    if (e.end_year > nowYear) continue
+    if (earliestBachelorPlus === null || e.end_year < earliestBachelorPlus) {
+      earliestBachelorPlus = e.end_year
     }
   }
-  const gradDate = earliest !== null ? new Date(earliest, 5, 1) : null
+  let gradAnchor = earliestBachelorPlus
+  if (gradAnchor === null) {
+    // Fallback: earliest non-HS overall (returnship / non-degreed).
+    const isHighSchoolOrLower = (e) => {
+      const lvl = (e.degree_level || '').toLowerCase()
+      if (lvl === 'high_school' || lvl === 'certificate' || lvl === 'coursework') return true
+      const name = ((e.degree_raw || e.degree_normalized) || '').toLowerCase()
+      return /high school|secondary school|\bged\b/.test(name)
+    }
+    for (const e of edus || []) {
+      if (!e.end_year) continue
+      if (isHighSchoolOrLower(e)) continue
+      if (gradAnchor === null || e.end_year < gradAnchor) gradAnchor = e.end_year
+    }
+  }
+  if (gradAnchor === null) {
+    // Final fallback: earliest end_year overall (HS-only profiles).
+    for (const e of edus || []) {
+      if (!e.end_year) continue
+      if (gradAnchor === null || e.end_year < gradAnchor) gradAnchor = e.end_year
+    }
+  }
+  const gradDate = gradAnchor !== null ? new Date(gradAnchor, 5, 1) : null
 
   // Update each experience
   const changedTitles = []
@@ -175,7 +224,7 @@ for (const person of people || []) {
   // from the refreshed experience data (now includes the seniority updates above).
   const { data: refreshed } = await supabase
     .from('person_experiences')
-    .select('seniority_normalized, title_raw, start_date, employment_type_normalized')
+    .select('seniority_normalized, title_raw, start_date, end_date, is_current, employment_type_normalized')
     .eq('person_id', person.person_id)
 
   let maxRank = 0
@@ -189,20 +238,16 @@ for (const person of people || []) {
   }
 
   // Years of experience: span from earliest post-graduation, non-student,
-  // non-internship role start to now. Matches lib/ingest/mappers/crust.ts
-  // computeYearsSpan() — we skip:
-  //   - student-level roles (by our updated seniority_normalized)
-  //   - internship titles
-  //   - roles that started before gradDate
+  // non-internship role start to now. Mirrors
+  // lib/normalize/seniority.ts computeYearsExperienceEstimate().
   let earliestPostGrad = null
   for (const e of refreshed || []) {
     if (!e.start_date) continue
-    // Null/empty title → low confidence (Voyager sometimes returns position
-    // groups with no title for high-school-era jobs). Don't let these anchor
-    // years calc. Aligns with extension's computeYearsOfExperience.
-    if (!e.title_raw || !e.title_raw.trim()) continue
+    if (!e.title_raw || !e.title_raw.trim()) continue   // null-title → low confidence
     if (e.seniority_normalized === 'student') continue
     if (isInternshipTitle(e.title_raw)) continue
+    if (isExplicitStudentTitle(e.title_raw)) continue
+    if (isAssistantshipTitle(e.title_raw) && roleOverlapsEducation(e, edus)) continue
     const start = new Date(e.start_date)
     if (isNaN(start.getTime())) continue
     if (gradDate && start.getFullYear() < gradDate.getFullYear()) continue

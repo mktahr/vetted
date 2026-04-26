@@ -323,31 +323,141 @@ export function graduationDateFromEducation(
     degree_level?: string | null
   }>,
 ): Date | null {
+  // Anchor at the earliest COMPLETED bachelor+ degree. Earliest (not latest)
+  // so pre-MBA pro experience for returners still counts. Completed-only so
+  // a returnship/part-time degree-completer with end_year in the future
+  // doesn't anchor the future and zero everything out — they fall through
+  // to the existing fallback below.
+  const nowYear = new Date().getFullYear()
+
+  let earliestBachelorPlus: number | null = null
+  for (const edu of education) {
+    if (!edu.end_year) continue
+    if (!isBachelorOrHigher(edu)) continue
+    if (edu.end_year > nowYear) continue
+    if (earliestBachelorPlus === null || edu.end_year < earliestBachelorPlus) {
+      earliestBachelorPlus = edu.end_year
+    }
+  }
+  // Use June 1 (not Dec 31) — most graduates start their first job in
+  // summer of their graduation year. Dec 31 caused roles starting in
+  // June/July of the grad year to be flagged as pre-graduation.
+  if (earliestBachelorPlus !== null) return new Date(earliestBachelorPlus, 5, 1)
+
+  // Fallback: no completed bachelor+. Use earliest non-HS overall so we
+  // don't regress non-degreed profiles or returners still finishing their
+  // first bachelor's (Associate degrees and unflagged community college
+  // entries can anchor here — better than nothing).
   const isHighSchoolOrLower = (e: { degree?: string | null; degree_raw?: string | null; degree_level?: string | null }) => {
     const lvl = (e.degree_level || '').toLowerCase()
     if (lvl === 'high_school' || lvl === 'certificate' || lvl === 'coursework') return true
     const name = ((e.degree || e.degree_raw) || '').toLowerCase()
     return /high school|secondary school|\bged\b/.test(name)
   }
-
-  let earliestPostSecondary: number | null = null
+  let earliestNonHs: number | null = null
   for (const edu of education) {
     if (!edu.end_year) continue
     if (isHighSchoolOrLower(edu)) continue
-    if (earliestPostSecondary === null || edu.end_year < earliestPostSecondary) {
-      earliestPostSecondary = edu.end_year
-    }
+    if (earliestNonHs === null || edu.end_year < earliestNonHs) earliestNonHs = edu.end_year
   }
-  // Use June 1 (not Dec 31) — most graduates start their first job in
-  // summer of their graduation year. Dec 31 caused roles starting in
-  // June/July of the grad year to be flagged as pre-graduation.
-  if (earliestPostSecondary !== null) return new Date(earliestPostSecondary, 5, 1)
+  if (earliestNonHs !== null) return new Date(earliestNonHs, 5, 1)
 
+  // Final fallback: earliest end_year overall (HS-only profiles).
   let earliestOverall: number | null = null
   for (const edu of education) {
     if (!edu.end_year) continue
     if (earliestOverall === null || edu.end_year < earliestOverall) earliestOverall = edu.end_year
   }
-  if (earliestOverall === null) return null
-  return new Date(earliestOverall, 5, 1)
+  return earliestOverall !== null ? new Date(earliestOverall, 5, 1) : null
+}
+
+function isBachelorOrHigher(edu: {
+  degree?: string | null
+  degree_raw?: string | null
+  degree_level?: string | null
+}): boolean {
+  const lvl = (edu.degree_level || '').toLowerCase()
+  if (['bachelor', 'master', 'phd', 'doctorate', 'jd', 'md', 'mba'].includes(lvl)) return true
+  const name = ((edu.degree || edu.degree_raw) || '').toLowerCase()
+  return /\b(bachelor|b\.?s\.?|b\.?a\.?|b\.?eng|master|m\.?s\.?|m\.?a\.?|m\.?eng|mba|phd|ph\.?d|doctorate|doctoral|md|jd)\b/.test(name)
+}
+
+// ─── Years-of-experience helpers ────────────────────────────────────────────
+
+/** Title is explicitly a student identity — always filter from years calc. */
+export function isExplicitStudentTitle(title: string | null | undefined): boolean {
+  if (!title) return false
+  return /\b(student|undergrad|undergraduate|doctoral candidate|phd candidate|m\.?s\.? candidate|m\.?a\.? candidate|masters? candidate)\b/i.test(title)
+}
+
+/**
+ * Title is an assistantship-style role (RA / TA / grad assistant). These can
+ * be legit pro experience post-grad (e.g. research assistant at a lab) OR
+ * school-tied work. Caller must check overlap with education to disambiguate.
+ */
+export function isAssistantshipTitle(title: string | null | undefined): boolean {
+  if (!title) return false
+  return /\b(graduate assistant|grad assistant|teaching assistant|research assistant|graduate research assistant|graduate teaching assistant)\b/i.test(title)
+}
+
+/** True if the role's date range intersects any education entry's start/end years. */
+export function roleOverlapsEducation(
+  role: { start_date?: string | null; end_date?: string | null; is_current?: boolean | null },
+  education: Array<{ start_year?: number | null; end_year?: number | null }>,
+): boolean {
+  if (!role.start_date) return false
+  const roleStart = new Date(role.start_date).getFullYear()
+  if (isNaN(roleStart)) return false
+  const roleEnd = role.is_current
+    ? new Date().getFullYear()
+    : (role.end_date ? new Date(role.end_date).getFullYear() : roleStart)
+  for (const edu of education) {
+    if (!edu.start_year || !edu.end_year) continue
+    if (roleStart <= edu.end_year && roleEnd >= edu.start_year) return true
+  }
+  return false
+}
+
+/**
+ * Years-of-experience estimate: years from earliest qualifying post-grad
+ * role start to today. "Qualifying" excludes interns, students, school-
+ * concurrent assistantships, and pre-graduation roles.
+ *
+ * Returns a decimal (one place) for compatibility with the prior backfill
+ * format. Pass server-side data shape (snake_case fields).
+ */
+export function computeYearsExperienceEstimate(
+  experiences: Array<{
+    title_raw?: string | null
+    start_date?: string | null
+    end_date?: string | null
+    is_current?: boolean | null
+    seniority_normalized?: string | null
+    employment_type_normalized?: string | null
+  }>,
+  education: Array<{
+    start_year?: number | null
+    end_year?: number | null
+    degree?: string | null
+    degree_raw?: string | null
+    degree_level?: string | null
+  }>,
+): number | null {
+  const gradDate = graduationDateFromEducation(education)
+  let earliest: Date | null = null
+  for (const e of experiences) {
+    if (!e.start_date) continue
+    if (!e.title_raw || !e.title_raw.trim()) continue
+    if (e.seniority_normalized === 'student') continue
+    if (/\bintern\b|\binternship\b|\bco-?op\b/i.test(e.title_raw)) continue
+    if (isExplicitStudentTitle(e.title_raw)) continue
+    if (isAssistantshipTitle(e.title_raw) && roleOverlapsEducation(e, education)) continue
+    const start = new Date(e.start_date)
+    if (isNaN(start.getTime())) continue
+    if (gradDate && start.getFullYear() < gradDate.getFullYear()) continue
+    if (earliest === null || start < earliest) earliest = start
+  }
+  if (earliest === null) return null
+  const years = (Date.now() - earliest.getTime()) / (1000 * 60 * 60 * 24 * 365.25)
+  return Math.max(0, Math.round(years * 10) / 10)
 }

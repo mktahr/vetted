@@ -24,6 +24,10 @@ export {
   scanDescriptionForSeniority,
   matchesRule,
   graduationDateFromEducation,
+  isExplicitStudentTitle,
+  isAssistantshipTitle,
+  roleOverlapsEducation,
+  computeYearsExperienceEstimate,
 } from './seniority';
 export type {
   SeniorityLevel,
