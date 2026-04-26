@@ -265,25 +265,24 @@ export default function ProfileDrawer({ person, experiences, signals, isOpen, on
 
           {/* Work History */}
           {(() => {
-            // Skip the most recent role (already shown above as "Current role")
-            const pastRoles = experiences
+            // All experiences in chronological order (most recent first)
+            const allRoles = experiences
               .slice()
               .sort((a, b) => (b.start_date ?? '').localeCompare(a.start_date ?? ''))
-              .filter((_, i) => i > 0)
-            if (pastRoles.length === 0) return null
+            if (allRoles.length === 0) return null
             return (
               <div style={{ marginTop: 24 }}>
                 <div style={{ fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)', color: 'var(--fg-tertiary)', textTransform: 'uppercase', letterSpacing: 'var(--tr-eyebrow)', marginBottom: 12, fontFamily: 'var(--font-sans)' }}>Work History</div>
                 <div style={{ position: 'relative', paddingLeft: 20 }}>
                   {/* Timeline line */}
                   <div style={{ position: 'absolute', left: 4, top: 6, bottom: 6, width: 1, background: 'var(--border-subtle)' }} />
-                  {pastRoles.map((exp, i) => {
+                  {allRoles.map((exp, i) => {
                     const title = (exp.title_raw || 'Untitled Role').split(/\s*[|–—]\s*/)[0].split(/,\s*/)[0]
                     const company = cleanCompanyName(exp.company_name)
                     const dateRange = formatDateRange(exp.start_date, exp.end_date, exp.is_current)
                     const duration = computeDuration(exp.start_date, exp.end_date, exp.is_current)
                     return (
-                      <div key={i} style={{ position: 'relative', marginBottom: i < pastRoles.length - 1 ? 16 : 0 }}>
+                      <div key={i} style={{ position: 'relative', marginBottom: i < allRoles.length - 1 ? 16 : 0 }}>
                         {/* Timeline dot */}
                         <div style={{ position: 'absolute', left: -20, top: 6, width: 9, height: 9, borderRadius: 'var(--r-full)', border: '2px solid var(--border-default)', background: 'var(--bg-surface)' }} />
                         <div style={{ color: 'var(--fg-primary)', fontSize: 'var(--fs-14)', fontWeight: 'var(--fw-medium)', fontFamily: 'var(--font-sans)' }}>{title}</div>
