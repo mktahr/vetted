@@ -224,9 +224,7 @@ function SearchBuilderInner() {
       schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean,
       signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope,
     }
-    // TODO: The home page doesn't currently read URL filters — this navigates back and the
-    // user needs to re-apply. Full round-trip requires ProfileTable to read URL params on mount.
-    router.push('/')
+    router.push(`/?filters=${encodeURIComponent(JSON.stringify(state))}`)
   }
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '64vh', color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)', background: 'var(--bg-canvas)' }}>Loading search builder...</div>

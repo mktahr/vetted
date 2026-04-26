@@ -1,6 +1,10 @@
+import { Suspense } from 'react'
 import ProfileTable from './components/ProfileTable'
 
 export default function Home() {
-  return <ProfileTable />
+  return (
+    <Suspense>
+      <ProfileTable />
+    </Suspense>
+  )
 }
-

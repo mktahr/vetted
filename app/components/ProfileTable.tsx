@@ -4,7 +4,7 @@
 // when people count exceeds ~500. Client-side filtering becomes too slow above that threshold.
 
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, fetchAllRows } from '@/lib/supabase'
 import { Person, SortField, SortDirection, CandidateBucket } from '../types'
 import ProfileDrawer, { DrawerExperience, DrawerSignal } from './ProfileDrawer'
@@ -89,6 +89,7 @@ function matchesBoolean(text: string, query: string): boolean {
 
 export default function ProfileTable() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [people, setPeople] = useState<PersonWithFilters[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -154,6 +155,52 @@ export default function ProfileTable() {
   const [companyGroupsMap, setCompanyGroupsMap] = useState<Record<string, string[]>>({})
 
   const locationOptions = useMemo(() => buildLocationOptions(), [])
+
+  // ─── Hydrate filter state from URL params (search builder round-trip) ──
+  const [urlHydrated, setUrlHydrated] = useState(false)
+  useEffect(() => {
+    if (urlHydrated) return
+    const raw = searchParams.get('filters')
+    if (!raw) { setUrlHydrated(true); return }
+    try {
+      const f = JSON.parse(decodeURIComponent(raw))
+      if (f.roleSel) setRoleSel(f.roleSel)
+      if (f.specialtySel) setSpecialtySel(f.specialtySel)
+      // Backward compat: old 'any'/'current' → 'ever'/'currently'
+      if (f.specialtyScope === 'any') setSpecialtyScope('ever')
+      else if (f.specialtyScope === 'current') setSpecialtyScope('currently')
+      else if (f.specialtyScope) setSpecialtyScope(f.specialtyScope)
+      if (f.senioritySel) setSenioritySel(f.senioritySel)
+      if (f.seniorityScope) setSeniorityScope(f.seniorityScope)
+      if (f.bucketSel) setBucketSel(f.bucketSel)
+      if (f.stageSel) setStageSel(f.stageSel)
+      if (f.yearsMin) setYearsMin(f.yearsMin)
+      if (f.yearsMax) setYearsMax(f.yearsMax)
+      if (f.clearanceSel) setClearanceSel(f.clearanceSel)
+      if (f.locationSel) setLocationSel(f.locationSel)
+      if (f.focusScope) setFocusScope(f.focusScope)
+      if (f.compoundCompany) setCompoundCompany(f.compoundCompany)
+      if (f.compoundCompanyScope) setCompoundCompanyScope(f.compoundCompanyScope)
+      // Backward compat: old compoundRelationship
+      else if (f.compoundRelationship === 'current') setCompoundCompanyScope('currently')
+      else if (f.compoundRelationship === 'previous') setCompoundCompanyScope('previously')
+      if (f.compoundSpecialties) setCompoundSpecialties(f.compoundSpecialties)
+      if (f.compoundYearMin) setCompoundYearMin(f.compoundYearMin)
+      if (f.compoundYearMax) setCompoundYearMax(f.compoundYearMax)
+      if (f.compoundRelationship) setCompoundRelationship(f.compoundRelationship)
+      if (f.schoolSel) setSchoolSel(f.schoolSel)
+      if (f.schoolTemporalScope) setSchoolTemporalScope(f.schoolTemporalScope)
+      if (f.titleBoolean) setTitleBoolean(f.titleBoolean)
+      if (f.titleBooleanScope) setTitleBooleanScope(f.titleBooleanScope)
+      if (f.experienceBoolean) setExperienceBoolean(f.experienceBoolean)
+      if (f.signalSel) setSignalSel(f.signalSel)
+      if (f.schoolGroupSel) setSchoolGroupSel(f.schoolGroupSel)
+      if (f.schoolGroupScope) setSchoolGroupScope(f.schoolGroupScope)
+      if (f.companyGroupSel) setCompanyGroupSel(f.companyGroupSel)
+      if (f.companyGroupScope) setCompanyGroupScope(f.companyGroupScope)
+    } catch { /* ignore bad JSON */ }
+    setUrlHydrated(true)
+  }, [searchParams, urlHydrated])
 
   // ─── Fetch ────────────────────────────────────────────────────────────
 
