@@ -318,7 +318,16 @@ export async function POST(req: NextRequest) {
   const titleLevelRules = await loadTitleLevelRules(supabase);
   const specialtyEntries = await loadSpecialtyDictionary(supabase);
   const personGradDate = graduationDateFromEducation(canonical.education || []);
-  const experiences = canonical.experiences || [];
+  // Safety-net dedup: remove duplicate experiences within the canonical payload
+  // regardless of data source (Crust, extension, generic mapper).
+  const rawExperiences = canonical.experiences || [];
+  const seenExpKeys = new Set<string>();
+  const experiences = rawExperiences.filter(exp => {
+    const key = `${(exp.company_name || '').toLowerCase()}|${(exp.title || '').toLowerCase()}|${exp.start_date || ''}|${exp.end_date || ''}`;
+    if (seenExpKeys.has(key)) return false;
+    seenExpKeys.add(key);
+    return true;
+  });
 
   // Capture the current role's normalized values to return to the client
   // so the extension popup can pre-populate editable tags.
@@ -469,7 +478,17 @@ export async function POST(req: NextRequest) {
     educationEntries.push(edu);
   }
 
-  for (const edu of educationEntries) {
+  // Safety-net dedup for education entries
+  const seenEduKeys = new Set<string>();
+  const dedupedEducation = educationEntries.filter(edu => {
+    if (!edu.school_name) return true; // let the skip-if-no-name check handle it
+    const key = `${edu.school_name.toLowerCase()}|${(edu.degree || '').toLowerCase()}|${edu.start_year ?? ''}|${edu.end_year ?? ''}`;
+    if (seenEduKeys.has(key)) return false;
+    seenEduKeys.add(key);
+    return true;
+  });
+
+  for (const edu of dedupedEducation) {
     if (!edu.school_name) continue;
 
     const schoolId = await upsertSchool(supabase, edu.school_name);
