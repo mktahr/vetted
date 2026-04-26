@@ -50,12 +50,15 @@ const scopeBtnStyle = (active: boolean): React.CSSProperties => ({
   cursor: 'pointer', lineHeight: '1.5',
 })
 
-function ScopeSelector({ value, onChange }: { value: TemporalScope; onChange: (v: TemporalScope) => void }) {
+function ScopeSelector({ value, onChange, label }: { value: TemporalScope; onChange: (v: TemporalScope) => void; label?: string }) {
   return (
-    <div style={{ display: 'flex', gap: 2, marginBottom: 4 }}>
-      <button style={scopeBtnStyle(value === 'ever')} onClick={() => onChange('ever')}>Ever</button>
-      <button style={scopeBtnStyle(value === 'currently')} onClick={() => onChange('currently')}>Currently</button>
-      <button style={scopeBtnStyle(value === 'previously')} onClick={() => onChange('previously')}>Previously</button>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+      {label && <span style={{ fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)' as any, color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)' }}>{label}</span>}
+      <div style={{ display: 'flex', gap: 2 }}>
+        <button style={scopeBtnStyle(value === 'ever')} onClick={() => onChange('ever')}>Ever</button>
+        <button style={scopeBtnStyle(value === 'currently')} onClick={() => onChange('currently')}>Currently</button>
+        <button style={scopeBtnStyle(value === 'previously')} onClick={() => onChange('previously')}>Previously</button>
+      </div>
     </div>
   )
 }
@@ -116,8 +119,8 @@ function SearchBuilderInner() {
       ] = await Promise.all([
         supabase.from('role_dictionary').select('role_id, role_name, display_order').eq('active', true).order('display_order'),
         supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
-        supabase.from('companies').select('company_id, company_name, primary_industry_tag, focus, company_groups').order('company_name'),
-        supabase.from('schools').select('school_id, school_name, school_score, is_foreign, school_groups').order('school_name'),
+        supabase.from('companies').select('company_id, company_name, primary_industry_tag, focus, company_groups').order('company_name').limit(5000),
+        supabase.from('schools').select('school_id, school_name, school_score, is_foreign, school_groups').order('school_name').limit(5000),
         supabase.from('specialty_dictionary').select('specialty_normalized, parent_function').eq('active', true).order('specialty_normalized'),
         supabase.from('person_signals_active').select('signal_id, canonical_name, category').order('confidence', { ascending: false }),
       ])
@@ -258,12 +261,12 @@ function SearchBuilderInner() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <MultiSelect label="Role" options={roleOptions} selected={roleSel} onChange={setRoleSel} placeholder="Any role" />
             <div>
-              <ScopeSelector value={specialtyScope} onChange={setSpecialtyScope} />
-              <MultiSelect label="Specialty" options={specialtyOptions} selected={specialtySel} onChange={setSpecialtySel} placeholder="Any specialty" />
+              <ScopeSelector label="Specialty" value={specialtyScope} onChange={setSpecialtyScope} />
+              <MultiSelect label="" options={specialtyOptions} selected={specialtySel} onChange={setSpecialtySel} placeholder="Any specialty" />
             </div>
             <div>
-              <ScopeSelector value={seniorityScope} onChange={setSeniorityScope} />
-              <MultiSelect label="Seniority" options={seniorityOptions} selected={senioritySel} onChange={setSenioritySel} placeholder="Any seniority" />
+              <ScopeSelector label="Seniority" value={seniorityScope} onChange={setSeniorityScope} />
+              <MultiSelect label="" options={seniorityOptions} selected={senioritySel} onChange={setSenioritySel} placeholder="Any seniority" />
             </div>
             <MultiSelect label="Bucket" options={BUCKET_OPTIONS} selected={bucketSel} onChange={setBucketSel} placeholder="Any bucket" />
             <MultiSelect label="Career Stage" options={STAGE_OPTIONS} selected={stageSel} onChange={setStageSel} placeholder="Any stage" />
@@ -286,8 +289,8 @@ function SearchBuilderInner() {
         {/* Where They Worked */}
         <div style={sectionStyle}>
           <div style={headingStyle}>Where They Worked</div>
-          <ScopeSelector value={compoundCompanyScope} onChange={setCompoundCompanyScope} />
-          <MultiSelect label="Company" options={companyOptions} selected={compoundCompany ? [compoundCompany] : []} onChange={v => setCompoundCompany(v[0] || '')} placeholder="Search companies…" />
+          <ScopeSelector label="Company" value={compoundCompanyScope} onChange={setCompoundCompanyScope} />
+          <MultiSelect label="" options={companyOptions} selected={compoundCompany ? [compoundCompany] : []} onChange={v => setCompoundCompany(v[0] || '')} placeholder="Search companies…" />
           {compoundCompany && (
             <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <MultiSelect label="Specialty there" options={specialtyOptions} selected={compoundSpecialties} onChange={setCompoundSpecialties} placeholder="Any" />
@@ -303,8 +306,8 @@ function SearchBuilderInner() {
           )}
           {companyGroupOptions.length > 0 && (
             <div style={{ marginTop: 12 }}>
-              <ScopeSelector value={companyGroupScope} onChange={setCompanyGroupScope} />
-              <MultiSelect label="Company group" options={companyGroupOptions} selected={companyGroupSel} onChange={setCompanyGroupSel} placeholder="Any company group" />
+              <ScopeSelector label="Company group" value={companyGroupScope} onChange={setCompanyGroupScope} />
+              <MultiSelect label="" options={companyGroupOptions} selected={companyGroupSel} onChange={setCompanyGroupSel} placeholder="Any company group" />
             </div>
           )}
         </div>
@@ -312,12 +315,12 @@ function SearchBuilderInner() {
         {/* Where They Studied */}
         <div style={sectionStyle}>
           <div style={headingStyle}>Where They Studied</div>
-          <ScopeSelector value={schoolTemporalScope} onChange={setSchoolTemporalScope} />
-          <MultiSelect label="School" options={schoolOptions} selected={schoolSel} onChange={setSchoolSel} placeholder="Search ranked schools…" />
+          <ScopeSelector label="School" value={schoolTemporalScope} onChange={setSchoolTemporalScope} />
+          <MultiSelect label="" options={schoolOptions} selected={schoolSel} onChange={setSchoolSel} placeholder="Search ranked schools…" />
           {schoolGroupOptions.length > 0 && (
             <div style={{ marginTop: 12 }}>
-              <ScopeSelector value={schoolGroupScope} onChange={setSchoolGroupScope} />
-              <MultiSelect label="School group" options={schoolGroupOptions} selected={schoolGroupSel} onChange={setSchoolGroupSel} placeholder="Any school group" />
+              <ScopeSelector label="School group" value={schoolGroupScope} onChange={setSchoolGroupScope} />
+              <MultiSelect label="" options={schoolGroupOptions} selected={schoolGroupSel} onChange={setSchoolGroupSel} placeholder="Any school group" />
             </div>
           )}
         </div>
@@ -327,8 +330,7 @@ function SearchBuilderInner() {
           <div style={headingStyle}>Keyword Search</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div>
-              <ScopeSelector value={titleBooleanScope} onChange={setTitleBooleanScope} />
-              <label style={lblStyle}>Title keywords</label>
+              <ScopeSelector label="Title keywords" value={titleBooleanScope} onChange={setTitleBooleanScope} />
               <input type="text" value={titleBoolean} onChange={e => setTitleBoolean(e.target.value)} placeholder='"staff engineer" OR principal' style={inputStyle} />
             </div>
             <div>
