@@ -17,6 +17,7 @@ import {
   loadSeniorityRules,
   resolveSeniorityWithDescription,
   graduationDateFromEducation,
+  computeYearsExperienceEstimate,
   loadTitleLevelRules,
   extractTitleLevel,
   loadSpecialtyDictionary,
@@ -504,6 +505,36 @@ export async function POST(req: NextRequest) {
     if (eduError) {
       console.error('[ingest] Education insert failed:', eduError);
     }
+  }
+
+  // ── Step 7.5: Recompute years_experience_estimate server-side ──────────
+  // The extension's pre-computed value (canonical.years_experience) was
+  // written at upsert time as a placeholder; now that experiences and
+  // education are in the DB, recompute using the canonical algorithm so
+  // the value here is consistent with what backfill-seniority would set.
+  // Without this, every re-scrape regresses to the extension's rougher
+  // calc until the next manual backfill.
+  try {
+    const { data: refreshedExps } = await supabase
+      .from('person_experiences')
+      .select('title_raw, start_date, end_date, is_current, seniority_normalized, employment_type_normalized')
+      .eq('person_id', personId);
+    const { data: refreshedEdus } = await supabase
+      .from('person_education')
+      .select('start_year, end_year, degree_raw, degree_normalized, degree_level')
+      .eq('person_id', personId);
+    const recomputedYears = computeYearsExperienceEstimate(refreshedExps || [], refreshedEdus || []);
+    const recomputedStage = inferCareerStage(recomputedYears);
+    const { error: yearsErr } = await supabase
+      .from('people')
+      .update({
+        years_experience_estimate: recomputedYears,
+        career_stage_assigned: recomputedStage,
+      })
+      .eq('person_id', personId);
+    if (yearsErr) console.error('[ingest] Years recompute update failed:', yearsErr);
+  } catch (yrsErr) {
+    console.error('[ingest] Years recompute failed (non-fatal):', yrsErr);
   }
 
   // ── Step 8: Score candidate + assign bucket ────────────────────────────
