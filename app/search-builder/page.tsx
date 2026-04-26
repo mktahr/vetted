@@ -9,7 +9,7 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, fetchAllRows } from '@/lib/supabase'
 import { MultiSelect, MultiSelectOption } from '../components/MultiSelect'
 import { buildLocationOptions } from '@/lib/locations/us-locations'
 
@@ -119,8 +119,8 @@ function SearchBuilderInner() {
       ] = await Promise.all([
         supabase.from('role_dictionary').select('role_id, role_name, display_order').eq('active', true).order('display_order'),
         supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
-        supabase.from('companies').select('company_id, company_name, primary_industry_tag, focus, company_groups').order('company_name').limit(5000),
-        supabase.from('schools').select('school_id, school_name, school_score, is_foreign, school_groups').order('school_name').limit(5000),
+        fetchAllRows<any>('companies', 'company_id, company_name, primary_industry_tag, focus, company_groups', 'company_name').then(data => ({ data })),
+        fetchAllRows<any>('schools', 'school_id, school_name, school_score, is_foreign, school_groups', 'school_name').then(data => ({ data })),
         supabase.from('specialty_dictionary').select('specialty_normalized, parent_function').eq('active', true).order('specialty_normalized'),
         supabase.from('person_signals_active').select('signal_id, canonical_name, category').order('confidence', { ascending: false }),
       ])

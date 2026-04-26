@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, fetchAllRows } from '@/lib/supabase'
 import { Person, SortField, SortDirection, CandidateBucket } from '../types'
 import ProfileDrawer, { DrawerExperience, DrawerSignal } from './ProfileDrawer'
 import { MultiSelectOption } from './MultiSelect'
@@ -178,8 +178,8 @@ export default function ProfileTable() {
           supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, seniority_normalized, start_date, end_date, is_current, employment_type_normalized, title_raw, description_raw'),
           supabase.from('person_education').select('person_id, school_id, end_year'),
           supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
-          supabase.from('companies').select('company_id, company_name, primary_industry_tag, focus, company_groups').order('company_name').limit(5000),
-          supabase.from('schools').select('school_id, school_name, school_score, is_foreign, school_groups').order('school_name').limit(5000),
+          fetchAllRows<any>('companies', 'company_id, company_name, primary_industry_tag, focus, company_groups', 'company_name').then(data => ({ data })),
+          fetchAllRows<any>('schools', 'school_id, school_name, school_score, is_foreign, school_groups', 'school_name').then(data => ({ data })),
           supabase.from('specialty_dictionary').select('specialty_normalized, parent_function').eq('active', true).order('specialty_normalized'),
           supabase.from('role_dictionary').select('role_id, role_name, display_order').eq('active', true).order('display_order'),
           supabase.from('role_specialty_map').select('role_id, specialty_normalized, is_primary'),
