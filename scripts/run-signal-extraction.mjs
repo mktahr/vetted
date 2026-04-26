@@ -148,44 +148,69 @@ for (let i = 0; i < people.length; i++) {
     .select('person_experience_id, title_raw, description_raw, companies:company_id(company_name)')
     .eq('person_id', person.person_id)
 
+  // Fetch education with text fields
+  const { data: edus } = await supabase
+    .from('person_education')
+    .select('person_education_id, description_raw, activities_raw, grade_raw')
+    .eq('person_id', person.person_id)
+
   const allMatches = []
 
   for (const exp of exps || []) {
     totalExperiences++
     if (exp.description_raw) {
       for (const m of extractSignals(exp.description_raw, 'experience_description')) {
-        allMatches.push({ match: m, expId: exp.person_experience_id })
+        allMatches.push({ match: m, expId: exp.person_experience_id, eduId: null })
       }
     }
     if (exp.title_raw) {
       for (const m of extractSignals(exp.title_raw, 'title')) {
-        allMatches.push({ match: m, expId: exp.person_experience_id })
+        allMatches.push({ match: m, expId: exp.person_experience_id, eduId: null })
       }
     }
     const companyName = exp.companies?.company_name
     if (companyName) {
       for (const m of extractSignals(companyName, 'company_name')) {
-        allMatches.push({ match: m, expId: exp.person_experience_id })
+        allMatches.push({ match: m, expId: exp.person_experience_id, eduId: null })
+      }
+    }
+  }
+
+  // Scan education text fields
+  for (const edu of edus || []) {
+    if (edu.description_raw) {
+      for (const m of extractSignals(edu.description_raw, 'education_description')) {
+        allMatches.push({ match: m, expId: null, eduId: edu.person_education_id })
+      }
+    }
+    if (edu.activities_raw) {
+      for (const m of extractSignals(edu.activities_raw, 'activities_honors')) {
+        allMatches.push({ match: m, expId: null, eduId: edu.person_education_id })
+      }
+    }
+    if (edu.grade_raw) {
+      for (const m of extractSignals(edu.grade_raw, 'education_description')) {
+        allMatches.push({ match: m, expId: null, eduId: edu.person_education_id })
       }
     }
   }
 
   if (person.headline_raw) {
     for (const m of extractSignals(person.headline_raw, 'headline')) {
-      allMatches.push({ match: m, expId: null })
+      allMatches.push({ match: m, expId: null, eduId: null })
     }
   }
   if (person.summary_raw) {
     for (const m of extractSignals(person.summary_raw, 'about')) {
-      allMatches.push({ match: m, expId: null })
+      allMatches.push({ match: m, expId: null, eduId: null })
     }
   }
 
-  // Deduplicate: best per (signal_id, expId) — same signal from different
-  // experiences produces separate rows per the unique index.
+  // Deduplicate: best per (signal_id, expId, eduId) — same signal from different
+  // source rows produces separate person_signals rows per the unique index.
   const deduped = new Map()
   for (const item of allMatches) {
-    const key = `${item.match.signal_id}|${item.expId ?? 'null'}`
+    const key = `${item.match.signal_id}|${item.expId ?? 'null'}|${item.eduId ?? 'null'}`
     const existing = deduped.get(key)
     if (!existing || item.match.confidence > existing.match.confidence) {
       deduped.set(key, item)
@@ -205,7 +230,7 @@ for (let i = 0; i < people.length; i++) {
       signal_id: item.match.signal_id,
       source: 'pattern_extractor',
       source_experience_id: item.expId,
-      source_education_id: null,
+      source_education_id: item.eduId,
       source_text: item.match.matched_alias.slice(0, 200),
       confidence: item.match.confidence,
     })
