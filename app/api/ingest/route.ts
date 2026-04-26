@@ -27,6 +27,7 @@ import {
   scoreCandidate,
   writeBucketAssignment,
 } from '@/lib/scoring';
+import { processCandidateSignals } from '@/lib/signals';
 
 const INGEST_SECRET = process.env.INGEST_SECRET!;
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -512,7 +513,18 @@ export async function POST(req: NextRequest) {
     console.error('[ingest] Scoring failed (non-fatal):', scoreErr);
   }
 
-  // ── Step 9: Create initial decision state (active) if new person ────────
+  // ── Step 9: Extract signals from text fields ────────────────────────────
+  // Non-fatal — signal extraction failure should not fail the ingest.
+  try {
+    const signalResult = await processCandidateSignals(supabase, personId);
+    if (signalResult.signals_written > 0) {
+      console.log('[ingest] Signals extracted:', payload.linkedin_url, `→ ${signalResult.signals_written} new`);
+    }
+  } catch (signalErr) {
+    console.error('[ingest] Signal extraction failed (non-fatal):', signalErr);
+  }
+
+  // ── Step 10: Create initial decision state (active) if new person ───────
   const { data: existingDecision } = await supabase
     .from('candidate_decision_state')
     .select('decision_state_id')
