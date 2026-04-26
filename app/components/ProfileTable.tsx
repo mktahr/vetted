@@ -96,7 +96,7 @@ export default function ProfileTable() {
 
   // Filter state
   const [roleSel, setRoleSel] = useState<string[]>([])
-  const [bucketSel, setBucketSel] = useState<string[]>(['vetted_talent', 'high_potential', 'silver_medalist'])
+  const [bucketSel, setBucketSel] = useState<string[]>([])
   const [stageSel, setStageSel] = useState<string[]>([])
   const [senioritySel, setSenioritySel] = useState<string[]>([])
   const [schoolSel, setSchoolSel] = useState<string[]>([])
