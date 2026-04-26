@@ -197,6 +197,10 @@ for (const person of people || []) {
   let earliestPostGrad = null
   for (const e of refreshed || []) {
     if (!e.start_date) continue
+    // Null/empty title → low confidence (Voyager sometimes returns position
+    // groups with no title for high-school-era jobs). Don't let these anchor
+    // years calc. Aligns with extension's computeYearsOfExperience.
+    if (!e.title_raw || !e.title_raw.trim()) continue
     if (e.seniority_normalized === 'student') continue
     if (isInternshipTitle(e.title_raw)) continue
     const start = new Date(e.start_date)
