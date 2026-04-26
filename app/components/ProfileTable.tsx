@@ -127,6 +127,17 @@ export default function ProfileTable() {
   const [companyNameMap, setCompanyNameMap] = useState<Record<string, string>>({})
   const [signalsByPerson, setSignalsByPerson] = useState<Record<string, DrawerSignal[]>>({})
 
+  // New filter state: signals, school groups, company groups
+  const [signalSel, setSignalSel] = useState<string[]>([])
+  const [signalOptions, setSignalOptions] = useState<MultiSelectOption[]>([])
+  const [schoolGroupSel, setSchoolGroupSel] = useState<string[]>([])
+  const [schoolGroupOptions, setSchoolGroupOptions] = useState<MultiSelectOption[]>([])
+  const [companyGroupSel, setCompanyGroupSel] = useState<string[]>([])
+  const [companyGroupOptions, setCompanyGroupOptions] = useState<MultiSelectOption[]>([])
+  // Lookup: school_id → school_groups[], company_id → company_groups[]
+  const [schoolGroupsMap, setSchoolGroupsMap] = useState<Record<string, string[]>>({})
+  const [companyGroupsMap, setCompanyGroupsMap] = useState<Record<string, string[]>>({})
+
   const locationOptions = useMemo(() => buildLocationOptions(), [])
 
   // ─── Fetch ────────────────────────────────────────────────────────────
@@ -152,8 +163,8 @@ export default function ProfileTable() {
           supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, start_date, end_date, is_current, employment_type_normalized, title_raw, description_raw'),
           supabase.from('person_education').select('person_id, school_id'),
           supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
-          supabase.from('companies').select('company_id, company_name, primary_industry_tag, focus').order('company_name'),
-          supabase.from('schools').select('school_id, school_name, school_score, is_foreign').order('school_name'),
+          supabase.from('companies').select('company_id, company_name, primary_industry_tag, focus, company_groups').order('company_name'),
+          supabase.from('schools').select('school_id, school_name, school_score, is_foreign, school_groups').order('school_name'),
           supabase.from('specialty_dictionary').select('specialty_normalized, parent_function').eq('active', true).order('specialty_normalized'),
           supabase.from('role_dictionary').select('role_id, role_name, display_order').eq('active', true).order('display_order'),
           supabase.from('role_specialty_map').select('role_id, specialty_normalized, is_primary'),
@@ -219,6 +230,58 @@ export default function ProfileTable() {
         }
         setSignalsByPerson(sigMap)
 
+        // Signal filter options: category-level + individual signals
+        const SIGNAL_CATEGORY_ORDER = ['founder','military','fellowship','scholarship','academic_distinction','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
+        const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
+          founder:'Founder', military:'Military', fellowship:'Fellowship', scholarship:'Scholarship',
+          academic_distinction:'Academic', competition:'Competition', hackathon:'Hackathon',
+          athletics:'Athletics', engineering_team:'Eng. Team', student_leadership:'Leadership', greek_life:'Greek Life',
+        }
+        // Collect unique categories that have signals on any person
+        const catsWithSignals = new Set<string>()
+        for (const sigs of Object.values(sigMap)) { for (const s of sigs) catsWithSignals.add(s.category) }
+        const sigOpts: MultiSelectOption[] = []
+        for (const cat of SIGNAL_CATEGORY_ORDER) {
+          if (!catsWithSignals.has(cat)) continue
+          sigOpts.push({ value: `cat:${cat}`, label: `Any ${SIGNAL_CATEGORY_LABELS[cat] || cat}`, sublabel: 'Category' })
+        }
+        // Add individual signals (all unique signal_ids across all people)
+        const allSignalIds = new Map<string, { name: string; cat: string }>()
+        for (const sigs of Object.values(sigMap)) {
+          for (const s of sigs) { if (!allSignalIds.has(s.signal_id)) allSignalIds.set(s.signal_id, { name: s.canonical_name, cat: s.category }) }
+        }
+        const sorted = Array.from(allSignalIds.entries()).sort((a, b) => {
+          const catA = SIGNAL_CATEGORY_ORDER.indexOf(a[1].cat), catB = SIGNAL_CATEGORY_ORDER.indexOf(b[1].cat)
+          if (catA !== catB) return catA - catB
+          return a[1].name.localeCompare(b[1].name)
+        })
+        for (const [id, info] of sorted) {
+          sigOpts.push({ value: id, label: info.name, sublabel: SIGNAL_CATEGORY_LABELS[info.cat] || info.cat })
+        }
+        setSignalOptions(sigOpts)
+
+        // School groups: build options from distinct values + lookup map
+        const sgMap: Record<string, string[]> = {}
+        const sgVals = new Set<string>()
+        for (const s of schools || []) {
+          const groups = (s as any).school_groups || []
+          if (groups.length > 0) { sgMap[s.school_id] = groups; for (const g of groups) sgVals.add(g) }
+        }
+        setSchoolGroupsMap(sgMap)
+        const sgLabels: Record<string, string> = { top_military_academy: 'Top Military Academy', top_mba: 'Top MBA Program', top_law_school: 'Top Law School' }
+        setSchoolGroupOptions(Array.from(sgVals).sort().map(g => ({ value: g, label: sgLabels[g] || g.replace(/_/g, ' ') })))
+
+        // Company groups: same pattern
+        const cgMap: Record<string, string[]> = {}
+        const cgVals = new Set<string>()
+        for (const c of companies || []) {
+          const groups = (c as any).company_groups || []
+          if (groups.length > 0) { cgMap[c.company_id] = groups; for (const g of groups) cgVals.add(g) }
+        }
+        setCompanyGroupsMap(cgMap)
+        const cgLabels: Record<string, string> = { top_law_firm: 'Top Law Firm' }
+        setCompanyGroupOptions(Array.from(cgVals).sort().map(g => ({ value: g, label: cgLabels[g] || g.replace(/_/g, ' ') })))
+
         // Roles
         setRoleOptions((roles || []).map((r: any) => ({ value: r.role_id, label: r.role_name })))
 
@@ -281,6 +344,36 @@ export default function ProfileTable() {
     }
 
     if (clearanceSel.length > 0) { const s = new Set(clearanceSel); rows = rows.filter(p => p.clearance_level && s.has(p.clearance_level)) }
+
+    // Signals filter: match candidates with selected signals or signal categories
+    if (signalSel.length > 0) {
+      const selectedCats = signalSel.filter(v => v.startsWith('cat:')).map(v => v.slice(4))
+      const selectedIds = new Set(signalSel.filter(v => !v.startsWith('cat:')))
+      rows = rows.filter(p => {
+        const personSigs = signalsByPerson[p.person_id] || []
+        return personSigs.some(s => selectedIds.has(s.signal_id) || selectedCats.includes(s.category))
+      })
+    }
+
+    // School groups filter: candidates who attended a school in any selected group
+    if (schoolGroupSel.length > 0) {
+      const selGroups = new Set(schoolGroupSel)
+      rows = rows.filter(p => Array.from(p.school_ids_all).some(sid => {
+        const groups = schoolGroupsMap[sid] || []
+        return groups.some(g => selGroups.has(g))
+      }))
+    }
+
+    // Company groups filter: candidates who worked at a company in any selected group
+    if (companyGroupSel.length > 0) {
+      const selGroups = new Set(companyGroupSel)
+      rows = rows.filter(p => p.experiences_lite.some(e => {
+        if (!e.company_id) return false
+        const groups = companyGroupsMap[e.company_id] || []
+        return groups.some(g => selGroups.has(g))
+      }))
+    }
+
     if (focusScope === 'hard_tech') rows = rows.filter(p => p.experiences_lite.some(e => e.company_focus === 'hard_tech'))
     else if (focusScope === 'all_tech') rows = rows.filter(p => p.experiences_lite.some(e => e.company_focus === 'hard_tech' || e.company_focus === 'all_tech'))
 
@@ -332,13 +425,14 @@ export default function ProfileTable() {
 
     if (sortField) rows.sort((a, b) => { const av = (a[sortField] as number) ?? -1, bv = (b[sortField] as number) ?? -1; return sortDirection === 'asc' ? av - bv : bv - av })
     return rows
-  }, [people, searchQuery, bucketSel, stageSel, roleSel, senioritySel, schoolSel, locationSel, specialtySel, specialtyScope, clearanceSel, focusScope, compoundCompany, compoundSpecialties, compoundYearMin, compoundYearMax, compoundRelationship, yearsMin, yearsMax, titleBoolean, experienceBoolean, sortField, sortDirection, roleSpecialtyMap])
+  }, [people, searchQuery, bucketSel, stageSel, roleSel, senioritySel, schoolSel, locationSel, specialtySel, specialtyScope, clearanceSel, focusScope, compoundCompany, compoundSpecialties, compoundYearMin, compoundYearMax, compoundRelationship, yearsMin, yearsMax, titleBoolean, experienceBoolean, signalSel, schoolGroupSel, companyGroupSel, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap])
 
   const activeFilterCount =
     (roleSel.length > 0 ? 1 : 0) + (bucketSel.length > 0 ? 1 : 0) + (stageSel.length > 0 ? 1 : 0) +
     (senioritySel.length > 0 ? 1 : 0) + (schoolSel.length > 0 ? 1 : 0) + (locationSel.length > 0 ? 1 : 0) +
     (specialtySel.length > 0 ? 1 : 0) + (clearanceSel.length > 0 ? 1 : 0) + (focusScope !== 'all' ? 1 : 0) +
-    (compoundCompany ? 1 : 0) + (yearsMin || yearsMax ? 1 : 0) + (titleBoolean ? 1 : 0) + (experienceBoolean ? 1 : 0)
+    (compoundCompany ? 1 : 0) + (yearsMin || yearsMax ? 1 : 0) + (titleBoolean ? 1 : 0) + (experienceBoolean ? 1 : 0) +
+    (signalSel.length > 0 ? 1 : 0) + (schoolGroupSel.length > 0 ? 1 : 0) + (companyGroupSel.length > 0 ? 1 : 0)
 
   const clearAllFilters = () => {
     setSearchQuery(''); setRoleSel([]); setBucketSel([]); setStageSel([]); setSenioritySel([])
@@ -346,6 +440,7 @@ export default function ProfileTable() {
     setClearanceSel([]); setFocusScope('all'); setCompoundCompany(''); setCompoundSpecialties([])
     setCompoundYearMin(''); setCompoundYearMax(''); setCompoundRelationship('any')
     setYearsMin(''); setYearsMax(''); setTitleBoolean(''); setExperienceBoolean('')
+    setSignalSel([]); setSchoolGroupSel([]); setCompanyGroupSel([])
   }
 
   const handleSort = (field: SortField) => {
@@ -410,6 +505,9 @@ export default function ProfileTable() {
         companyOptions={companyOptions}
         schoolSel={schoolSel} setSchoolSel={setSchoolSel} schoolOptions={schoolOptions}
         schoolScope={schoolScope} setSchoolScope={setSchoolScope}
+        schoolGroupSel={schoolGroupSel} setSchoolGroupSel={setSchoolGroupSel} schoolGroupOptions={schoolGroupOptions}
+        companyGroupSel={companyGroupSel} setCompanyGroupSel={setCompanyGroupSel} companyGroupOptions={companyGroupOptions}
+        signalSel={signalSel} setSignalSel={setSignalSel} signalOptions={signalOptions}
         titleBoolean={titleBoolean} setTitleBoolean={setTitleBoolean}
         experienceBoolean={experienceBoolean} setExperienceBoolean={setExperienceBoolean}
         clearAllFilters={clearAllFilters} activeFilterCount={activeFilterCount}

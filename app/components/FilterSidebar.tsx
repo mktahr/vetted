@@ -39,6 +39,12 @@ export interface FilterSidebarProps {
   schoolSel: string[];           setSchoolSel: (v: string[]) => void
   schoolOptions: MultiSelectOption[]
   schoolScope: 'us' | 'all';    setSchoolScope: (v: 'us' | 'all') => void
+  schoolGroupSel: string[];     setSchoolGroupSel: (v: string[]) => void
+  schoolGroupOptions: MultiSelectOption[]
+  companyGroupSel: string[];    setCompanyGroupSel: (v: string[]) => void
+  companyGroupOptions: MultiSelectOption[]
+  signalSel: string[];          setSignalSel: (v: string[]) => void
+  signalOptions: MultiSelectOption[]
   titleBoolean: string;          setTitleBoolean: (v: string) => void
   experienceBoolean: string;     setExperienceBoolean: (v: string) => void
   clearAllFilters: () => void
@@ -146,6 +152,7 @@ export default function FilterSidebar(props: FilterSidebarProps) {
           </div>
         </div>
         <div style={{ marginBottom: 12 }}><MultiSelect label="Clearance" options={CLEARANCE_OPTIONS} selected={props.clearanceSel} onChange={props.setClearanceSel} placeholder="Any clearance" /></div>
+        <div style={{ marginBottom: 12 }}><MultiSelect label="Signals" options={props.signalOptions} selected={props.signalSel} onChange={props.setSignalSel} placeholder="Any signal" emptyMessage="No match" /></div>
         <div style={{ marginBottom: 16 }}><MultiSelect label="Location (US)" options={props.locationOptions} selected={props.locationSel} onChange={props.setLocationSel} placeholder="State or city" emptyMessage="No match" /></div>
 
         {/* WHERE THEY WORKED */}
@@ -178,6 +185,10 @@ export default function FilterSidebar(props: FilterSidebarProps) {
           </>
         )}
 
+        {props.companyGroupOptions.length > 0 && (
+          <div style={{ marginBottom: 16 }}><MultiSelect label="Company group" options={props.companyGroupOptions} selected={props.companyGroupSel} onChange={props.setCompanyGroupSel} placeholder="Any company group" /></div>
+        )}
+
         {/* WHERE THEY STUDIED */}
         <SH icon={<IconGrad />} label="Where they studied" />
         <div style={{ marginBottom: 12 }}>
@@ -191,6 +202,9 @@ export default function FilterSidebar(props: FilterSidebarProps) {
           <MultiSelect label="" options={props.schoolScope === 'us' ? props.schoolOptions.filter(s => !s.sublabel?.includes("Int'l")) : props.schoolOptions}
             selected={props.schoolSel} onChange={props.setSchoolSel} placeholder="Search ranked schools…" emptyMessage="No match" />
         </div>
+        {props.schoolGroupOptions.length > 0 && (
+          <div style={{ marginBottom: 16 }}><MultiSelect label="School group" options={props.schoolGroupOptions} selected={props.schoolGroupSel} onChange={props.setSchoolGroupSel} placeholder="Any school group" /></div>
+        )}
 
         {/* KEYWORD SEARCH */}
         <button onClick={() => setBooleanOpen(o => !o)} style={{
