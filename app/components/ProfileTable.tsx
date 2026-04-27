@@ -640,13 +640,15 @@ export default function ProfileTable() {
     }
 
     // ── Condition rows (new model) ──────────────────────────────────────
-    // AND across all company condition rows
+    // AND across all company condition rows. Skip rows with no valid target.
     for (const row of companyConditions) {
-      // Resolve target to company IDs
+      // Resolve target to company IDs — skip if no valid target
       let targetIds: Set<string>
       if (row.target.type === 'specific' && row.target.companyIds?.length) {
         targetIds = new Set(row.target.companyIds)
       } else if (row.target.type === 'attributes' && row.target.companyAttributes) {
+        const ca = row.target.companyAttributes
+        if (!ca.stage?.length && !ca.size?.length && !ca.focus?.length && !ca.industry?.length && !ca.foundedAfter && !ca.foundedBefore) continue // no attributes set
         const attrs = row.target.companyAttributes
         const matching = companiesRaw.filter(comp => {
           if (attrs.stage?.length && (!comp.funding_stage || !attrs.stage.includes(comp.funding_stage))) return false
@@ -688,7 +690,7 @@ export default function ProfileTable() {
       })
     }
 
-    // AND across all school condition rows
+    // AND across all school condition rows. Skip rows with no valid target.
     const currentYear = new Date().getFullYear()
     for (const row of schoolConditions) {
       let targetIds: Set<string>

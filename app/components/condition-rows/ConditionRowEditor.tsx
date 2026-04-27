@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import type { ConditionRow, ConditionEntityType, TemporalScope, ConditionTargetType } from './types'
 import { MultiSelect, MultiSelectOption } from '../MultiSelect'
 
@@ -13,11 +13,11 @@ interface ConditionRowEditorProps {
   industryOptions?: MultiSelectOption[]
   focusOptions?: MultiSelectOption[]
   stageOptions?: MultiSelectOption[]
-  sizeOptions?: MultiSelectOption[]
   schoolGroupOptions?: MultiSelectOption[]
   onSave: (row: ConditionRow) => void
   onCancel: () => void
   onDelete: () => void
+  inline?: boolean
 }
 
 const STAGE_OPTIONS: MultiSelectOption[] = [
@@ -69,26 +69,6 @@ export default function ConditionRowEditor({
   const [specialty, setSpecialty] = useState(row.specialty || '')
   const [seniority, setSeniority] = useState(row.seniority || '')
 
-  const ref = useRef<HTMLDivElement>(null)
-  const [flipUp, setFlipUp] = useState(false)
-
-  // Click outside to cancel
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onCancel()
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [onCancel])
-
-  // Issue 6: Flip popover up if near bottom of viewport
-  useEffect(() => {
-    if (ref.current) {
-      const rect = ref.current.getBoundingClientRect()
-      if (rect.bottom > window.innerHeight - 20) setFlipUp(true)
-    }
-  }, [])
-
   // Smart auto-detection
   useEffect(() => {
     const yt = yearTo ? parseInt(yearTo) : null
@@ -96,7 +76,7 @@ export default function ConditionRowEditor({
     else if (yearFrom && !yearTo) setScope('currently')
   }, [yearFrom, yearTo])
 
-  // Issue 1: Validation — must have at least one target set
+  // Validation: must have at least one target
   const isValid = targetType === 'specific'
     ? entityIds.length > 0
     : (attrIndustry.length > 0 || attrFocus.length > 0 || attrStage.length > 0 ||
@@ -134,7 +114,7 @@ export default function ConditionRowEditor({
     onSave(built)
   }
 
-  // Issue 5: Segmented control style
+  // Segmented control styles
   const segLeft: React.CSSProperties = {
     padding: '3px 10px', fontSize: 'var(--fs-11)', fontFamily: 'var(--font-sans)',
     border: '1px solid var(--border-default)', borderRight: 'none',
@@ -154,17 +134,13 @@ export default function ConditionRowEditor({
     cursor: 'pointer', lineHeight: '1.5',
   }
 
+  // Inline expand: normal flow element inside the section card
   return (
-    <div ref={ref} style={{
-      position: 'absolute',
-      ...(flipUp ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }),
-      left: 0, zIndex: 100,
-      width: 320, padding: 12,
-      background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
-      borderRadius: 'var(--r-card, 8px)', boxShadow: 'var(--shadow-float)',
-      fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-12)',
+    <div style={{
+      padding: 12, background: 'var(--bg-canvas)', border: '1px solid var(--border-default)',
+      borderRadius: 'var(--r-card, 8px)', fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-12)',
     }}>
-      {/* Issue 5: Segmented control for target type */}
+      {/* Segmented control for target type */}
       <div style={{ display: 'flex', marginBottom: 8 }}>
         <button style={segLeft} onClick={() => setTargetType('specific')}>
           Specific {entityType === 'company' ? 'companies' : 'schools'}
@@ -190,9 +166,7 @@ export default function ConditionRowEditor({
               {focusOptions && focusOptions.length > 0 && (
                 <MultiSelect label="Focus" options={focusOptions} selected={attrFocus} onChange={setAttrFocus} placeholder="Any focus" />
               )}
-              {/* Issue 3: Stage */}
               <MultiSelect label="Stage" options={STAGE_OPTIONS} selected={attrStage} onChange={setAttrStage} placeholder="Any stage" />
-              {/* Issue 3: Size */}
               <MultiSelect label="Size" options={SIZE_OPTIONS} selected={[]} onChange={() => {}} placeholder="Any size (data pending)" />
               <div>
                 <div style={lblStyle}>Founded year</div>
@@ -235,7 +209,7 @@ export default function ConditionRowEditor({
         </div>
       )}
 
-      {/* Specialty — Issue 4: inline, not hidden */}
+      {/* Specialty */}
       {entityType === 'company' && specialtyOptions.length > 0 && (
         <div style={{ marginBottom: 8 }}>
           <MultiSelect label="Specialty" options={specialtyOptions} selected={specialty ? [specialty] : []}
@@ -243,7 +217,7 @@ export default function ConditionRowEditor({
         </div>
       )}
 
-      {/* Issue 4: Seniority inline (no Advanced collapse) */}
+      {/* Seniority (inline, not hidden) */}
       {entityType === 'company' && seniorityOptions.length > 0 && (
         <div style={{ marginBottom: 8 }}>
           <MultiSelect label="Seniority" options={seniorityOptions} selected={seniority ? [seniority] : []}
@@ -251,7 +225,7 @@ export default function ConditionRowEditor({
         </div>
       )}
 
-      {/* Actions — Issue 1: Save disabled without valid target */}
+      {/* Actions */}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={handleSave} disabled={!isValid} style={{ padding: '4px 12px', background: isValid ? 'var(--accent)' : 'var(--bg-surface-raised)', color: isValid ? 'white' : 'var(--fg-tertiary)', border: 'none', borderRadius: 'var(--r-button)', cursor: isValid ? 'pointer' : 'not-allowed', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)' }}>Save</button>

@@ -16,7 +16,6 @@ interface ConditionRowListProps {
   seniorityOptions: MultiSelectOption[]
   defaultScope: TemporalScope
   onDefaultScopeChange: (v: TemporalScope) => void
-  // Attribute options
   industryOptions?: MultiSelectOption[]
   focusOptions?: MultiSelectOption[]
   stageOptions?: MultiSelectOption[]
@@ -39,43 +38,45 @@ export default function ConditionRowList({
   industryOptions, focusOptions, stageOptions, schoolGroupOptions, label,
 }: ConditionRowListProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [isAdding, setIsAdding] = useState(false)
+  // Pending row: held in local state until Save. Never touches rows array.
+  const [pendingRow, setPendingRow] = useState<ConditionRow | null>(null)
 
-  function addRow() {
-    const newRow: ConditionRow = {
+  function startAdd() {
+    setEditingId(null)
+    setPendingRow({
       id: crypto.randomUUID(),
       scope: defaultScope,
       target: { type: 'specific' },
-    }
-    setIsAdding(true)
-    setEditingId(newRow.id)
-    onChange([...rows, newRow])
+    })
+  }
+
+  function savePending(saved: ConditionRow) {
+    onChange([...rows, saved])
+    setPendingRow(null)
+  }
+
+  function cancelPending() {
+    setPendingRow(null)
   }
 
   function updateRow(updated: ConditionRow) {
     onChange(rows.map(r => r.id === updated.id ? updated : r))
     setEditingId(null)
-    setIsAdding(false)
   }
 
   function removeRow(id: string) {
     onChange(rows.filter(r => r.id !== id))
-    setEditingId(null)
-    setIsAdding(false)
+    if (editingId === id) setEditingId(null)
   }
 
-  function cancelEdit() {
-    if (isAdding && editingId) {
-      // Remove the row that was being added
-      onChange(rows.filter(r => r.id !== editingId))
-    }
-    setEditingId(null)
-    setIsAdding(false)
+  function toggleEdit(id: string) {
+    setPendingRow(null) // close any pending add
+    setEditingId(editingId === id ? null : id)
   }
 
   return (
     <div>
-      {/* Header with label + default scope */}
+      {/* Header: label + default scope toggle */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <span style={{ fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)' as any, color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)' }}>{label}</span>
         <div style={{ display: 'flex', gap: 2 }}>
@@ -85,18 +86,18 @@ export default function ConditionRowList({
         </div>
       </div>
 
-      {/* Pills */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6, position: 'relative' }}>
-        {rows.map(row => (
-          <div key={row.id} style={{ position: 'relative' }}>
-            <ConditionRowPill
-              row={row}
-              entityType={entityType}
-              entityNameMap={entityNameMap}
-              onEdit={() => setEditingId(editingId === row.id ? null : row.id)}
-              onRemove={() => removeRow(row.id)}
-            />
-            {editingId === row.id && (
+      {/* Committed rows: pill + inline editor */}
+      {rows.map(row => (
+        <div key={row.id} style={{ marginBottom: 4 }}>
+          <ConditionRowPill
+            row={row}
+            entityType={entityType}
+            entityNameMap={entityNameMap}
+            onEdit={() => toggleEdit(row.id)}
+            onRemove={() => removeRow(row.id)}
+          />
+          {editingId === row.id && (
+            <div style={{ marginTop: 4, marginBottom: 8 }}>
               <ConditionRowEditor
                 row={row}
                 entityType={entityType}
@@ -107,31 +108,55 @@ export default function ConditionRowList({
                 focusOptions={focusOptions}
                 stageOptions={stageOptions}
                 schoolGroupOptions={schoolGroupOptions}
-                onSave={updateRow}
-                onCancel={cancelEdit}
+                onSave={(updated) => { updateRow(updated); setEditingId(null) }}
+                onCancel={() => setEditingId(null)}
                 onDelete={() => removeRow(row.id)}
+                inline
               />
-            )}
-          </div>
-        ))}
+            </div>
+          )}
+        </div>
+      ))}
 
-        {/* Add button */}
+      {/* Pending add: inline editor (not in rows array until Save) */}
+      {pendingRow && (
+        <div style={{ marginTop: 4, marginBottom: 8 }}>
+          <ConditionRowEditor
+            row={pendingRow}
+            entityType={entityType}
+            entityOptions={entityOptions}
+            specialtyOptions={specialtyOptions}
+            seniorityOptions={seniorityOptions}
+            industryOptions={industryOptions}
+            focusOptions={focusOptions}
+            stageOptions={stageOptions}
+            schoolGroupOptions={schoolGroupOptions}
+            onSave={savePending}
+            onCancel={cancelPending}
+            onDelete={cancelPending}
+            inline
+          />
+        </div>
+      )}
+
+      {/* Add button */}
+      {!pendingRow && (
         <button
-          onClick={addRow}
+          onClick={startAdd}
           style={{
             padding: '3px 10px', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)',
             background: 'none', border: '1px dashed var(--border-subtle)',
             borderRadius: 'var(--r-chip)', color: 'var(--fg-tertiary)',
-            cursor: 'pointer',
+            cursor: 'pointer', marginTop: 4,
           }}
         >
           + Add {entityType}
         </button>
-      </div>
+      )}
 
-      {/* Summary count */}
+      {/* Summary */}
       {rows.length > 0 && (
-        <div style={{ fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)' }}>
+        <div style={{ fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)', marginTop: 6 }}>
           {rows.length} condition{rows.length !== 1 ? 's' : ''} (AND)
         </div>
       )}
