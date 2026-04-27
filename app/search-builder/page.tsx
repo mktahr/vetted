@@ -270,26 +270,27 @@ function SearchBuilderInner() {
   const inputStyle: React.CSSProperties = { width: '100%', padding: '6px 10px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-button)', fontSize: 'var(--fs-13)', fontFamily: 'var(--font-sans)', background: 'var(--bg-surface)', color: 'var(--fg-primary)' }
 
   return (
-    <div style={{ padding: 24, maxWidth: 1100, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
-      <div style={{ marginBottom: 24 }}>
-        <a href="/" style={{ fontSize: 'var(--fs-13)', color: 'var(--fg-tertiary)', textDecoration: 'none' }}>← Back to results</a>
-        <h1 style={{ fontSize: 'var(--fs-22)', fontWeight: 'var(--fw-semibold)' as any, marginTop: 8 }}>Build a Search</h1>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-
-        {/* Search Scope */}
-        <div style={sectionStyle}>
-          <div style={headingStyle}>Search Scope</div>
-          <select value={focusScope} onChange={e => setFocusScope(e.target.value as any)} style={{ ...inputStyle, cursor: 'pointer' }}>
+    <div style={{ padding: 24, maxWidth: 900, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
+      {/* Header: title + search scope inline */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div>
+          <a href="/" style={{ fontSize: 'var(--fs-13)', color: 'var(--fg-tertiary)', textDecoration: 'none' }}>← Back to results</a>
+          <h1 style={{ fontSize: 'var(--fs-22)', fontWeight: 'var(--fw-semibold)' as any, marginTop: 8 }}>Build a Search</h1>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)' }}>Scope:</span>
+          <select value={focusScope} onChange={e => setFocusScope(e.target.value as any)} style={{ padding: '4px 8px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-button)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)', background: 'var(--bg-surface)', color: 'var(--fg-primary)', cursor: 'pointer' }}>
             <option value="all">All candidates</option>
-            <option value="hard_tech">Hard tech experience</option>
-            <option value="all_tech">All tech experience</option>
+            <option value="hard_tech">Hard tech</option>
+            <option value="all_tech">All tech</option>
           </select>
         </div>
+      </div>
 
-        {/* Who They Are */}
-        <div style={{ ...sectionStyle, gridColumn: 'span 2' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+        {/* Who They Are — full width, 2-column grid */}
+        <div style={sectionStyle}>
           <div style={headingStyle}>Who They Are</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <MultiSelect label="Role" options={roleOptions} selected={roleSel} onChange={setRoleSel} placeholder="Any role" />
@@ -319,7 +320,7 @@ function SearchBuilderInner() {
           </div>
         </div>
 
-        {/* Where They Worked — Condition Rows */}
+        {/* Where They Worked — full width */}
         <div style={sectionStyle}>
           <div style={headingStyle}>Where They Worked</div>
           <ConditionRowList
@@ -338,7 +339,7 @@ function SearchBuilderInner() {
           />
         </div>
 
-        {/* Where They Studied — Condition Rows */}
+        {/* Where They Studied — full width */}
         <div style={sectionStyle}>
           <div style={headingStyle}>Where They Studied</div>
           <ConditionRowList
@@ -356,8 +357,8 @@ function SearchBuilderInner() {
           />
         </div>
 
-        {/* Keyword Search */}
-        <div style={sectionStyle}>
+        {/* Keyword Search — compact */}
+        <div style={{ ...sectionStyle, maxWidth: 500 }}>
           <div style={headingStyle}>Keyword Search</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div>
@@ -367,7 +368,7 @@ function SearchBuilderInner() {
             <div>
               <label style={lblStyle}>Experience & skills keywords</label>
               <input type="text" value={experienceBoolean} onChange={e => setExperienceBoolean(e.target.value)} placeholder='MATLAB OR Simulink' style={inputStyle} />
-              <p style={{ fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', marginTop: 4, fontFamily: 'var(--font-sans)' }}>Searches descriptions, headlines, skills. Use AND, OR, NOT, quotes.</p>
+              <p style={{ fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', marginTop: 4, fontFamily: 'var(--font-sans)' }}>Use AND, OR, NOT, quotes.</p>
             </div>
           </div>
         </div>
