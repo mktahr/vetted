@@ -30,11 +30,11 @@ export interface FilterSidebarProps {
   locationSel: string[];         setLocationSel: (v: string[]) => void
   locationOptions: MultiSelectOption[]
   focusScope: FocusScope;        setFocusScope: (v: FocusScope) => void
-  compoundCompany: string;       setCompoundCompany: (v: string) => void
+  compoundCompany: string[];     setCompoundCompany: (v: string[]) => void
+  compoundCompanyScope: 'ever' | 'currently' | 'previously'; setCompoundCompanyScope: (v: 'ever' | 'currently' | 'previously') => void
   compoundSpecialties: string[]; setCompoundSpecialties: (v: string[]) => void
   compoundYearMin: string;       setCompoundYearMin: (v: string) => void
   compoundYearMax: string;       setCompoundYearMax: (v: string) => void
-  compoundRelationship: string;  setCompoundRelationship: (v: string) => void
   companyOptions: MultiSelectOption[]
   schoolSel: string[];           setSchoolSel: (v: string[]) => void
   schoolOptions: MultiSelectOption[]
@@ -158,22 +158,20 @@ export default function FilterSidebar(props: FilterSidebarProps) {
 
         {/* WHERE THEY WORKED */}
         <SH icon={<IconBriefcase />} label="Where they worked" />
-        <div style={{ marginBottom: 12 }}>
-          <MultiSelect label="Company" options={props.companyOptions} selected={props.compoundCompany ? [props.compoundCompany] : []}
-            onChange={vals => props.setCompoundCompany(vals[0] || '')} placeholder="Search companies…" emptyMessage="No match" />
-        </div>
-        {props.compoundCompany && (
-          <>
-            <div style={{ marginBottom: 8 }}>
-              <Lbl>Relationship</Lbl>
-              <div style={{ display: 'flex', gap: 4 }}>
-                {(['any','current','previous','intern'] as const).map(v => (
-                  <ToggleBtn key={v} active={props.compoundRelationship === v} onClick={() => props.setCompoundRelationship(v)}>
-                    {v === 'any' ? 'Any' : v === 'current' ? 'Current' : v === 'previous' ? 'Previous' : 'Intern'}
-                  </ToggleBtn>
-                ))}
-              </div>
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Lbl>Company</Lbl>
+            <div style={{ display: 'flex', gap: 2 }}>
+              <ToggleBtn active={props.compoundCompanyScope === 'ever'} onClick={() => props.setCompoundCompanyScope('ever')}>Ever</ToggleBtn>
+              <ToggleBtn active={props.compoundCompanyScope === 'currently'} onClick={() => props.setCompoundCompanyScope('currently')}>Currently</ToggleBtn>
+              <ToggleBtn active={props.compoundCompanyScope === 'previously'} onClick={() => props.setCompoundCompanyScope('previously')}>Previously</ToggleBtn>
             </div>
+          </div>
+          <MultiSelect label="" options={props.companyOptions} selected={props.compoundCompany}
+            onChange={props.setCompoundCompany} placeholder="Search companies…" emptyMessage="No match" />
+        </div>
+        {props.compoundCompany.length > 0 && (
+          <>
             <div style={{ marginBottom: 12 }}><MultiSelect label="Specialty there" options={props.allSpecialtyOptions} selected={props.compoundSpecialties} onChange={props.setCompoundSpecialties} placeholder="Any" /></div>
             <div style={{ marginBottom: 12 }}>
               <Lbl>Year range</Lbl>

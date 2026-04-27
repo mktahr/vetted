@@ -116,12 +116,11 @@ export default function ProfileTable() {
   const [specialtyScope, setSpecialtyScope] = useState<TemporalScope>('ever')
   const [seniorityScope, setSeniorityScope] = useState<TemporalScope>('ever')
   const [focusScope, setFocusScope] = useState<FocusScope>('all')
-  const [compoundCompany, setCompoundCompany] = useState<string>('')
+  const [compoundCompany, setCompoundCompany] = useState<string[]>([])
   const [compoundCompanyScope, setCompoundCompanyScope] = useState<TemporalScope>('ever')
   const [compoundSpecialties, setCompoundSpecialties] = useState<string[]>([])
   const [compoundYearMin, setCompoundYearMin] = useState<string>('')
   const [compoundYearMax, setCompoundYearMax] = useState<string>('')
-  const [compoundRelationship, setCompoundRelationship] = useState<string>('any')
   const [yearsMin, setYearsMin] = useState<string>('')
   const [yearsMax, setYearsMax] = useState<string>('')
   const [schoolScope, setSchoolScope] = useState<'us' | 'all'>('us')
@@ -179,15 +178,18 @@ export default function ProfileTable() {
       if (f.clearanceSel) setClearanceSel(f.clearanceSel)
       if (f.locationSel) setLocationSel(f.locationSel)
       if (f.focusScope) setFocusScope(f.focusScope)
-      if (f.compoundCompany) setCompoundCompany(f.compoundCompany)
+      // Backward compat: compoundCompany was a string, now string[]
+      if (f.compoundCompany) {
+        if (Array.isArray(f.compoundCompany)) setCompoundCompany(f.compoundCompany)
+        else if (typeof f.compoundCompany === 'string') setCompoundCompany([f.compoundCompany])
+      }
       if (f.compoundCompanyScope) setCompoundCompanyScope(f.compoundCompanyScope)
-      // Backward compat: old compoundRelationship
+      // Backward compat: old compoundRelationship → compoundCompanyScope
       else if (f.compoundRelationship === 'current') setCompoundCompanyScope('currently')
       else if (f.compoundRelationship === 'previous') setCompoundCompanyScope('previously')
       if (f.compoundSpecialties) setCompoundSpecialties(f.compoundSpecialties)
       if (f.compoundYearMin) setCompoundYearMin(f.compoundYearMin)
       if (f.compoundYearMax) setCompoundYearMax(f.compoundYearMax)
-      if (f.compoundRelationship) setCompoundRelationship(f.compoundRelationship)
       if (f.schoolSel) setSchoolSel(f.schoolSel)
       if (f.schoolTemporalScope) setSchoolTemporalScope(f.schoolTemporalScope)
       if (f.titleBoolean) setTitleBoolean(f.titleBoolean)
@@ -511,24 +513,19 @@ export default function ProfileTable() {
     if (focusScope === 'hard_tech') rows = rows.filter(p => p.experiences_lite.some(e => e.company_focus === 'hard_tech'))
     else if (focusScope === 'all_tech') rows = rows.filter(p => p.experiences_lite.some(e => e.company_focus === 'hard_tech' || e.company_focus === 'all_tech'))
 
-    // Compound company filter with temporal scope
-    if (compoundCompany) {
+    // Compound company filter with temporal scope + multi-select (OR across companies)
+    if (compoundCompany.length > 0) {
+      const selectedCompanies = new Set(compoundCompany)
       const y1 = compoundYearMin ? parseInt(compoundYearMin, 10) : null
       const y2 = compoundYearMax ? parseInt(compoundYearMax, 10) : null
       const needSpecs = compoundSpecialties.length > 0 ? new Set(compoundSpecialties) : null
       const rStart = y1 && !isNaN(y1) ? new Date(y1, 0, 1).getTime() : null
       const rEnd = y2 && !isNaN(y2) ? new Date(y2, 11, 31).getTime() : null
       const matchesExp = (e: typeof rows[0]['experiences_lite'][0]) => {
-        if (e.company_id !== compoundCompany) return false
+        if (!e.company_id || !selectedCompanies.has(e.company_id)) return false
         if (needSpecs && !(e.specialty && needSpecs.has(e.specialty))) return false
-        // Legacy relationship filter (sidebar still uses this)
-        if (compoundRelationship === 'current' && !e.is_current) return false
-        if (compoundRelationship === 'previous' && (e.is_current || e.employment_type === 'internship')) return false
-        if (compoundRelationship === 'intern' && e.employment_type !== 'internship') return false
-        // Temporal scope (from search builder)
         if (compoundCompanyScope === 'currently' && !e.is_current) return false
         if (compoundCompanyScope === 'previously' && e.is_current) return false
-        // Date range
         if (rStart || rEnd) {
           const eS = e.start_date ? new Date(e.start_date).getTime() : null
           const eE = e.end_date ? new Date(e.end_date).getTime() : null
@@ -538,10 +535,9 @@ export default function ProfileTable() {
         return true
       }
       if (compoundCompanyScope === 'previously') {
-        // "Previously" = had a match in the past but NOT currently at that company
         rows = rows.filter(p => {
           const hasMatch = p.experiences_lite.some(e => matchesExp(e))
-          const hasCurrent = p.experiences_lite.some(e => e.company_id === compoundCompany && e.is_current)
+          const hasCurrent = p.experiences_lite.some(e => e.company_id && selectedCompanies.has(e.company_id) && e.is_current)
           return hasMatch && !hasCurrent
         })
       } else {
@@ -577,20 +573,20 @@ export default function ProfileTable() {
 
     if (sortField) rows.sort((a, b) => { const av = (a[sortField] as number) ?? -1, bv = (b[sortField] as number) ?? -1; return sortDirection === 'asc' ? av - bv : bv - av })
     return rows
-  }, [people, searchQuery, bucketSel, stageSel, roleSel, senioritySel, seniorityScope, schoolSel, schoolTemporalScope, locationSel, specialtySel, specialtyScope, clearanceSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, compoundRelationship, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap])
+  }, [people, searchQuery, bucketSel, stageSel, roleSel, senioritySel, seniorityScope, schoolSel, schoolTemporalScope, locationSel, specialtySel, specialtyScope, clearanceSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap])
 
   const activeFilterCount =
     (roleSel.length > 0 ? 1 : 0) + (bucketSel.length > 0 ? 1 : 0) + (stageSel.length > 0 ? 1 : 0) +
     (senioritySel.length > 0 ? 1 : 0) + (schoolSel.length > 0 ? 1 : 0) + (locationSel.length > 0 ? 1 : 0) +
     (specialtySel.length > 0 ? 1 : 0) + (clearanceSel.length > 0 ? 1 : 0) + (focusScope !== 'all' ? 1 : 0) +
-    (compoundCompany ? 1 : 0) + (yearsMin || yearsMax ? 1 : 0) + (titleBoolean ? 1 : 0) + (experienceBoolean ? 1 : 0) +
+    (compoundCompany.length > 0 ? 1 : 0) + (yearsMin || yearsMax ? 1 : 0) + (titleBoolean ? 1 : 0) + (experienceBoolean ? 1 : 0) +
     (signalSel.length > 0 ? 1 : 0) + (schoolGroupSel.length > 0 ? 1 : 0) + (companyGroupSel.length > 0 ? 1 : 0)
 
   const clearAllFilters = () => {
     setSearchQuery(''); setRoleSel([]); setBucketSel([]); setStageSel([]); setSenioritySel([])
     setSchoolSel([]); setLocationSel([]); setSpecialtySel([])
-    setClearanceSel([]); setFocusScope('all'); setCompoundCompany(''); setCompoundSpecialties([])
-    setCompoundYearMin(''); setCompoundYearMax(''); setCompoundRelationship('any')
+    setClearanceSel([]); setFocusScope('all'); setCompoundCompany([]); setCompoundSpecialties([])
+    setCompoundYearMin(''); setCompoundYearMax('')
     setYearsMin(''); setYearsMax(''); setTitleBoolean(''); setTitleBooleanScope('ever'); setExperienceBoolean('')
     setSignalSel([]); setSchoolGroupSel([]); setCompanyGroupSel([])
     setSpecialtyScope('ever'); setSeniorityScope('ever'); setCompoundCompanyScope('ever')
@@ -624,7 +620,7 @@ export default function ProfileTable() {
   if (yearsMin || yearsMax) chips.push({ label: `Yrs: ${yearsMin || '0'}–${yearsMax || '∞'}`, onRemove: () => { setYearsMin(''); setYearsMax('') } })
   for (const v of clearanceSel) chips.push({ label: `Clearance: ${v.replace(/_/g, ' ')}`, onRemove: () => setClearanceSel(clearanceSel.filter(x => x !== v)) })
   for (const v of locationSel) chips.push({ label: `Location: ${v}`, onRemove: () => setLocationSel(locationSel.filter(x => x !== v)) })
-  if (compoundCompany) { const co = companyOptions.find(c => c.value === compoundCompany); chips.push({ label: `At: ${co?.label || '?'}`, onRemove: () => { setCompoundCompany(''); setCompoundSpecialties([]); setCompoundYearMin(''); setCompoundYearMax(''); setCompoundRelationship('any') } }) }
+  if (compoundCompany.length > 0) { const labels = compoundCompany.map(id => companyOptions.find(c => c.value === id)?.label || '?').join(', '); chips.push({ label: `At: ${labels}`, onRemove: () => { setCompoundCompany([]); setCompoundSpecialties([]); setCompoundYearMin(''); setCompoundYearMax(''); setCompoundCompanyScope('ever') } }) }
   for (const v of schoolSel) { const sc = schoolOptions.find(s => s.value === v); chips.push({ label: `School: ${sc?.label || v}`, onRemove: () => setSchoolSel(schoolSel.filter(x => x !== v)) }) }
   if (titleBoolean) chips.push({ label: `Title: "${titleBoolean}"`, onRemove: () => setTitleBoolean('') })
   if (experienceBoolean) chips.push({ label: `Keywords: "${experienceBoolean}"`, onRemove: () => setExperienceBoolean('') })
@@ -652,10 +648,10 @@ export default function ProfileTable() {
         locationSel={locationSel} setLocationSel={setLocationSel} locationOptions={locationOptions}
         focusScope={focusScope} setFocusScope={setFocusScope}
         compoundCompany={compoundCompany} setCompoundCompany={setCompoundCompany}
+        compoundCompanyScope={compoundCompanyScope} setCompoundCompanyScope={setCompoundCompanyScope}
         compoundSpecialties={compoundSpecialties} setCompoundSpecialties={setCompoundSpecialties}
         compoundYearMin={compoundYearMin} setCompoundYearMin={setCompoundYearMin}
         compoundYearMax={compoundYearMax} setCompoundYearMax={setCompoundYearMax}
-        compoundRelationship={compoundRelationship} setCompoundRelationship={setCompoundRelationship}
         companyOptions={companyOptions}
         schoolSel={schoolSel} setSchoolSel={setSchoolSel} schoolOptions={schoolOptions}
         schoolScope={schoolScope} setSchoolScope={setSchoolScope}
@@ -667,7 +663,7 @@ export default function ProfileTable() {
         clearAllFilters={clearAllFilters} activeFilterCount={activeFilterCount}
         onOpenBuilder={() => {
           // Encode current filter state as JSON in URL param
-          const state = { roleSel, specialtySel, specialtyScope, senioritySel, seniorityScope, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, compoundRelationship, schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope }
+          const state = { roleSel, specialtySel, specialtyScope, senioritySel, seniorityScope, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope }
           // TODO: Refactor to individual URL params when search-URL-sharing becomes a use case.
           router.push(`/search-builder?filters=${encodeURIComponent(JSON.stringify(state))}`)
         }}

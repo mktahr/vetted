@@ -83,7 +83,7 @@ function SearchBuilderInner() {
   const [clearanceSel, setClearanceSel] = useState<string[]>([])
   const [locationSel, setLocationSel] = useState<string[]>([])
   const [focusScope, setFocusScope] = useState<'all' | 'hard_tech' | 'all_tech'>('all')
-  const [compoundCompany, setCompoundCompany] = useState('')
+  const [compoundCompany, setCompoundCompany] = useState<string[]>([])
   const [compoundCompanyScope, setCompoundCompanyScope] = useState<TemporalScope>('ever')
   const [compoundSpecialties, setCompoundSpecialties] = useState<string[]>([])
   const [compoundYearMin, setCompoundYearMin] = useState('')
@@ -191,7 +191,10 @@ function SearchBuilderInner() {
           if (f.clearanceSel) setClearanceSel(f.clearanceSel)
           if (f.locationSel) setLocationSel(f.locationSel)
           if (f.focusScope) setFocusScope(f.focusScope)
-          if (f.compoundCompany) setCompoundCompany(f.compoundCompany)
+          if (f.compoundCompany) {
+            if (Array.isArray(f.compoundCompany)) setCompoundCompany(f.compoundCompany)
+            else if (typeof f.compoundCompany === 'string') setCompoundCompany([f.compoundCompany])
+          }
           if (f.compoundCompanyScope) setCompoundCompanyScope(f.compoundCompanyScope)
           // Backward compat: old compoundRelationship maps to scope
           else if (f.compoundRelationship === 'current') setCompoundCompanyScope('currently')
@@ -288,8 +291,8 @@ function SearchBuilderInner() {
         <div style={sectionStyle}>
           <div style={headingStyle}>Where They Worked</div>
           <ScopeSelector label="Company" value={compoundCompanyScope} onChange={setCompoundCompanyScope} />
-          <MultiSelect label="" options={companyOptions} selected={compoundCompany ? [compoundCompany] : []} onChange={v => setCompoundCompany(v[0] || '')} placeholder="Search companies…" />
-          {compoundCompany && (
+          <MultiSelect label="" options={companyOptions} selected={compoundCompany} onChange={setCompoundCompany} placeholder="Search companies…" />
+          {compoundCompany.length > 0 && (
             <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <MultiSelect label="Specialty there" options={specialtyOptions} selected={compoundSpecialties} onChange={setCompoundSpecialties} placeholder="Any" />
               <div>
