@@ -846,6 +846,8 @@ export default function ProfileTable() {
         companyGroupSel={companyGroupSel} setCompanyGroupSel={setCompanyGroupSel} companyGroupOptions={companyGroupOptions}
         signalSel={signalSel} setSignalSel={setSignalSel} signalOptions={signalOptions}
         acceleratorSel={acceleratorSel} setAcceleratorSel={setAcceleratorSel} acceleratorOptions={acceleratorOptions}
+        companyConditionCount={companyConditions.length}
+        schoolConditionCount={schoolConditions.length}
         titleBoolean={titleBoolean} setTitleBoolean={setTitleBoolean}
         experienceBoolean={experienceBoolean} setExperienceBoolean={setExperienceBoolean}
         clearAllFilters={clearAllFilters} activeFilterCount={activeFilterCount}

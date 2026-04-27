@@ -11,6 +11,9 @@ import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, fetchAllRows } from '@/lib/supabase'
 import { MultiSelect, MultiSelectOption } from '../components/MultiSelect'
+import { ConditionRowList } from '../components/condition-rows'
+import type { ConditionRow } from '../components/condition-rows/types'
+import { conditionToCompact, compactToCondition } from '../components/condition-rows/types'
 import { buildLocationOptions } from '@/lib/locations/us-locations'
 
 export default function SearchBuilderPage() {
@@ -99,6 +102,12 @@ function SearchBuilderInner() {
   const [companyGroupSel, setCompanyGroupSel] = useState<string[]>([])
   const [companyGroupScope, setCompanyGroupScope] = useState<TemporalScope>('ever')
 
+  // Condition rows (new model)
+  const [companyConditions, setCompanyConditions] = useState<ConditionRow[]>([])
+  const [schoolConditions, setSchoolConditions] = useState<ConditionRow[]>([])
+  const [companyDefaultScope, setCompanyDefaultScope] = useState<TemporalScope>('currently')
+  const [schoolDefaultScope, setSchoolDefaultScope] = useState<TemporalScope>('ever')
+
   // ─── Options ────────────────────────────────────────────────────────────
   const [roleOptions, setRoleOptions] = useState<MultiSelectOption[]>([])
   const [seniorityOptions, setSeniorityOptions] = useState<MultiSelectOption[]>([])
@@ -108,6 +117,10 @@ function SearchBuilderInner() {
   const [signalOptions, setSignalOptions] = useState<MultiSelectOption[]>([])
   const [schoolGroupOptions, setSchoolGroupOptions] = useState<MultiSelectOption[]>([])
   const [companyGroupOptions, setCompanyGroupOptions] = useState<MultiSelectOption[]>([])
+  const [industryOptions, setIndustryOptions] = useState<MultiSelectOption[]>([])
+  const [focusFilterOptions, setFocusFilterOptions] = useState<MultiSelectOption[]>([])
+  const [companyNameMap, setCompanyNameMap] = useState<Record<string, string>>({})
+  const [schoolNameMap, setSchoolNameMap] = useState<Record<string, string>>({})
   const locationOptions = buildLocationOptions()
 
   // ─── Load data ──────────────────────────────────────────────────────────
@@ -171,6 +184,20 @@ function SearchBuilderInner() {
       const cgLabels: Record<string, string> = { top_law_firm: 'Top Law Firm' }
       setCompanyGroupOptions(Array.from(cgVals).sort().map(g => ({ value: g, label: cgLabels[g] || g.replace(/_/g, ' ') })))
 
+      // Name maps + attribute options for condition rows
+      const cnMap: Record<string, string> = {}
+      const indVals = new Set<string>()
+      for (const c of companies || []) {
+        cnMap[c.company_id] = c.company_name
+        if (c.primary_industry_tag) indVals.add(c.primary_industry_tag)
+      }
+      setCompanyNameMap(cnMap)
+      setIndustryOptions(Array.from(indVals).sort().map(v => ({ value: v, label: v })))
+      setFocusFilterOptions([{ value: 'hard_tech', label: 'Hard Tech' }, { value: 'all_tech', label: 'All Tech' }])
+      const snMap: Record<string, string> = {}
+      for (const s of schools || []) snMap[s.school_id] = s.school_name
+      setSchoolNameMap(snMap)
+
       // Parse incoming filter state from URL
       const raw = searchParams.get('filters')
       if (raw) {
@@ -212,6 +239,9 @@ function SearchBuilderInner() {
           if (f.schoolGroupScope) setSchoolGroupScope(f.schoolGroupScope)
           if (f.companyGroupSel) setCompanyGroupSel(f.companyGroupSel)
           if (f.companyGroupScope) setCompanyGroupScope(f.companyGroupScope)
+          // Condition rows
+          if (f.cc && Array.isArray(f.cc)) setCompanyConditions(f.cc.map((c: any) => compactToCondition(c)))
+          if (f.sc && Array.isArray(f.sc)) setSchoolConditions(f.sc.map((c: any) => compactToCondition(c)))
         } catch { /* ignore bad JSON */ }
       }
       setLoading(false)
@@ -226,6 +256,8 @@ function SearchBuilderInner() {
       compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax,
       schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean,
       signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope,
+      cc: companyConditions.map(conditionToCompact),
+      sc: schoolConditions.map(conditionToCompact),
     }
     router.push(`/?filters=${encodeURIComponent(JSON.stringify(state))}`)
   }
@@ -287,43 +319,41 @@ function SearchBuilderInner() {
           </div>
         </div>
 
-        {/* Where They Worked */}
+        {/* Where They Worked — Condition Rows */}
         <div style={sectionStyle}>
           <div style={headingStyle}>Where They Worked</div>
-          <ScopeSelector label="Company" value={compoundCompanyScope} onChange={setCompoundCompanyScope} />
-          <MultiSelect label="" options={companyOptions} selected={compoundCompany} onChange={setCompoundCompany} placeholder="Search companies…" />
-          {compoundCompany.length > 0 && (
-            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <MultiSelect label="Specialty there" options={specialtyOptions} selected={compoundSpecialties} onChange={setCompoundSpecialties} placeholder="Any" />
-              <div>
-                <label style={lblStyle}>Year range</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <input type="number" min="1950" max="2100" value={compoundYearMin} onChange={e => setCompoundYearMin(e.target.value)} placeholder="from" style={inputStyle} />
-                  <span style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)' }}>–</span>
-                  <input type="number" min="1950" max="2100" value={compoundYearMax} onChange={e => setCompoundYearMax(e.target.value)} placeholder="to" style={inputStyle} />
-                </div>
-              </div>
-            </div>
-          )}
-          {companyGroupOptions.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <ScopeSelector label="Company group" value={companyGroupScope} onChange={setCompanyGroupScope} />
-              <MultiSelect label="" options={companyGroupOptions} selected={companyGroupSel} onChange={setCompanyGroupSel} placeholder="Any company group" />
-            </div>
-          )}
+          <ConditionRowList
+            rows={companyConditions}
+            onChange={setCompanyConditions}
+            entityType="company"
+            entityOptions={companyOptions}
+            entityNameMap={companyNameMap}
+            specialtyOptions={specialtyOptions}
+            seniorityOptions={seniorityOptions}
+            defaultScope={companyDefaultScope}
+            onDefaultScopeChange={setCompanyDefaultScope}
+            industryOptions={industryOptions}
+            focusOptions={focusFilterOptions}
+            label="Company conditions"
+          />
         </div>
 
-        {/* Where They Studied */}
+        {/* Where They Studied — Condition Rows */}
         <div style={sectionStyle}>
           <div style={headingStyle}>Where They Studied</div>
-          <ScopeSelector label="School" value={schoolTemporalScope} onChange={setSchoolTemporalScope} />
-          <MultiSelect label="" options={schoolOptions} selected={schoolSel} onChange={setSchoolSel} placeholder="Search ranked schools…" />
-          {schoolGroupOptions.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <ScopeSelector label="School group" value={schoolGroupScope} onChange={setSchoolGroupScope} />
-              <MultiSelect label="" options={schoolGroupOptions} selected={schoolGroupSel} onChange={setSchoolGroupSel} placeholder="Any school group" />
-            </div>
-          )}
+          <ConditionRowList
+            rows={schoolConditions}
+            onChange={setSchoolConditions}
+            entityType="school"
+            entityOptions={schoolOptions}
+            entityNameMap={schoolNameMap}
+            specialtyOptions={[]}
+            seniorityOptions={[]}
+            defaultScope={schoolDefaultScope}
+            onDefaultScopeChange={setSchoolDefaultScope}
+            schoolGroupOptions={schoolGroupOptions}
+            label="School conditions"
+          />
         </div>
 
         {/* Keyword Search */}

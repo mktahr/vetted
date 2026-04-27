@@ -36,6 +36,8 @@ export interface FilterSidebarProps {
   compoundYearMin: string;       setCompoundYearMin: (v: string) => void
   compoundYearMax: string;       setCompoundYearMax: (v: string) => void
   companyOptions: MultiSelectOption[]
+  companyConditionCount: number
+  schoolConditionCount: number
   schoolSel: string[];           setSchoolSel: (v: string[]) => void
   schoolOptions: MultiSelectOption[]
   schoolScope: 'us' | 'all';    setSchoolScope: (v: 'us' | 'all') => void
@@ -187,7 +189,12 @@ export default function FilterSidebar(props: FilterSidebarProps) {
         )}
 
         {props.companyGroupOptions.length > 0 && (
-          <div style={{ marginBottom: 16 }}><MultiSelect label="Company group" options={props.companyGroupOptions} selected={props.companyGroupSel} onChange={props.setCompanyGroupSel} placeholder="Any company group" /></div>
+          <div style={{ marginBottom: 12 }}><MultiSelect label="Company group" options={props.companyGroupOptions} selected={props.companyGroupSel} onChange={props.setCompanyGroupSel} placeholder="Any company group" /></div>
+        )}
+        {props.companyConditionCount > 0 && (
+          <div style={{ marginBottom: 16, padding: '6px 10px', background: 'var(--accent-950)', border: '1px solid var(--accent-900)', borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)', color: 'var(--accent-400)', fontFamily: 'var(--font-sans)' }}>
+            {props.companyConditionCount} company condition{props.companyConditionCount !== 1 ? 's' : ''} active · <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={props.onOpenBuilder}>Edit in builder</span>
+          </div>
         )}
 
         {/* WHERE THEY STUDIED */}
@@ -207,7 +214,12 @@ export default function FilterSidebar(props: FilterSidebarProps) {
           <div style={{ marginBottom: 12 }}><MultiSelect label="School group" options={props.schoolGroupOptions} selected={props.schoolGroupSel} onChange={props.setSchoolGroupSel} placeholder="Any school group" /></div>
         )}
         {props.acceleratorOptions.length > 0 && (
-          <div style={{ marginBottom: 16 }}><MultiSelect label="Accelerator" options={props.acceleratorOptions} selected={props.acceleratorSel} onChange={props.setAcceleratorSel} placeholder="Any accelerator" /></div>
+          <div style={{ marginBottom: 12 }}><MultiSelect label="Accelerator" options={props.acceleratorOptions} selected={props.acceleratorSel} onChange={props.setAcceleratorSel} placeholder="Any accelerator" /></div>
+        )}
+        {props.schoolConditionCount > 0 && (
+          <div style={{ marginBottom: 16, padding: '6px 10px', background: 'var(--accent-950)', border: '1px solid var(--accent-900)', borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)', color: 'var(--accent-400)', fontFamily: 'var(--font-sans)' }}>
+            {props.schoolConditionCount} school condition{props.schoolConditionCount !== 1 ? 's' : ''} active · <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={props.onOpenBuilder}>Edit in builder</span>
+          </div>
         )}
 
         {/* KEYWORD SEARCH */}

@@ -451,7 +451,10 @@ export default function CompaniesListPage() {
           <button
             onClick={() => {
               const ids = filtered.map(c => c.company_id)
-              const state = { compoundCompany: ids, compoundCompanyScope: 'ever' }
+              const state = {
+                compoundCompany: ids, compoundCompanyScope: 'ever',
+                cc: [{ s: 'ever', c: ids }],
+              }
               router.push(`/?filters=${encodeURIComponent(JSON.stringify(state))}`)
             }}
             style={{ padding: '6px 14px', fontSize: 'var(--fs-13)', fontFamily: 'var(--font-sans)', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--r-button)', cursor: 'pointer', fontWeight: 'var(--fw-medium)' as any }}
@@ -469,7 +472,10 @@ export default function CompaniesListPage() {
           <button
             onClick={() => {
               const ids = Array.from(selectedIds)
-              const state = { compoundCompany: ids, compoundCompanyScope: 'ever' }
+              const state = {
+                compoundCompany: ids, compoundCompanyScope: 'ever',
+                cc: [{ s: 'ever', c: ids }],
+              }
               router.push(`/?filters=${encodeURIComponent(JSON.stringify(state))}`)
             }}
             style={{ padding: '4px 12px', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--r-button)', cursor: 'pointer', fontWeight: 'var(--fw-medium)' as any }}
