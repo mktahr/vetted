@@ -101,6 +101,7 @@ export default function ProfileTable() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
+  const [companyChipExpanded, setCompanyChipExpanded] = useState(false)
 
   // Filter state
   const [roleSel, setRoleSel] = useState<string[]>([])
@@ -620,7 +621,16 @@ export default function ProfileTable() {
   if (yearsMin || yearsMax) chips.push({ label: `Yrs: ${yearsMin || '0'}–${yearsMax || '∞'}`, onRemove: () => { setYearsMin(''); setYearsMax('') } })
   for (const v of clearanceSel) chips.push({ label: `Clearance: ${v.replace(/_/g, ' ')}`, onRemove: () => setClearanceSel(clearanceSel.filter(x => x !== v)) })
   for (const v of locationSel) chips.push({ label: `Location: ${v}`, onRemove: () => setLocationSel(locationSel.filter(x => x !== v)) })
-  if (compoundCompany.length > 0) { const labels = compoundCompany.map(id => companyOptions.find(c => c.value === id)?.label || '?').join(', '); chips.push({ label: `At: ${labels}`, onRemove: () => { setCompoundCompany([]); setCompoundSpecialties([]); setCompoundYearMin(''); setCompoundYearMax(''); setCompoundCompanyScope('ever') } }) }
+  if (compoundCompany.length > 0) {
+    const companyLabels = compoundCompany.map(id => companyOptions.find(c => c.value === id)?.label || '?')
+    const clearCompanies = () => { setCompoundCompany([]); setCompoundSpecialties([]); setCompoundYearMin(''); setCompoundYearMax(''); setCompoundCompanyScope('ever') }
+    if (compoundCompany.length <= 5) {
+      chips.push({ label: `At: ${companyLabels.join(', ')}`, onRemove: clearCompanies })
+    } else {
+      // Collapsed chip — rendered specially below via companyChipCollapsed flag
+      chips.push({ label: `__company_collapsed__`, onRemove: clearCompanies })
+    }
+  }
   for (const v of schoolSel) { const sc = schoolOptions.find(s => s.value === v); chips.push({ label: `School: ${sc?.label || v}`, onRemove: () => setSchoolSel(schoolSel.filter(x => x !== v)) }) }
   if (titleBoolean) chips.push({ label: `Title: "${titleBoolean}"`, onRemove: () => setTitleBoolean('') })
   if (experienceBoolean) chips.push({ label: `Keywords: "${experienceBoolean}"`, onRemove: () => setExperienceBoolean('') })
@@ -692,17 +702,41 @@ export default function ProfileTable() {
 
           {chips.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-              {chips.map((c, i) => (
-                <span key={i} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
-                  background: 'var(--accent-950)', color: 'var(--accent-400)',
-                  borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)',
-                  border: '1px solid var(--accent-900)',
-                }}>
-                  {c.label}
-                  <button onClick={c.onRemove} style={{ color: 'var(--accent-500)', fontWeight: 700, cursor: 'pointer', background: 'none', border: 'none', fontSize: 'var(--fs-12)' }}>×</button>
-                </span>
-              ))}
+              {chips.map((c, i) => {
+                // Collapsed company chip — special rendering
+                if (c.label === '__company_collapsed__') {
+                  const companyLabels = compoundCompany.map(id => companyOptions.find(co => co.value === id)?.label || '?')
+                  return (
+                    <span key={i} style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
+                      background: 'var(--accent-950)', color: 'var(--accent-400)',
+                      borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)',
+                      border: '1px solid var(--accent-900)', flexWrap: 'wrap',
+                    }}>
+                      {companyChipExpanded ? (
+                        <>
+                          <span style={{ cursor: 'pointer' }} onClick={() => setCompanyChipExpanded(false)}>At: {companyLabels.join(', ')}</span>
+                          <button onClick={() => setCompanyChipExpanded(false)} style={{ color: 'var(--accent-500)', cursor: 'pointer', background: 'none', border: 'none', fontSize: 'var(--fs-11)' }}>▴</button>
+                        </>
+                      ) : (
+                        <span style={{ cursor: 'pointer' }} onClick={() => setCompanyChipExpanded(true)}>At: {compoundCompany.length} companies ▾</span>
+                      )}
+                      <button onClick={c.onRemove} style={{ color: 'var(--accent-500)', fontWeight: 700, cursor: 'pointer', background: 'none', border: 'none', fontSize: 'var(--fs-12)' }}>×</button>
+                    </span>
+                  )
+                }
+                return (
+                  <span key={i} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
+                    background: 'var(--accent-950)', color: 'var(--accent-400)',
+                    borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)',
+                    border: '1px solid var(--accent-900)',
+                  }}>
+                    {c.label}
+                    <button onClick={c.onRemove} style={{ color: 'var(--accent-500)', fontWeight: 700, cursor: 'pointer', background: 'none', border: 'none', fontSize: 'var(--fs-12)' }}>×</button>
+                  </span>
+                )
+              })}
             </div>
           )}
 
