@@ -45,6 +45,8 @@ export interface FilterSidebarProps {
   companyGroupOptions: MultiSelectOption[]
   signalSel: string[];          setSignalSel: (v: string[]) => void
   signalOptions: MultiSelectOption[]
+  acceleratorSel: string[];    setAcceleratorSel: (v: string[]) => void
+  acceleratorOptions: MultiSelectOption[]
   titleBoolean: string;          setTitleBoolean: (v: string) => void
   experienceBoolean: string;     setExperienceBoolean: (v: string) => void
   clearAllFilters: () => void
@@ -202,7 +204,10 @@ export default function FilterSidebar(props: FilterSidebarProps) {
             selected={props.schoolSel} onChange={props.setSchoolSel} placeholder="Search ranked schools…" emptyMessage="No match" />
         </div>
         {props.schoolGroupOptions.length > 0 && (
-          <div style={{ marginBottom: 16 }}><MultiSelect label="School group" options={props.schoolGroupOptions} selected={props.schoolGroupSel} onChange={props.setSchoolGroupSel} placeholder="Any school group" /></div>
+          <div style={{ marginBottom: 12 }}><MultiSelect label="School group" options={props.schoolGroupOptions} selected={props.schoolGroupSel} onChange={props.setSchoolGroupSel} placeholder="Any school group" /></div>
+        )}
+        {props.acceleratorOptions.length > 0 && (
+          <div style={{ marginBottom: 16 }}><MultiSelect label="Accelerator" options={props.acceleratorOptions} selected={props.acceleratorSel} onChange={props.setAcceleratorSel} placeholder="Any accelerator" /></div>
         )}
 
         {/* KEYWORD SEARCH */}

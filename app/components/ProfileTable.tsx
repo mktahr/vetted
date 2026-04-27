@@ -51,6 +51,7 @@ interface ExperienceLite {
 interface EducationLite {
   school_id: string
   school_name_raw: string | null
+  school_type: string | null
   degree_raw: string | null
   degree_level: string | null
   field_of_study_raw: string | null
@@ -101,15 +102,25 @@ function derivePrimaryEducation(
 ): { schoolName: string; degree: string } | null {
   if (eduLite.length === 0) return null
 
-  // Priority: bachelor (earliest by end_year) → highest degree_level → first row
-  const bachelors = eduLite.filter(e => e.degree_level === 'bachelor')
+  // Filter to degree-granting institutions (university only, skip accelerators/bootcamps/high schools)
+  const degreeGranting = eduLite.filter(e => !e.school_type || e.school_type === 'university')
+
+  // Priority: bachelor (earliest by end_year) → highest degree_level → first row with field_of_study → first row
+  const candidates = degreeGranting.length > 0 ? degreeGranting : eduLite
+  const bachelors = candidates.filter(e => e.degree_level === 'bachelor')
   let primary: EducationLite
   if (bachelors.length > 0) {
     primary = bachelors.sort((a, b) => (a.end_year ?? 9999) - (b.end_year ?? 9999))[0]
   } else {
-    // Highest available degree
-    const sorted = [...eduLite].sort((a, b) => (DEGREE_LEVEL_PRIORITY[b.degree_level || ''] ?? 0) - (DEGREE_LEVEL_PRIORITY[a.degree_level || ''] ?? 0))
-    primary = sorted[0]
+    // Highest available degree with degree_level populated
+    const withLevel = candidates.filter(e => e.degree_level && DEGREE_LEVEL_PRIORITY[e.degree_level])
+    if (withLevel.length > 0) {
+      primary = withLevel.sort((a, b) => (DEGREE_LEVEL_PRIORITY[b.degree_level || ''] ?? 0) - (DEGREE_LEVEL_PRIORITY[a.degree_level || ''] ?? 0))[0]
+    } else {
+      // No degree_level at all — prefer row with field_of_study_raw (more informative)
+      const withField = candidates.filter(e => e.field_of_study_raw)
+      primary = withField.length > 0 ? withField[0] : candidates[0]
+    }
   }
 
   // School name: prefer canonical from schools table, fall back to raw
@@ -195,6 +206,8 @@ export default function ProfileTable() {
   const [schoolGroupOptions, setSchoolGroupOptions] = useState<MultiSelectOption[]>([])
   const [companyGroupSel, setCompanyGroupSel] = useState<string[]>([])
   const [companyGroupOptions, setCompanyGroupOptions] = useState<MultiSelectOption[]>([])
+  const [acceleratorSel, setAcceleratorSel] = useState<string[]>([])
+  const [acceleratorOptions, setAcceleratorOptions] = useState<MultiSelectOption[]>([])
   // Lookup: school_id → school_groups[], company_id → company_groups[]
   const [schoolGroupsMap, setSchoolGroupsMap] = useState<Record<string, string[]>>({})
   const [companyGroupsMap, setCompanyGroupsMap] = useState<Record<string, string[]>>({})
@@ -246,6 +259,7 @@ export default function ProfileTable() {
       if (f.schoolGroupScope) setSchoolGroupScope(f.schoolGroupScope)
       if (f.companyGroupSel) setCompanyGroupSel(f.companyGroupSel)
       if (f.companyGroupScope) setCompanyGroupScope(f.companyGroupScope)
+      if (f.acceleratorSel) setAcceleratorSel(f.acceleratorSel)
     } catch { /* ignore bad JSON */ }
     setUrlHydrated(true)
   }, [searchParams, urlHydrated])
@@ -274,7 +288,7 @@ export default function ProfileTable() {
           supabase.from('person_education').select('person_id, school_id, school_name_raw, degree_raw, degree_level, field_of_study_raw, end_year'),
           supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
           fetchAllRows<any>('companies', 'company_id, company_name, primary_industry_tag, focus, company_groups', 'company_name').then(data => ({ data })),
-          fetchAllRows<any>('schools', 'school_id, school_name, school_score, is_foreign, school_groups', 'school_name').then(data => ({ data })),
+          fetchAllRows<any>('schools', 'school_id, school_name, school_score, is_foreign, school_groups, school_type', 'school_name').then(data => ({ data })),
           supabase.from('specialty_dictionary').select('specialty_normalized, parent_function').eq('active', true).order('specialty_normalized'),
           supabase.from('role_dictionary').select('role_id, role_name, display_order').eq('active', true).order('display_order'),
           supabase.from('role_specialty_map').select('role_id, specialty_normalized, is_primary'),
@@ -313,8 +327,11 @@ export default function ProfileTable() {
             if (!schoolIds[r.person_id]) schoolIds[r.person_id] = new Set()
             schoolIds[r.person_id].add(r.school_id)
             if (!eduLite[r.person_id]) eduLite[r.person_id] = []
+            // Look up school_type from the schools data (already fetched)
+            const schoolRecord = (schools as any[])?.find((s: any) => s.school_id === r.school_id)
             eduLite[r.person_id].push({
               school_id: r.school_id, school_name_raw: (r as any).school_name_raw ?? null,
+              school_type: schoolRecord?.school_type ?? null,
               degree_raw: (r as any).degree_raw ?? null, degree_level: (r as any).degree_level ?? null,
               field_of_study_raw: (r as any).field_of_study_raw ?? null, end_year: (r as any).end_year ?? null,
             })
@@ -338,6 +355,9 @@ export default function ProfileTable() {
         const snMap: Record<string, string> = {}
         for (const s of schools || []) snMap[s.school_id] = s.school_name
         setSchoolNameMap(snMap)
+
+        // Accelerator options (school_type = 'accelerator')
+        setAcceleratorOptions((schools || []).filter((s: any) => s.school_type === 'accelerator').map((s: any) => ({ value: s.school_id, label: s.school_name })))
 
         // Signals: group by person, deduplicate by signal_id (keep highest confidence)
         const sigMap: Record<string, DrawerSignal[]> = {}
@@ -563,6 +583,12 @@ export default function ProfileTable() {
       }
     }
 
+    // Accelerator filter: candidates who attended a selected accelerator
+    if (acceleratorSel.length > 0) {
+      const selAccel = new Set(acceleratorSel)
+      rows = rows.filter(p => p.education_lite.some(e => selAccel.has(e.school_id)))
+    }
+
     if (focusScope === 'hard_tech') rows = rows.filter(p => p.experiences_lite.some(e => e.company_focus === 'hard_tech'))
     else if (focusScope === 'all_tech') rows = rows.filter(p => p.experiences_lite.some(e => e.company_focus === 'hard_tech' || e.company_focus === 'all_tech'))
 
@@ -626,14 +652,15 @@ export default function ProfileTable() {
 
     if (sortField) rows.sort((a, b) => { const av = (a[sortField] as number) ?? -1, bv = (b[sortField] as number) ?? -1; return sortDirection === 'asc' ? av - bv : bv - av })
     return rows
-  }, [people, searchQuery, bucketSel, stageSel, roleSel, senioritySel, seniorityScope, schoolSel, schoolTemporalScope, locationSel, specialtySel, specialtyScope, clearanceSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap])
+  }, [people, searchQuery, bucketSel, stageSel, roleSel, senioritySel, seniorityScope, schoolSel, schoolTemporalScope, locationSel, specialtySel, specialtyScope, clearanceSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap])
 
   const activeFilterCount =
     (roleSel.length > 0 ? 1 : 0) + (bucketSel.length > 0 ? 1 : 0) + (stageSel.length > 0 ? 1 : 0) +
     (senioritySel.length > 0 ? 1 : 0) + (schoolSel.length > 0 ? 1 : 0) + (locationSel.length > 0 ? 1 : 0) +
     (specialtySel.length > 0 ? 1 : 0) + (clearanceSel.length > 0 ? 1 : 0) + (focusScope !== 'all' ? 1 : 0) +
     (compoundCompany.length > 0 ? 1 : 0) + (yearsMin || yearsMax ? 1 : 0) + (titleBoolean ? 1 : 0) + (experienceBoolean ? 1 : 0) +
-    (signalSel.length > 0 ? 1 : 0) + (schoolGroupSel.length > 0 ? 1 : 0) + (companyGroupSel.length > 0 ? 1 : 0)
+    (signalSel.length > 0 ? 1 : 0) + (schoolGroupSel.length > 0 ? 1 : 0) + (companyGroupSel.length > 0 ? 1 : 0) +
+    (acceleratorSel.length > 0 ? 1 : 0)
 
   const clearAllFilters = () => {
     setSearchQuery(''); setRoleSel([]); setBucketSel([]); setStageSel([]); setSenioritySel([])
@@ -641,7 +668,7 @@ export default function ProfileTable() {
     setClearanceSel([]); setFocusScope('all'); setCompoundCompany([]); setCompoundSpecialties([])
     setCompoundYearMin(''); setCompoundYearMax('')
     setYearsMin(''); setYearsMax(''); setTitleBoolean(''); setTitleBooleanScope('ever'); setExperienceBoolean('')
-    setSignalSel([]); setSchoolGroupSel([]); setCompanyGroupSel([])
+    setSignalSel([]); setSchoolGroupSel([]); setCompanyGroupSel([]); setAcceleratorSel([])
     setSpecialtyScope('ever'); setSeniorityScope('ever'); setCompoundCompanyScope('ever')
     setSchoolTemporalScope('ever'); setSchoolGroupScope('ever'); setCompanyGroupScope('ever')
   }
@@ -720,12 +747,13 @@ export default function ProfileTable() {
         schoolGroupSel={schoolGroupSel} setSchoolGroupSel={setSchoolGroupSel} schoolGroupOptions={schoolGroupOptions}
         companyGroupSel={companyGroupSel} setCompanyGroupSel={setCompanyGroupSel} companyGroupOptions={companyGroupOptions}
         signalSel={signalSel} setSignalSel={setSignalSel} signalOptions={signalOptions}
+        acceleratorSel={acceleratorSel} setAcceleratorSel={setAcceleratorSel} acceleratorOptions={acceleratorOptions}
         titleBoolean={titleBoolean} setTitleBoolean={setTitleBoolean}
         experienceBoolean={experienceBoolean} setExperienceBoolean={setExperienceBoolean}
         clearAllFilters={clearAllFilters} activeFilterCount={activeFilterCount}
         onOpenBuilder={() => {
           // Encode current filter state as JSON in URL param
-          const state = { roleSel, specialtySel, specialtyScope, senioritySel, seniorityScope, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope }
+          const state = { roleSel, specialtySel, specialtyScope, senioritySel, seniorityScope, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel }
           // TODO: Refactor to individual URL params when search-URL-sharing becomes a use case.
           router.push(`/search-builder?filters=${encodeURIComponent(JSON.stringify(state))}`)
         }}
@@ -820,7 +848,7 @@ export default function ProfileTable() {
                     <th style={{ ...eyebrow, width: 36, padding: '8px 4px' }} title="LinkedIn">
                       <svg viewBox="0 0 24 24" width="14" height="14" fill="var(--fg-tertiary)"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                     </th>
-                    {[{h:'Name',sort:false},{h:'School',sort:false},{h:'Company',sort:false},{h:'Title',sort:false},{h:'Specialty',sort:false},{h:'Yrs',sort:true},{h:'Location',sort:false}].map(({h,sort}) => (
+                    {[{h:'Name',sort:false},{h:'Company',sort:false},{h:'School',sort:false},{h:'Title',sort:false},{h:'Specialty',sort:false},{h:'Yrs',sort:true},{h:'Location',sort:false}].map(({h,sort}) => (
                       <th key={h} onClick={sort ? () => handleSort('years_experience_estimate') : undefined}
                         style={{ ...eyebrow, cursor: sort ? 'pointer' : 'default' }}>
                         {h}{h === 'Yrs' && sortField === 'years_experience_estimate' && (sortDirection === 'asc' ? ' ↑' : ' ↓')}
@@ -869,27 +897,28 @@ export default function ProfileTable() {
                           {person.full_name || 'N/A'}
                         </button>
                       </td>
-                      {/* School */}
-                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
-                        {(() => {
-                          const edu = derivePrimaryEducation(person.education_lite, schoolNameMap)
-                          if (!edu) return <span style={{ color: 'var(--fg-tertiary)', opacity: 0.4 }}>—</span>
-                          return (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <CompanyLogo domain={guessSchoolDomain(edu.schoolName)} companyName={edu.schoolName} size={20} />
-                              <span style={{ color: 'var(--fg-primary)' }}>
-                                {edu.schoolName}{edu.degree ? <span style={{ color: 'var(--fg-tertiary)' }}> · {edu.degree}</span> : ''}
-                              </span>
-                            </div>
-                          )
-                        })()}
-                      </td>
                       {/* Company */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <CompanyLogo domain={guessDomain(person.current_company_name)} companyName={person.current_company_name} size={20} />
                           <span style={{ color: 'var(--fg-primary)' }}>{cleanCompanyName(person.current_company_name) || '—'}</span>
                         </div>
+                      </td>
+                      {/* School */}
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {(() => {
+                          const edu = derivePrimaryEducation(person.education_lite, schoolNameMap)
+                          if (!edu) return <span style={{ color: 'var(--fg-tertiary)', opacity: 0.4 }}>—</span>
+                          const fullText = edu.schoolName + (edu.degree ? ' · ' + edu.degree : '')
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} title={fullText}>
+                              <CompanyLogo domain={guessSchoolDomain(edu.schoolName)} companyName={edu.schoolName} size={20} shape="circle" />
+                              <span style={{ color: 'var(--fg-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {edu.schoolName}{edu.degree ? <span style={{ color: 'var(--fg-tertiary)' }}> · {edu.degree}</span> : ''}
+                              </span>
+                            </div>
+                          )
+                        })()}
                       </td>
                       {/* Title (text only, no pills) */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-primary)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }}>

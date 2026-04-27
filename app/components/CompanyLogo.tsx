@@ -6,23 +6,24 @@ interface CompanyLogoProps {
   domain: string | null | undefined
   companyName: string | null | undefined
   size?: number
+  shape?: 'square' | 'circle'
   className?: string
 }
 
 /**
- * Renders a company logo from logo.dev, falling back to a generic
+ * Renders a company/school logo from logo.dev, falling back to a generic
  * initial-letter placeholder when no domain is available or the
- * image fails to load.
+ * image fails to load. Use shape='circle' for schools.
  */
-export default function CompanyLogo({ domain, companyName, size = 24, className = '' }: CompanyLogoProps) {
+export default function CompanyLogo({ domain, companyName, size = 24, shape = 'square', className = '' }: CompanyLogoProps) {
   const [failed, setFailed] = useState(false)
   const token = process.env.NEXT_PUBLIC_LOGO_DEV_API_KEY
 
   const initial = (companyName || '?')[0].toUpperCase()
+  const borderRadius = shape === 'circle' ? '50%' : '4px'
 
   // If we have a domain and the key, try logo.dev
   if (domain && token && !failed) {
-    // Strip protocol and trailing slashes if present
     const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/+$/, '')
     const src = `https://img.logo.dev/${cleanDomain}?token=${token}&size=${size * 2}`
 
@@ -32,7 +33,8 @@ export default function CompanyLogo({ domain, companyName, size = 24, className 
         alt={companyName || ''}
         width={size}
         height={size}
-        className={`rounded flex-shrink-0 ${className}`}
+        className={`flex-shrink-0 ${className}`}
+        style={{ borderRadius }}
         onError={() => setFailed(true)}
         loading="lazy"
       />
@@ -42,8 +44,8 @@ export default function CompanyLogo({ domain, companyName, size = 24, className 
   // Placeholder: colored initial letter
   return (
     <div
-      className={`flex items-center justify-center rounded bg-muted text-tertiary font-semibold flex-shrink-0 ${className}`}
-      style={{ width: size, height: size, fontSize: size * 0.45 }}
+      className={`flex items-center justify-center bg-muted text-tertiary font-semibold flex-shrink-0 ${className}`}
+      style={{ width: size, height: size, fontSize: size * 0.45, borderRadius }}
       title={companyName || undefined}
     >
       {initial}
