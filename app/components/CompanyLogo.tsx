@@ -147,3 +147,92 @@ export function guessDomain(companyName: string | null | undefined): string | nu
   if (cleaned.length >= 2) return `${cleaned}.com`
   return null
 }
+
+/**
+ * Derive a plausible .edu domain from a school name for logo lookup.
+ */
+export function guessSchoolDomain(schoolName: string | null | undefined): string | null {
+  if (!schoolName) return null
+  const lower = schoolName.toLowerCase().trim()
+
+  const OVERRIDES: Record<string, string> = {
+    'mit': 'mit.edu',
+    'massachusetts institute of technology': 'mit.edu',
+    'stanford': 'stanford.edu',
+    'stanford university': 'stanford.edu',
+    'harvard': 'harvard.edu',
+    'harvard university': 'harvard.edu',
+    'berkeley': 'berkeley.edu',
+    'university of california, berkeley': 'berkeley.edu',
+    'uc berkeley': 'berkeley.edu',
+    'caltech': 'caltech.edu',
+    'ucla': 'ucla.edu',
+    'university of california, los angeles': 'ucla.edu',
+    'uc san diego': 'ucsd.edu',
+    'university of california, san diego': 'ucsd.edu',
+    'nyu': 'nyu.edu',
+    'penn': 'upenn.edu',
+    'the wharton school': 'wharton.upenn.edu',
+    'columbia': 'columbia.edu',
+    'cornell university': 'cornell.edu',
+    'princeton university': 'princeton.edu',
+    'dartmouth': 'dartmouth.edu',
+    'yale': 'yale.edu',
+    'northwestern': 'northwestern.edu',
+    'northwestern university': 'northwestern.edu',
+    'university of chicago': 'uchicago.edu',
+    'university of washington': 'uw.edu',
+    'university of michigan': 'umich.edu',
+    'university of texas at austin': 'utexas.edu',
+    'the university of texas at austin': 'utexas.edu',
+    'university of southern california': 'usc.edu',
+    'university of oxford': 'ox.ac.uk',
+    'university of cambridge': 'cam.ac.uk',
+    'georgia institute of technology': 'gatech.edu',
+    'carnegie mellon university': 'cmu.edu',
+    'university of waterloo': 'uwaterloo.ca',
+    'university of toronto': 'utoronto.ca',
+    'the university of british columbia': 'ubc.ca',
+    'university of colorado boulder': 'colorado.edu',
+    'university of wisconsin-madison': 'wisc.edu',
+    'university of minnesota-twin cities': 'umn.edu',
+    'university of arizona': 'arizona.edu',
+    'university of melbourne': 'unimelb.edu.au',
+    'peking university': 'pku.edu.cn',
+    'technion - israel institute of technology': 'technion.ac.il',
+    'the hebrew university of jerusalem': 'huji.ac.il',
+    'indian institute of technology, kharagpur': 'iitkgp.ac.in',
+    'loyola marymount university': 'lmu.edu',
+    'loyola marymount university, college of business administration': 'lmu.edu',
+    'pasadena city college': 'pasadena.edu',
+    'arizona state university': 'asu.edu',
+    'clemson university': 'clemson.edu',
+    'san francisco state university': 'sfsu.edu',
+    'indiana university bloomington': 'iu.edu',
+    'kent state university': 'kent.edu',
+    'brandeis university': 'brandeis.edu',
+    'middlebury college': 'middlebury.edu',
+    'roger williams university': 'rwu.edu',
+    'queensland university of technology': 'qut.edu.au',
+    'griffith university': 'griffith.edu.au',
+    'penn state college of information sciences and technology': 'psu.edu',
+    'united states military academy': 'westpoint.edu',
+    'united states naval academy': 'usna.edu',
+    'united states air force academy': 'usafa.edu',
+    'national defense university': 'ndu.edu',
+    'the george washington university law school': 'law.gwu.edu',
+    'hust': 'hust.edu.cn',
+    'sun yat-sen university': 'sysu.edu.cn',
+  }
+
+  if (OVERRIDES[lower]) return OVERRIDES[lower]
+
+  // Generic: strip "University of", "The", common suffixes, then .edu
+  const cleaned = lower
+    .replace(/^the\s+/, '')
+    .replace(/\s*\(.*?\)\s*/g, '')
+    .replace(/,.*$/, '')
+    .replace(/[^a-z0-9]/g, '')
+  if (cleaned.length >= 2) return `${cleaned}.edu`
+  return null
+}

@@ -9,7 +9,7 @@ import { supabase, fetchAllRows } from '@/lib/supabase'
 import { Person, SortField, SortDirection, CandidateBucket } from '../types'
 import ProfileDrawer, { DrawerExperience, DrawerSignal } from './ProfileDrawer'
 import { MultiSelectOption } from './MultiSelect'
-import CompanyLogo, { guessDomain } from './CompanyLogo'
+import CompanyLogo, { guessDomain, guessSchoolDomain } from './CompanyLogo'
 import FilterSidebar from './FilterSidebar'
 import { buildLocationOptions } from '@/lib/locations/us-locations'
 
@@ -50,6 +50,10 @@ interface ExperienceLite {
 
 interface EducationLite {
   school_id: string
+  school_name_raw: string | null
+  degree_raw: string | null
+  degree_level: string | null
+  field_of_study_raw: string | null
   end_year: number | null
 }
 
@@ -85,6 +89,46 @@ function matchesBoolean(text: string, query: string): boolean {
       return negated ? !found : found
     })
   })
+}
+
+// Derive primary education row for display in the table
+const DEGREE_LEVEL_PRIORITY: Record<string, number> = { phd: 5, mba: 4, master: 3, bachelor: 2, certificate: 1 }
+const DEGREE_ABBREV: Record<string, string> = { bachelor: 'BS', master: 'MS', mba: 'MBA', phd: 'PhD', certificate: 'Cert' }
+
+function derivePrimaryEducation(
+  eduLite: EducationLite[],
+  schoolNameMap: Record<string, string>,
+): { schoolName: string; degree: string } | null {
+  if (eduLite.length === 0) return null
+
+  // Priority: bachelor (earliest by end_year) → highest degree_level → first row
+  const bachelors = eduLite.filter(e => e.degree_level === 'bachelor')
+  let primary: EducationLite
+  if (bachelors.length > 0) {
+    primary = bachelors.sort((a, b) => (a.end_year ?? 9999) - (b.end_year ?? 9999))[0]
+  } else {
+    // Highest available degree
+    const sorted = [...eduLite].sort((a, b) => (DEGREE_LEVEL_PRIORITY[b.degree_level || ''] ?? 0) - (DEGREE_LEVEL_PRIORITY[a.degree_level || ''] ?? 0))
+    primary = sorted[0]
+  }
+
+  // School name: prefer canonical from schools table, fall back to raw
+  const schoolName = schoolNameMap[primary.school_id] || primary.school_name_raw || '—'
+
+  // Degree formatting: "BS Computer Science" or degree_raw fallback
+  let degree = ''
+  if (primary.degree_level && DEGREE_ABBREV[primary.degree_level]) {
+    degree = DEGREE_ABBREV[primary.degree_level]
+    if (primary.field_of_study_raw) {
+      // Truncate long field names
+      const field = primary.field_of_study_raw.length > 30 ? primary.field_of_study_raw.slice(0, 28) + '…' : primary.field_of_study_raw
+      degree += ' ' + field
+    }
+  } else if (primary.degree_raw) {
+    degree = primary.degree_raw.length > 35 ? primary.degree_raw.slice(0, 33) + '…' : primary.degree_raw
+  }
+
+  return { schoolName, degree }
 }
 
 export default function ProfileTable() {
@@ -141,6 +185,7 @@ export default function ProfileTable() {
   // Role→specialty mapping for contextual filtering
   const [roleSpecialtyMap, setRoleSpecialtyMap] = useState<Record<string, string[]>>({})
   const [companyNameMap, setCompanyNameMap] = useState<Record<string, string>>({})
+  const [schoolNameMap, setSchoolNameMap] = useState<Record<string, string>>({})
   const [signalsByPerson, setSignalsByPerson] = useState<Record<string, DrawerSignal[]>>({})
 
   // New filter state: signals, school groups, company groups
@@ -226,7 +271,7 @@ export default function ProfileTable() {
           supabase.from('people').select('*, companies:current_company_id ( company_name )').order('created_at', { ascending: false }),
           supabase.from('candidate_bucket_assignments').select('person_id, candidate_bucket, assignment_reason, effective_at').order('effective_at', { ascending: false }),
           supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, seniority_normalized, start_date, end_date, is_current, employment_type_normalized, title_raw, description_raw'),
-          supabase.from('person_education').select('person_id, school_id, end_year'),
+          supabase.from('person_education').select('person_id, school_id, school_name_raw, degree_raw, degree_level, field_of_study_raw, end_year'),
           supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
           fetchAllRows<any>('companies', 'company_id, company_name, primary_industry_tag, focus, company_groups', 'company_name').then(data => ({ data })),
           fetchAllRows<any>('schools', 'school_id, school_name, school_score, is_foreign, school_groups', 'school_name').then(data => ({ data })),
@@ -268,7 +313,11 @@ export default function ProfileTable() {
             if (!schoolIds[r.person_id]) schoolIds[r.person_id] = new Set()
             schoolIds[r.person_id].add(r.school_id)
             if (!eduLite[r.person_id]) eduLite[r.person_id] = []
-            eduLite[r.person_id].push({ school_id: r.school_id, end_year: (r as any).end_year ?? null })
+            eduLite[r.person_id].push({
+              school_id: r.school_id, school_name_raw: (r as any).school_name_raw ?? null,
+              degree_raw: (r as any).degree_raw ?? null, degree_level: (r as any).degree_level ?? null,
+              field_of_study_raw: (r as any).field_of_study_raw ?? null, end_year: (r as any).end_year ?? null,
+            })
           }
         }
 
@@ -286,6 +335,9 @@ export default function ProfileTable() {
         for (const c of companies || []) cMap[c.company_id] = c.company_name
         setCompanyNameMap(cMap)
         setSchoolOptions((schools || []).filter((s: any) => s.school_score != null).map((s: any) => ({ value: s.school_id, label: s.school_name, sublabel: s.is_foreign ? "Int'l" : undefined })))
+        const snMap: Record<string, string> = {}
+        for (const s of schools || []) snMap[s.school_id] = s.school_name
+        setSchoolNameMap(snMap)
 
         // Signals: group by person, deduplicate by signal_id (keep highest confidence)
         const sigMap: Record<string, DrawerSignal[]> = {}
@@ -768,7 +820,7 @@ export default function ProfileTable() {
                     <th style={{ ...eyebrow, width: 36, padding: '8px 4px' }} title="LinkedIn">
                       <svg viewBox="0 0 24 24" width="14" height="14" fill="var(--fg-tertiary)"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                     </th>
-                    {[{h:'Name',sort:false},{h:'Company',sort:false},{h:'Title',sort:false},{h:'Specialty',sort:false},{h:'Yrs',sort:true},{h:'Location',sort:false}].map(({h,sort}) => (
+                    {[{h:'Name',sort:false},{h:'School',sort:false},{h:'Company',sort:false},{h:'Title',sort:false},{h:'Specialty',sort:false},{h:'Yrs',sort:true},{h:'Location',sort:false}].map(({h,sort}) => (
                       <th key={h} onClick={sort ? () => handleSort('years_experience_estimate') : undefined}
                         style={{ ...eyebrow, cursor: sort ? 'pointer' : 'default' }}>
                         {h}{h === 'Yrs' && sortField === 'years_experience_estimate' && (sortDirection === 'asc' ? ' ↑' : ' ↓')}
@@ -816,6 +868,21 @@ export default function ProfileTable() {
                           onMouseLeave={e => { if (!isSelected) e.currentTarget.style.color = 'var(--fg-primary)' }}>
                           {person.full_name || 'N/A'}
                         </button>
+                      </td>
+                      {/* School */}
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                        {(() => {
+                          const edu = derivePrimaryEducation(person.education_lite, schoolNameMap)
+                          if (!edu) return <span style={{ color: 'var(--fg-tertiary)', opacity: 0.4 }}>—</span>
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <CompanyLogo domain={guessSchoolDomain(edu.schoolName)} companyName={edu.schoolName} size={20} />
+                              <span style={{ color: 'var(--fg-primary)' }}>
+                                {edu.schoolName}{edu.degree ? <span style={{ color: 'var(--fg-tertiary)' }}> · {edu.degree}</span> : ''}
+                              </span>
+                            </div>
+                          )
+                        })()}
                       </td>
                       {/* Company */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
