@@ -442,13 +442,40 @@ export default function CompaniesListPage() {
         )}
       </div>
 
-      <div className="mb-4 text-sm text-muted-foreground">
-        Showing {filtered.length} of {companies.length} companies
+      <div className="mb-4 flex items-center justify-between">
+        <span className="text-sm text-muted-foreground">
+          Showing {filtered.length} of {companies.length} companies
+        </span>
+        {/* Header "Find candidates" button — shown when filters active but no checkboxes selected */}
+        {selectedIds.size === 0 && (searchQuery || activeFilters > 0) && filtered.length > 0 && (
+          <button
+            onClick={() => {
+              const ids = filtered.map(c => c.company_id)
+              const state = { compoundCompany: ids, compoundCompanyScope: 'ever' }
+              router.push(`/?filters=${encodeURIComponent(JSON.stringify(state))}`)
+            }}
+            style={{ padding: '6px 14px', fontSize: 'var(--fs-13)', fontFamily: 'var(--font-sans)', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--r-button)', cursor: 'pointer', fontWeight: 'var(--fw-medium)' as any }}
+          >
+            Find candidates from filtered list ({filtered.length})
+          </button>
+        )}
       </div>
 
       {selectedIds.size > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-3 p-3 bg-watch/10 border border-watch/30 rounded-lg">
           <span className="text-sm text-watch font-medium">{selectedIds.size} selected</span>
+
+          {/* Find candidates from selected */}
+          <button
+            onClick={() => {
+              const ids = Array.from(selectedIds)
+              const state = { compoundCompany: ids, compoundCompanyScope: 'ever' }
+              router.push(`/?filters=${encodeURIComponent(JSON.stringify(state))}`)
+            }}
+            style={{ padding: '4px 12px', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--r-button)', cursor: 'pointer', fontWeight: 'var(--fw-medium)' as any }}
+          >
+            Find candidates at {selectedIds.size} selected
+          </button>
 
           {/* Bulk focus change */}
           <div className="flex items-center gap-2">
