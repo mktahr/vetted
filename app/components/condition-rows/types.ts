@@ -9,6 +9,7 @@ export type ConditionTargetType = 'specific' | 'attributes'
 
 export interface CompanyAttributes {
   stage?: string[]
+  size?: string[]
   focus?: string[]
   foundedAfter?: number
   foundedBefore?: number

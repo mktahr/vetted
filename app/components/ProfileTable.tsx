@@ -650,6 +650,7 @@ export default function ProfileTable() {
         const attrs = row.target.companyAttributes
         const matching = companiesRaw.filter(comp => {
           if (attrs.stage?.length && (!comp.funding_stage || !attrs.stage.includes(comp.funding_stage))) return false
+          if (attrs.size?.length && (!comp.headcount_range || !attrs.size.includes(comp.headcount_range))) return false
           if (attrs.focus?.length && !attrs.focus.includes(comp.focus)) return false
           if (attrs.industry?.length && (!comp.primary_industry_tag || !attrs.industry.includes(comp.primary_industry_tag))) return false
           if (attrs.foundedAfter && (!comp.founding_year || comp.founding_year < attrs.foundedAfter)) return false

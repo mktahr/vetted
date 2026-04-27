@@ -7,19 +7,33 @@ import { MultiSelect, MultiSelectOption } from '../MultiSelect'
 interface ConditionRowEditorProps {
   row: ConditionRow
   entityType: ConditionEntityType
-  entityOptions: MultiSelectOption[]         // company or school options
+  entityOptions: MultiSelectOption[]
   specialtyOptions: MultiSelectOption[]
   seniorityOptions: MultiSelectOption[]
-  // Attribute options (company-specific)
   industryOptions?: MultiSelectOption[]
   focusOptions?: MultiSelectOption[]
   stageOptions?: MultiSelectOption[]
-  // School-specific
+  sizeOptions?: MultiSelectOption[]
   schoolGroupOptions?: MultiSelectOption[]
   onSave: (row: ConditionRow) => void
   onCancel: () => void
   onDelete: () => void
 }
+
+const STAGE_OPTIONS: MultiSelectOption[] = [
+  { value: 'Pre-Seed', label: 'Pre-Seed' }, { value: 'Seed', label: 'Seed' },
+  { value: 'Series A', label: 'Series A' }, { value: 'Series B', label: 'Series B' },
+  { value: 'Series C', label: 'Series C' }, { value: 'Series D+', label: 'Series D+' },
+  { value: 'Growth', label: 'Growth' }, { value: 'Public', label: 'Public' },
+  { value: 'Acquired', label: 'Acquired' }, { value: 'Bootstrapped', label: 'Bootstrapped' },
+]
+
+const SIZE_OPTIONS: MultiSelectOption[] = [
+  { value: '1-10', label: '1-10' }, { value: '11-50', label: '11-50' },
+  { value: '51-200', label: '51-200' }, { value: '201-500', label: '201-500' },
+  { value: '501-1000', label: '501-1000' }, { value: '1001-5000', label: '1001-5000' },
+  { value: '5000+', label: '5000+' },
+]
 
 const scopeBtn = (active: boolean): React.CSSProperties => ({
   padding: '2px 8px', fontSize: 'var(--fs-11)', fontFamily: 'var(--font-sans)',
@@ -35,7 +49,7 @@ const inputStyle: React.CSSProperties = { width: '100%', padding: '4px 8px', bor
 
 export default function ConditionRowEditor({
   row, entityType, entityOptions, specialtyOptions, seniorityOptions,
-  industryOptions, focusOptions, stageOptions, schoolGroupOptions,
+  industryOptions, focusOptions, schoolGroupOptions,
   onSave, onCancel, onDelete,
 }: ConditionRowEditorProps) {
   const [scope, setScope] = useState<TemporalScope>(row.scope)
@@ -43,7 +57,6 @@ export default function ConditionRowEditor({
   const [entityIds, setEntityIds] = useState<string[]>(
     entityType === 'company' ? (row.target.companyIds || []) : (row.target.schoolIds || [])
   )
-  // Attributes
   const [attrIndustry, setAttrIndustry] = useState<string[]>(row.target.companyAttributes?.industry || [])
   const [attrFocus, setAttrFocus] = useState<string[]>(row.target.companyAttributes?.focus || [])
   const [attrStage, setAttrStage] = useState<string[]>(row.target.companyAttributes?.stage || [])
@@ -54,10 +67,10 @@ export default function ConditionRowEditor({
   const [yearFrom, setYearFrom] = useState(row.yearFrom?.toString() || '')
   const [yearTo, setYearTo] = useState(row.yearTo?.toString() || '')
   const [specialty, setSpecialty] = useState(row.specialty || '')
-  const [showAdvanced, setShowAdvanced] = useState(!!row.seniority)
   const [seniority, setSeniority] = useState(row.seniority || '')
 
   const ref = useRef<HTMLDivElement>(null)
+  const [flipUp, setFlipUp] = useState(false)
 
   // Click outside to cancel
   useEffect(() => {
@@ -68,14 +81,29 @@ export default function ConditionRowEditor({
     return () => document.removeEventListener('mousedown', handleClick)
   }, [onCancel])
 
-  // Smart auto-detection: year range end < current year → scope = previously
+  // Issue 6: Flip popover up if near bottom of viewport
+  useEffect(() => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect()
+      if (rect.bottom > window.innerHeight - 20) setFlipUp(true)
+    }
+  }, [])
+
+  // Smart auto-detection
   useEffect(() => {
     const yt = yearTo ? parseInt(yearTo) : null
     if (yt && yt < new Date().getFullYear()) setScope('previously')
     else if (yearFrom && !yearTo) setScope('currently')
   }, [yearFrom, yearTo])
 
+  // Issue 1: Validation — must have at least one target set
+  const isValid = targetType === 'specific'
+    ? entityIds.length > 0
+    : (attrIndustry.length > 0 || attrFocus.length > 0 || attrStage.length > 0 ||
+       !!attrFoundedAfter || !!attrFoundedBefore || attrSchoolGroups.length > 0)
+
   function handleSave() {
+    if (!isValid) return
     const built: ConditionRow = {
       id: row.id,
       scope,
@@ -106,20 +134,42 @@ export default function ConditionRowEditor({
     onSave(built)
   }
 
+  // Issue 5: Segmented control style
+  const segLeft: React.CSSProperties = {
+    padding: '3px 10px', fontSize: 'var(--fs-11)', fontFamily: 'var(--font-sans)',
+    border: '1px solid var(--border-default)', borderRight: 'none',
+    borderRadius: 'var(--r-chip) 0 0 var(--r-chip)',
+    background: targetType === 'specific' ? 'var(--bg-surface-raised)' : 'transparent',
+    color: targetType === 'specific' ? 'var(--fg-primary)' : 'var(--fg-tertiary)',
+    fontWeight: targetType === 'specific' ? 'var(--fw-medium)' as any : 'normal',
+    cursor: 'pointer', lineHeight: '1.5',
+  }
+  const segRight: React.CSSProperties = {
+    padding: '3px 10px', fontSize: 'var(--fs-11)', fontFamily: 'var(--font-sans)',
+    border: '1px solid var(--border-default)',
+    borderRadius: '0 var(--r-chip) var(--r-chip) 0',
+    background: targetType === 'attributes' ? 'var(--bg-surface-raised)' : 'transparent',
+    color: targetType === 'attributes' ? 'var(--fg-primary)' : 'var(--fg-tertiary)',
+    fontWeight: targetType === 'attributes' ? 'var(--fw-medium)' as any : 'normal',
+    cursor: 'pointer', lineHeight: '1.5',
+  }
+
   return (
     <div ref={ref} style={{
-      position: 'absolute', top: '100%', left: 0, zIndex: 100,
-      width: 320, padding: 12, marginTop: 4,
+      position: 'absolute',
+      ...(flipUp ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }),
+      left: 0, zIndex: 100,
+      width: 320, padding: 12,
       background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
       borderRadius: 'var(--r-card, 8px)', boxShadow: 'var(--shadow-float)',
       fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-12)',
     }}>
-      {/* Target type toggle */}
-      <div style={{ display: 'flex', gap: 2, marginBottom: 8 }}>
-        <button style={scopeBtn(targetType === 'specific')} onClick={() => setTargetType('specific')}>
+      {/* Issue 5: Segmented control for target type */}
+      <div style={{ display: 'flex', marginBottom: 8 }}>
+        <button style={segLeft} onClick={() => setTargetType('specific')}>
           Specific {entityType === 'company' ? 'companies' : 'schools'}
         </button>
-        <button style={scopeBtn(targetType === 'attributes')} onClick={() => setTargetType('attributes')}>
+        <button style={segRight} onClick={() => setTargetType('attributes')}>
           {entityType === 'company' ? 'Company' : 'School'} attributes
         </button>
       </div>
@@ -140,9 +190,10 @@ export default function ConditionRowEditor({
               {focusOptions && focusOptions.length > 0 && (
                 <MultiSelect label="Focus" options={focusOptions} selected={attrFocus} onChange={setAttrFocus} placeholder="Any focus" />
               )}
-              {stageOptions && stageOptions.length > 0 && (
-                <MultiSelect label="Stage" options={stageOptions} selected={attrStage} onChange={setAttrStage} placeholder="Any stage" />
-              )}
+              {/* Issue 3: Stage */}
+              <MultiSelect label="Stage" options={STAGE_OPTIONS} selected={attrStage} onChange={setAttrStage} placeholder="Any stage" />
+              {/* Issue 3: Size */}
+              <MultiSelect label="Size" options={SIZE_OPTIONS} selected={[]} onChange={() => {}} placeholder="Any size (data pending)" />
               <div>
                 <div style={lblStyle}>Founded year</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -184,7 +235,7 @@ export default function ConditionRowEditor({
         </div>
       )}
 
-      {/* Specialty */}
+      {/* Specialty — Issue 4: inline, not hidden */}
       {entityType === 'company' && specialtyOptions.length > 0 && (
         <div style={{ marginBottom: 8 }}>
           <MultiSelect label="Specialty" options={specialtyOptions} selected={specialty ? [specialty] : []}
@@ -192,25 +243,18 @@ export default function ConditionRowEditor({
         </div>
       )}
 
-      {/* Advanced */}
-      {entityType === 'company' && (
-        <>
-          <button onClick={() => setShowAdvanced(!showAdvanced)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-tertiary)', fontSize: 'var(--fs-11)', fontFamily: 'var(--font-sans)', marginBottom: showAdvanced ? 4 : 0 }}>
-            {showAdvanced ? '▾ Advanced' : '▸ Advanced'}
-          </button>
-          {showAdvanced && seniorityOptions.length > 0 && (
-            <div style={{ marginBottom: 8 }}>
-              <MultiSelect label="Seniority" options={seniorityOptions} selected={seniority ? [seniority] : []}
-                onChange={v => setSeniority(v[0] || '')} placeholder="Any seniority" />
-            </div>
-          )}
-        </>
+      {/* Issue 4: Seniority inline (no Advanced collapse) */}
+      {entityType === 'company' && seniorityOptions.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          <MultiSelect label="Seniority" options={seniorityOptions} selected={seniority ? [seniority] : []}
+            onChange={v => setSeniority(v[0] || '')} placeholder="Any seniority" />
+        </div>
       )}
 
-      {/* Actions */}
+      {/* Actions — Issue 1: Save disabled without valid target */}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={handleSave} style={{ padding: '4px 12px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: 'var(--r-button)', cursor: 'pointer', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)' }}>Save</button>
+          <button onClick={handleSave} disabled={!isValid} style={{ padding: '4px 12px', background: isValid ? 'var(--accent)' : 'var(--bg-surface-raised)', color: isValid ? 'white' : 'var(--fg-tertiary)', border: 'none', borderRadius: 'var(--r-button)', cursor: isValid ? 'pointer' : 'not-allowed', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)' }}>Save</button>
           <button onClick={onCancel} style={{ padding: '4px 12px', background: 'none', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-button)', cursor: 'pointer', color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)' }}>Cancel</button>
         </div>
         <button onClick={onDelete} style={{ padding: '4px 12px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)' }}>Delete</button>

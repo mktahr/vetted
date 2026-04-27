@@ -23,15 +23,17 @@ export default function ConditionRowPill({ row, entityType, entityNameMap, onEdi
       else parts.push(`${names[0]} +${names.length - 1}`)
     }
   } else {
-    // Attributes summary
+    // Issue 2: Attributes summary with prefixed labels
     const attrs = entityType === 'company' ? row.target.companyAttributes : row.target.schoolAttributes
     if (attrs) {
       const attrParts: string[] = []
-      if ('stage' in attrs && (attrs as any).stage?.length) attrParts.push((attrs as any).stage.join('/'))
-      if ('focus' in attrs && (attrs as any).focus?.length) attrParts.push((attrs as any).focus.join('/'))
-      if ('industry' in attrs && (attrs as any).industry?.length) attrParts.push((attrs as any).industry.slice(0, 2).join('/'))
-      if ('schoolGroups' in attrs && (attrs as any).schoolGroups?.length) attrParts.push((attrs as any).schoolGroups.map((g: string) => g.replace(/_/g, ' ')).join(', '))
-      parts.push(attrParts.length > 0 ? attrParts.join(' · ') : 'Any')
+      if ('industry' in attrs && (attrs as any).industry?.length) attrParts.push('Industry: ' + (attrs as any).industry.slice(0, 2).join('/'))
+      if ('stage' in attrs && (attrs as any).stage?.length) attrParts.push('Stage: ' + (attrs as any).stage.join('/'))
+      if ('focus' in attrs && (attrs as any).focus?.length) attrParts.push('Focus: ' + (attrs as any).focus.join('/'))
+      if ('foundedAfter' in attrs && (attrs as any).foundedAfter) attrParts.push('Founded ≥' + (attrs as any).foundedAfter)
+      if ('foundedBefore' in attrs && (attrs as any).foundedBefore) attrParts.push('Founded ≤' + (attrs as any).foundedBefore)
+      if ('schoolGroups' in attrs && (attrs as any).schoolGroups?.length) attrParts.push('Group: ' + (attrs as any).schoolGroups.map((g: string) => g.replace(/_/g, ' ')).join(', '))
+      parts.push(attrParts.length > 0 ? attrParts.join(', ') : 'Any')
     }
   }
 
