@@ -57,6 +57,7 @@ interface EducationLite {
   degree_raw: string | null
   degree_level: string | null
   field_of_study_raw: string | null
+  start_year: number | null
   end_year: number | null
 }
 
@@ -301,7 +302,7 @@ export default function ProfileTable() {
           supabase.from('people').select('*, companies:current_company_id ( company_name )').order('created_at', { ascending: false }),
           supabase.from('candidate_bucket_assignments').select('person_id, candidate_bucket, assignment_reason, effective_at').order('effective_at', { ascending: false }),
           supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, seniority_normalized, start_date, end_date, is_current, employment_type_normalized, title_raw, description_raw'),
-          supabase.from('person_education').select('person_id, school_id, school_name_raw, degree_raw, degree_level, field_of_study_raw, end_year'),
+          supabase.from('person_education').select('person_id, school_id, school_name_raw, degree_raw, degree_level, field_of_study_raw, start_year, end_year'),
           supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
           fetchAllRows<any>('companies', 'company_id, company_name, primary_industry_tag, focus, company_groups', 'company_name').then(data => ({ data })),
           fetchAllRows<any>('schools', 'school_id, school_name, school_score, is_foreign, school_groups, school_type', 'school_name').then(data => ({ data })),
@@ -349,7 +350,8 @@ export default function ProfileTable() {
               school_id: r.school_id, school_name_raw: (r as any).school_name_raw ?? null,
               school_type: schoolRecord?.school_type ?? null,
               degree_raw: (r as any).degree_raw ?? null, degree_level: (r as any).degree_level ?? null,
-              field_of_study_raw: (r as any).field_of_study_raw ?? null, end_year: (r as any).end_year ?? null,
+              field_of_study_raw: (r as any).field_of_study_raw ?? null,
+              start_year: (r as any).start_year ?? null, end_year: (r as any).end_year ?? null,
             })
           }
         }
@@ -1069,7 +1071,7 @@ export default function ProfileTable() {
                 deg = DEGREE_ABBREV[e.degree_level]
                 if (e.field_of_study_raw) deg += ' ' + e.field_of_study_raw
               } else if (e.degree_raw) deg = e.degree_raw
-              return { schoolName: sn, degree: deg, startYear: null, endYear: e.end_year } satisfies DrawerEducation
+              return { schoolName: sn, degree: deg, startYear: e.start_year, endYear: e.end_year } satisfies DrawerEducation
             })
         })()}
         experiences={(() => {

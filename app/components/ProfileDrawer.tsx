@@ -1,7 +1,7 @@
 'use client'
 
 import { Person, CandidateBucket } from '../types'
-import CompanyLogo, { guessDomain } from './CompanyLogo'
+import CompanyLogo, { guessDomain, guessSchoolDomain } from './CompanyLogo'
 
 export interface DrawerExperience {
   company_id: string | null
@@ -178,14 +178,17 @@ export default function ProfileDrawer({ person, experiences, education, signals,
               <Field label="Education">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {education.map((edu, i) => (
-                    <div key={i}>
-                      <div style={{ color: 'var(--fg-primary)', fontWeight: 'var(--fw-medium)' }}>{edu.schoolName}</div>
-                      {edu.degree && <div style={{ color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)' }}>{edu.degree}</div>}
-                      {(edu.startYear || edu.endYear) && (
-                        <div style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-mono)' }}>
-                          {edu.startYear || '?'} – {edu.endYear || 'Present'}
-                        </div>
-                      )}
+                    <div key={i} style={{ display: 'flex', gap: 8 }}>
+                      <CompanyLogo domain={guessSchoolDomain(edu.schoolName)} companyName={edu.schoolName} size={20} shape="circle" />
+                      <div>
+                        <div style={{ color: 'var(--fg-primary)', fontWeight: 'var(--fw-medium)' }}>{edu.schoolName}</div>
+                        {edu.degree && <div style={{ color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)' }}>{edu.degree}</div>}
+                        {(edu.startYear || edu.endYear) && (
+                          <div style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-mono)' }}>
+                            {edu.startYear ?? ''}{edu.startYear && edu.endYear ? ' – ' : ''}{edu.endYear ?? ''}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
