@@ -159,7 +159,6 @@ export default function ProfileTable() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
-  const [companyChipExpanded, setCompanyChipExpanded] = useState(false)
 
   // Filter state
   const [bucketSel, setBucketSel] = useState<string[]>([])
@@ -197,8 +196,12 @@ export default function ProfileTable() {
     }))
   }
   const [focusScope, setFocusScope] = useState<FocusScope>('all')
-  const [compoundCompany, setCompoundCompany] = useState<string[]>([])
-  const [compoundCompanyScope, setCompoundCompanyScope] = useState<TemporalScope>('ever')
+  const [compoundCompanyPills, setCompoundCompanyPills] = useState<ScopedPill[]>([])
+  // Derived for backward compat
+  const compoundCompany = compoundCompanyPills.map(p => p.value)
+  const setCompoundCompany = (vals: string[]) => {
+    setCompoundCompanyPills(vals.map(v => compoundCompanyPills.find(p => p.value === v) || { value: v, scope: 'ever' as TemporalScope }))
+  }
   const [compoundSpecialties, setCompoundSpecialties] = useState<string[]>([])
   const [compoundYearMin, setCompoundYearMin] = useState<string>('')
   const [compoundYearMax, setCompoundYearMax] = useState<string>('')
@@ -278,15 +281,17 @@ export default function ProfileTable() {
       if (f.clearanceSel) setClearanceSel(f.clearanceSel)
       if (f.locationSel) setLocationSel(f.locationSel)
       if (f.focusScope) setFocusScope(f.focusScope)
-      // Backward compat: compoundCompany was a string, now string[]
-      if (f.compoundCompany) {
-        if (Array.isArray(f.compoundCompany)) setCompoundCompany(f.compoundCompany)
-        else if (typeof f.compoundCompany === 'string') setCompoundCompany([f.compoundCompany])
+      // Per-pill scope: new format has compoundCompanyPills, old format has compoundCompany + compoundCompanyScope
+      if (f.compoundCompanyPills) setCompoundCompanyPills(f.compoundCompanyPills)
+      else if (f.compoundCompany) {
+        let scope: TemporalScope = 'ever'
+        if (f.compoundCompanyScope === 'currently') scope = 'currently'
+        else if (f.compoundCompanyScope === 'previously') scope = 'previously'
+        else if (f.compoundRelationship === 'current') scope = 'currently'
+        else if (f.compoundRelationship === 'previous') scope = 'previously'
+        const ids = Array.isArray(f.compoundCompany) ? f.compoundCompany : [f.compoundCompany]
+        setCompoundCompanyPills((ids as string[]).map(v => ({ value: v, scope })))
       }
-      if (f.compoundCompanyScope) setCompoundCompanyScope(f.compoundCompanyScope)
-      // Backward compat: old compoundRelationship → compoundCompanyScope
-      else if (f.compoundRelationship === 'current') setCompoundCompanyScope('currently')
-      else if (f.compoundRelationship === 'previous') setCompoundCompanyScope('previously')
       if (f.compoundSpecialties) setCompoundSpecialties(f.compoundSpecialties)
       if (f.compoundYearMin) setCompoundYearMin(f.compoundYearMin)
       if (f.compoundYearMax) setCompoundYearMax(f.compoundYearMax)
@@ -633,35 +638,35 @@ export default function ProfileTable() {
     else if (focusScope === 'all_tech') rows = rows.filter(p => p.experiences_lite.some(e => e.company_focus === 'hard_tech' || e.company_focus === 'all_tech'))
 
     // Compound company filter with temporal scope + multi-select (OR across companies)
-    if (compoundCompany.length > 0) {
-      const selectedCompanies = new Set(compoundCompany)
+    // Compound company filter with per-pill scope (OR across pills)
+    if (compoundCompanyPills.length > 0) {
       const y1 = compoundYearMin ? parseInt(compoundYearMin, 10) : null
       const y2 = compoundYearMax ? parseInt(compoundYearMax, 10) : null
       const needSpecs = compoundSpecialties.length > 0 ? new Set(compoundSpecialties) : null
       const rStart = y1 && !isNaN(y1) ? new Date(y1, 0, 1).getTime() : null
       const rEnd = y2 && !isNaN(y2) ? new Date(y2, 11, 31).getTime() : null
-      const matchesExp = (e: typeof rows[0]['experiences_lite'][0]) => {
-        if (!e.company_id || !selectedCompanies.has(e.company_id)) return false
-        if (needSpecs && !(e.specialty && needSpecs.has(e.specialty))) return false
-        if (compoundCompanyScope === 'currently' && !e.is_current) return false
-        if (compoundCompanyScope === 'previously' && e.is_current) return false
-        if (rStart || rEnd) {
-          const eS = e.start_date ? new Date(e.start_date).getTime() : null
-          const eE = e.end_date ? new Date(e.end_date).getTime() : null
-          if (rEnd && eS && eS > rEnd) return false
-          if (rStart && eE && eE < rStart) return false
+
+      rows = rows.filter(p => compoundCompanyPills.some(pill => {
+        const matchesExp = (e: typeof rows[0]['experiences_lite'][0]) => {
+          if (e.company_id !== pill.value) return false
+          if (needSpecs && !(e.specialty && needSpecs.has(e.specialty))) return false
+          if (pill.scope === 'currently' && !e.is_current) return false
+          if (pill.scope === 'previously' && e.is_current) return false
+          if (rStart || rEnd) {
+            const eS = e.start_date ? new Date(e.start_date).getTime() : null
+            const eE = e.end_date ? new Date(e.end_date).getTime() : null
+            if (rEnd && eS && eS > rEnd) return false
+            if (rStart && eE && eE < rStart) return false
+          }
+          return true
         }
-        return true
-      }
-      if (compoundCompanyScope === 'previously') {
-        rows = rows.filter(p => {
+        if (pill.scope === 'previously') {
           const hasMatch = p.experiences_lite.some(e => matchesExp(e))
-          const hasCurrent = p.experiences_lite.some(e => e.company_id && selectedCompanies.has(e.company_id) && e.is_current)
+          const hasCurrent = p.experiences_lite.some(e => e.company_id === pill.value && e.is_current)
           return hasMatch && !hasCurrent
-        })
-      } else {
-        rows = rows.filter(p => p.experiences_lite.some(e => matchesExp(e)))
-      }
+        }
+        return p.experiences_lite.some(e => matchesExp(e))
+      }))
     }
 
     // ── Condition rows (new model) ──────────────────────────────────────
@@ -776,7 +781,7 @@ export default function ProfileTable() {
 
     if (sortField) rows.sort((a, b) => { const av = (a[sortField] as number) ?? -1, bv = (b[sortField] as number) ?? -1; return sortDirection === 'asc' ? av - bv : bv - av })
     return rows
-  }, [people, searchQuery, bucketSel, stageSel, rolePills, seniorityPills, schoolSel, schoolTemporalScope, locationSel, specialtyPills, clearanceSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel, companyConditions, schoolConditions, companiesRaw, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap])
+  }, [people, searchQuery, bucketSel, stageSel, rolePills, seniorityPills, schoolSel, schoolTemporalScope, locationSel, specialtyPills, clearanceSel, focusScope, compoundCompanyPills, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel, companyConditions, schoolConditions, companiesRaw, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap])
 
   const activeFilterCount =
     (roleSel.length > 0 ? 1 : 0) + (bucketSel.length > 0 ? 1 : 0) + (stageSel.length > 0 ? 1 : 0) +
@@ -795,7 +800,7 @@ export default function ProfileTable() {
     setYearsMin(''); setYearsMax(''); setTitleBoolean(''); setTitleBooleanScope('ever'); setExperienceBoolean('')
     setSignalSel([]); setSchoolGroupSel([]); setCompanyGroupSel([]); setAcceleratorSel([])
     setCompanyConditions([]); setSchoolConditions([])
-    setRolePills([]); setSpecialtyPills([]); setSeniorityPills([]); setCompoundCompanyScope('ever')
+    setRolePills([]); setSpecialtyPills([]); setSeniorityPills([]); setCompoundCompanyPills([])
     setSchoolTemporalScope('ever'); setSchoolGroupScope('ever'); setCompanyGroupScope('ever')
   }
 
@@ -826,15 +831,11 @@ export default function ProfileTable() {
   if (yearsMin || yearsMax) chips.push({ label: `Yrs: ${yearsMin || '0'}–${yearsMax || '∞'}`, onRemove: () => { setYearsMin(''); setYearsMax('') } })
   for (const v of clearanceSel) chips.push({ label: `Clearance: ${v.replace(/_/g, ' ')}`, onRemove: () => setClearanceSel(clearanceSel.filter(x => x !== v)) })
   for (const v of locationSel) chips.push({ label: `Location: ${v}`, onRemove: () => setLocationSel(locationSel.filter(x => x !== v)) })
-  if (compoundCompany.length > 0) {
-    const companyLabels = compoundCompany.map(id => companyOptions.find(c => c.value === id)?.label || '?')
-    const clearCompanies = () => { setCompoundCompany([]); setCompoundSpecialties([]); setCompoundYearMin(''); setCompoundYearMax(''); setCompoundCompanyScope('ever') }
-    if (compoundCompany.length <= 5) {
-      chips.push({ label: `At: ${companyLabels.join(', ')}`, onRemove: clearCompanies })
-    } else {
-      // Collapsed chip — rendered specially below via companyChipCollapsed flag
-      chips.push({ label: `__company_collapsed__`, onRemove: clearCompanies })
-    }
+  for (const pill of compoundCompanyPills) {
+    const label = companyOptions.find(c => c.value === pill.value)?.label || '?'
+    chips.push({ label: `At: ${label}${pill.scope !== 'ever' ? ` · ${pill.scope}` : ''}`, onRemove: () => {
+      setCompoundCompanyPills(compoundCompanyPills.filter(p => p.value !== pill.value))
+    }})
   }
   for (const v of schoolSel) { const sc = schoolOptions.find(s => s.value === v); chips.push({ label: `School: ${sc?.label || v}`, onRemove: () => setSchoolSel(schoolSel.filter(x => x !== v)) }) }
   if (titleBoolean) chips.push({ label: `Title: "${titleBoolean}"`, onRemove: () => setTitleBoolean('') })
@@ -863,7 +864,7 @@ export default function ProfileTable() {
         locationSel={locationSel} setLocationSel={setLocationSel} locationOptions={locationOptions}
         focusScope={focusScope} setFocusScope={setFocusScope}
         compoundCompany={compoundCompany} setCompoundCompany={setCompoundCompany}
-        compoundCompanyScope={compoundCompanyScope} setCompoundCompanyScope={setCompoundCompanyScope}
+        compoundCompanyPills={compoundCompanyPills} setCompoundCompanyPills={setCompoundCompanyPills}
         compoundSpecialties={compoundSpecialties} setCompoundSpecialties={setCompoundSpecialties}
         compoundYearMin={compoundYearMin} setCompoundYearMin={setCompoundYearMin}
         compoundYearMax={compoundYearMax} setCompoundYearMax={setCompoundYearMax}
@@ -882,7 +883,7 @@ export default function ProfileTable() {
         onOpenBuilder={() => {
           // Encode current filter state as JSON in URL param
           const state = {
-            rolePills, specialtyPills, seniorityPills, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel,
+            rolePills, specialtyPills, seniorityPills, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, focusScope, compoundCompanyPills, compoundSpecialties, compoundYearMin, compoundYearMax, schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel,
             cc: companyConditions.map(conditionToCompact),
             sc: schoolConditions.map(conditionToCompact),
           }
@@ -914,30 +915,7 @@ export default function ProfileTable() {
 
           {chips.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-              {chips.map((c, i) => {
-                // Collapsed company chip — special rendering
-                if (c.label === '__company_collapsed__') {
-                  const companyLabels = compoundCompany.map(id => companyOptions.find(co => co.value === id)?.label || '?')
-                  return (
-                    <span key={i} style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
-                      background: 'var(--accent-950)', color: 'var(--accent-400)',
-                      borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)',
-                      border: '1px solid var(--accent-900)', flexWrap: 'wrap',
-                    }}>
-                      {companyChipExpanded ? (
-                        <>
-                          <span style={{ cursor: 'pointer' }} onClick={() => setCompanyChipExpanded(false)}>At: {companyLabels.join(', ')}</span>
-                          <button onClick={() => setCompanyChipExpanded(false)} style={{ color: 'var(--accent-500)', cursor: 'pointer', background: 'none', border: 'none', fontSize: 'var(--fs-11)' }}>▴</button>
-                        </>
-                      ) : (
-                        <span style={{ cursor: 'pointer' }} onClick={() => setCompanyChipExpanded(true)}>At: {compoundCompany.length} companies ▾</span>
-                      )}
-                      <button onClick={c.onRemove} style={{ color: 'var(--accent-500)', fontWeight: 700, cursor: 'pointer', background: 'none', border: 'none', fontSize: 'var(--fs-12)' }}>×</button>
-                    </span>
-                  )
-                }
-                return (
+              {chips.map((c, i) => (
                   <span key={i} style={{
                     display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
                     background: 'var(--accent-950)', color: 'var(--accent-400)',
@@ -947,8 +925,7 @@ export default function ProfileTable() {
                     {c.label}
                     <button onClick={c.onRemove} style={{ color: 'var(--accent-500)', fontWeight: 700, cursor: 'pointer', background: 'none', border: 'none', fontSize: 'var(--fs-12)' }}>×</button>
                   </span>
-                )
-              })}
+              ))}
             </div>
           )}
 

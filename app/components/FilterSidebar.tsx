@@ -36,7 +36,8 @@ export interface FilterSidebarProps {
   locationOptions: MultiSelectOption[]
   focusScope: FocusScope;        setFocusScope: (v: FocusScope) => void
   compoundCompany: string[];     setCompoundCompany: (v: string[]) => void
-  compoundCompanyScope: 'ever' | 'currently' | 'previously'; setCompoundCompanyScope: (v: 'ever' | 'currently' | 'previously') => void
+  compoundCompanyPills: Array<{ value: string; scope: 'ever' | 'currently' | 'previously' }>
+  setCompoundCompanyPills: (v: Array<{ value: string; scope: 'ever' | 'currently' | 'previously' }>) => void
   compoundSpecialties: string[]; setCompoundSpecialties: (v: string[]) => void
   compoundYearMin: string;       setCompoundYearMin: (v: string) => void
   compoundYearMax: string;       setCompoundYearMax: (v: string) => void
@@ -224,16 +225,26 @@ export default function FilterSidebar(props: FilterSidebarProps) {
         {/* WHERE THEY WORKED */}
         <SH icon={<IconBriefcase />} label="Where they worked" />
         <div style={{ marginBottom: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-            <Lbl>Company</Lbl>
-            <div style={{ display: 'flex', gap: 2 }}>
-              <ToggleBtn active={props.compoundCompanyScope === 'ever'} onClick={() => props.setCompoundCompanyScope('ever')}>Ever</ToggleBtn>
-              <ToggleBtn active={props.compoundCompanyScope === 'currently'} onClick={() => props.setCompoundCompanyScope('currently')}>Currently</ToggleBtn>
-              <ToggleBtn active={props.compoundCompanyScope === 'previously'} onClick={() => props.setCompoundCompanyScope('previously')}>Previously</ToggleBtn>
-            </div>
-          </div>
+          <Lbl>Company</Lbl>
           <MultiSelect label="" options={props.companyOptions} selected={props.compoundCompany}
             onChange={props.setCompoundCompany} placeholder="Search companies…" emptyMessage="No match" />
+          {props.compoundCompanyPills.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
+              {props.compoundCompanyPills.map(pill => {
+                const label = props.companyOptions.find(o => o.value === pill.value)?.label || pill.value
+                return (
+                  <span key={pill.value} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, padding: '1px 6px', fontSize: 'var(--fs-11)', fontFamily: 'var(--font-sans)', background: 'var(--bg-surface-raised)', border: '1px solid var(--border-default)', borderRadius: 'var(--r-chip)' }}>
+                    <span style={{ color: 'var(--fg-primary)' }}>{label}</span>
+                    <select value={pill.scope} onChange={e => props.setCompoundCompanyPills(props.compoundCompanyPills.map(p => p.value === pill.value ? { ...p, scope: e.target.value as any } : p))} style={{ background: 'none', border: 'none', color: 'var(--fg-tertiary)', fontSize: 'var(--fs-10)', fontFamily: 'var(--font-sans)', cursor: 'pointer', padding: 0 }}>
+                      <option value="ever">ever</option>
+                      <option value="currently">currently</option>
+                      <option value="previously">previously</option>
+                    </select>
+                  </span>
+                )
+              })}
+            </div>
+          )}
         </div>
         {props.compoundCompany.length > 0 && (
           <>

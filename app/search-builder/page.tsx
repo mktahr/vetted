@@ -249,14 +249,18 @@ function SearchBuilderInner() {
           if (f.clearanceSel) setClearanceSel(f.clearanceSel)
           if (f.locationSel) setLocationSel(f.locationSel)
           if (f.focusScope) setFocusScope(f.focusScope)
-          if (f.compoundCompany) {
+          // Per-pill scope: new format from ProfileTable
+          if (f.compoundCompanyPills && Array.isArray(f.compoundCompanyPills)) {
+            setCompoundCompany(f.compoundCompanyPills.map((p: any) => p.value))
+            // Use scope from first pill as filter-level scope (search builder doesn't do per-pill yet)
+            if (f.compoundCompanyPills.length > 0) setCompoundCompanyScope(f.compoundCompanyPills[0].scope || 'ever')
+          } else if (f.compoundCompany) {
             if (Array.isArray(f.compoundCompany)) setCompoundCompany(f.compoundCompany)
             else if (typeof f.compoundCompany === 'string') setCompoundCompany([f.compoundCompany])
+            if (f.compoundCompanyScope) setCompoundCompanyScope(f.compoundCompanyScope)
+            else if (f.compoundRelationship === 'current') setCompoundCompanyScope('currently')
+            else if (f.compoundRelationship === 'previous') setCompoundCompanyScope('previously')
           }
-          if (f.compoundCompanyScope) setCompoundCompanyScope(f.compoundCompanyScope)
-          // Backward compat: old compoundRelationship maps to scope
-          else if (f.compoundRelationship === 'current') setCompoundCompanyScope('currently')
-          else if (f.compoundRelationship === 'previous') setCompoundCompanyScope('previously')
           if (f.compoundSpecialties) setCompoundSpecialties(f.compoundSpecialties)
           if (f.compoundYearMin) setCompoundYearMin(f.compoundYearMin)
           if (f.compoundYearMax) setCompoundYearMax(f.compoundYearMax)
@@ -284,7 +288,8 @@ function SearchBuilderInner() {
     const state = {
       rolePills, specialtyPills, seniorityPills,
       bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, focusScope,
-      compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax,
+      compoundCompanyPills: compoundCompany.map(v => ({ value: v, scope: compoundCompanyScope })),
+      compoundSpecialties, compoundYearMin, compoundYearMax,
       schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean,
       signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope,
       cc: companyConditions.map(conditionToCompact),
