@@ -178,8 +178,10 @@ export default function ProfileDrawer({ person, experiences, education, signals,
               <Field label="Education">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {education.map((edu, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 8 }}>
-                      <CompanyLogo domain={guessSchoolDomain(edu.schoolName)} companyName={edu.schoolName} size={20} shape="circle" />
+                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                      <div style={{ flexShrink: 0, marginTop: 2 }}>
+                        <CompanyLogo domain={guessSchoolDomain(edu.schoolName)} companyName={edu.schoolName} size={20} shape="circle" />
+                      </div>
                       <div>
                         <div style={{ color: 'var(--fg-primary)', fontWeight: 'var(--fw-medium)' }}>{edu.schoolName}</div>
                         {edu.degree && <div style={{ color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)' }}>{edu.degree}</div>}

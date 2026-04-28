@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Person, Experience, Education, BucketAssignment, CandidateBucket, ClearanceLevel, ScoreComponent } from '../../types'
-import CompanyLogo, { guessDomain } from '../../components/CompanyLogo'
+import CompanyLogo, { guessDomain, guessSchoolDomain } from '../../components/CompanyLogo'
 
 function cleanCompanyName(name: string | null | undefined): string | null {
   if (!name) return null
@@ -308,6 +308,55 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        {/* Overview — Title, Company, Experience, Stage (moved to top) */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-background rounded-lg">
+          <div>
+            <p className="text-xs text-tertiary uppercase">Title</p>
+            <p className="font-medium text-sm">{person.current_title_normalized || person.current_title_raw || 'N/A'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-tertiary uppercase">Company</p>
+            <div className="flex items-center gap-1.5 font-medium text-sm">
+              <CompanyLogo domain={guessDomain(companyName)} companyName={companyName} size={18} />
+              {companyName || 'N/A'}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-tertiary uppercase">Experience</p>
+            <p className="font-medium text-sm">{person.years_experience_estimate != null ? `${person.years_experience_estimate} years` : 'N/A'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-tertiary uppercase">Stage</p>
+            <p className="font-medium text-sm">{person.career_stage_assigned?.replace(/_/g, ' ') || 'N/A'}</p>
+          </div>
+        </div>
+
+        {/* Education — right after overview, before summary */}
+        {education.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">Education</h2>
+            <div className="space-y-3">
+              {education.map((edu) => (
+                <div key={edu.person_education_id} className="flex items-start gap-3">
+                  <CompanyLogo domain={guessSchoolDomain(edu.school_name || edu.school_name_raw)} companyName={edu.school_name || edu.school_name_raw} size={20} shape="circle" />
+                  <div>
+                    <p className="font-medium text-sm">{edu.school_name || edu.school_name_raw || 'Unknown school'}</p>
+                    {(edu.degree_normalized || edu.degree_raw || edu.field_of_study_raw) && (
+                      <p className="text-muted-foreground text-xs">
+                        {edu.degree_normalized || edu.degree_raw}
+                        {edu.field_of_study_normalized || edu.field_of_study_raw ? `, ${edu.field_of_study_normalized || edu.field_of_study_raw}` : ''}
+                      </p>
+                    )}
+                    {(edu.start_year || edu.end_year) && (
+                      <p className="text-tertiary text-xs">{edu.start_year ?? ''}{edu.start_year && edu.end_year ? ' — ' : ''}{edu.end_year ?? ''}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* AI narrative summary */}
         <div className="mb-6 p-4 bg-card border border-border rounded-lg">
           <div className="flex items-center justify-between mb-2">
@@ -415,29 +464,6 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* Overview grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 p-4 bg-background rounded-lg">
-          <div>
-            <p className="text-xs text-tertiary uppercase">Title</p>
-            <p className="font-medium text-sm">{person.current_title_normalized || person.current_title_raw || 'N/A'}</p>
-          </div>
-          <div>
-            <p className="text-xs text-tertiary uppercase">Company</p>
-            <div className="flex items-center gap-1.5 font-medium text-sm">
-              <CompanyLogo domain={guessDomain(companyName)} companyName={companyName} size={18} />
-              {companyName || 'N/A'}
-            </div>
-          </div>
-          <div>
-            <p className="text-xs text-tertiary uppercase">Experience</p>
-            <p className="font-medium text-sm">{person.years_experience_estimate != null ? `${person.years_experience_estimate} years` : 'N/A'}</p>
-          </div>
-          <div>
-            <p className="text-xs text-tertiary uppercase">Stage</p>
-            <p className="font-medium text-sm">{person.career_stage_assigned?.replace(/_/g, ' ') || 'N/A'}</p>
-          </div>
-        </div>
-
         {/* Admin — clearance */}
         <div className="mb-8 p-4 bg-muted border border-border rounded-lg">
           <div className="flex items-center justify-between mb-3">
@@ -493,41 +519,6 @@ export default function ProfilePage() {
             <p className="text-muted-foreground whitespace-pre-wrap text-sm">{person.summary_raw}</p>
           </div>
         )}
-
-        {/* Education (moved near top — high signal for recruiters) */}
-        <div className="mb-8">
-          <h2 className="text-lg font-semibold mb-3">
-            Education {education.length > 0 && <span className="text-tertiary font-normal">({education.length})</span>}
-          </h2>
-          {education.length === 0 ? (
-            <p className="text-tertiary text-sm">No education data yet</p>
-          ) : (
-            <div className="space-y-4">
-              {education.map((edu) => (
-                <div key={edu.person_education_id} className="border-l-2 border-border pl-4 py-1">
-                  <p className="font-medium">
-                    {edu.school_name || edu.school_name_raw || 'Unknown school'}
-                  </p>
-                  {(edu.degree_normalized || edu.degree_raw || edu.field_of_study_raw) && (
-                    <p className="text-muted-foreground text-sm">
-                      {edu.degree_normalized || edu.degree_raw}
-                      {edu.field_of_study_normalized || edu.field_of_study_raw
-                        ? `, ${edu.field_of_study_normalized || edu.field_of_study_raw}`
-                        : ''}
-                    </p>
-                  )}
-                  {(edu.start_year || edu.end_year) && (
-                    <p className="text-tertiary text-xs mt-0.5">
-                      {edu.start_year && `${edu.start_year}`}
-                      {edu.start_year && edu.end_year && ' — '}
-                      {edu.end_year && `${edu.end_year}`}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
 
         {/* Experience */}
         <div className="mb-8">
