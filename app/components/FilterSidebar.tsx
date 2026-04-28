@@ -121,6 +121,19 @@ export default function FilterSidebar(props: FilterSidebarProps) {
           </button>
         )}
 
+        {/* CLEAR ALL — top */}
+        {props.activeFilterCount > 0 && (
+          <button onClick={props.clearAllFilters} style={{
+            width: '100%', marginBottom: 12, padding: '5px 12px',
+            fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)',
+            color: 'var(--fg-secondary)', background: 'none',
+            border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-button)',
+            cursor: 'pointer',
+          }}>
+            Clear all filters ({props.activeFilterCount})
+          </button>
+        )}
+
         {/* SEARCH SCOPE */}
         <SH icon={<IconSearch />} label="Search scope" />
         <div style={{ marginBottom: 16 }}>

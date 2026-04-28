@@ -494,6 +494,41 @@ export default function ProfilePage() {
           </div>
         )}
 
+        {/* Education (moved near top — high signal for recruiters) */}
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold mb-3">
+            Education {education.length > 0 && <span className="text-tertiary font-normal">({education.length})</span>}
+          </h2>
+          {education.length === 0 ? (
+            <p className="text-tertiary text-sm">No education data yet</p>
+          ) : (
+            <div className="space-y-4">
+              {education.map((edu) => (
+                <div key={edu.person_education_id} className="border-l-2 border-border pl-4 py-1">
+                  <p className="font-medium">
+                    {edu.school_name || edu.school_name_raw || 'Unknown school'}
+                  </p>
+                  {(edu.degree_normalized || edu.degree_raw || edu.field_of_study_raw) && (
+                    <p className="text-muted-foreground text-sm">
+                      {edu.degree_normalized || edu.degree_raw}
+                      {edu.field_of_study_normalized || edu.field_of_study_raw
+                        ? `, ${edu.field_of_study_normalized || edu.field_of_study_raw}`
+                        : ''}
+                    </p>
+                  )}
+                  {(edu.start_year || edu.end_year) && (
+                    <p className="text-tertiary text-xs mt-0.5">
+                      {edu.start_year && `${edu.start_year}`}
+                      {edu.start_year && edu.end_year && ' — '}
+                      {edu.end_year && `${edu.end_year}`}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Experience */}
         <div className="mb-8">
           <h2 className="text-lg font-semibold mb-3">
@@ -525,41 +560,6 @@ export default function ProfilePage() {
                   </p>
                   {exp.description_raw && (
                     <p className="text-muted-foreground text-sm mt-1">{exp.description_raw}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Education */}
-        <div className="mb-8">
-          <h2 className="text-lg font-semibold mb-3">
-            Education {education.length > 0 && <span className="text-tertiary font-normal">({education.length})</span>}
-          </h2>
-          {education.length === 0 ? (
-            <p className="text-tertiary text-sm">No education data yet</p>
-          ) : (
-            <div className="space-y-4">
-              {education.map((edu) => (
-                <div key={edu.person_education_id} className="border-l-2 border-border pl-4 py-1">
-                  <p className="font-medium">
-                    {edu.school_name || edu.school_name_raw || 'Unknown school'}
-                  </p>
-                  {(edu.degree_normalized || edu.degree_raw || edu.field_of_study_raw) && (
-                    <p className="text-muted-foreground text-sm">
-                      {edu.degree_normalized || edu.degree_raw}
-                      {edu.field_of_study_normalized || edu.field_of_study_raw
-                        ? `, ${edu.field_of_study_normalized || edu.field_of_study_raw}`
-                        : ''}
-                    </p>
-                  )}
-                  {(edu.start_year || edu.end_year) && (
-                    <p className="text-tertiary text-xs mt-0.5">
-                      {edu.start_year && `${edu.start_year}`}
-                      {edu.start_year && edu.end_year && ' — '}
-                      {edu.end_year && `${edu.end_year}`}
-                    </p>
                   )}
                 </div>
               ))}

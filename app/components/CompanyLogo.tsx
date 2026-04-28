@@ -19,7 +19,7 @@ export default function CompanyLogo({ domain, companyName, size = 24, shape = 's
   const [failed, setFailed] = useState(false)
   const token = process.env.NEXT_PUBLIC_LOGO_DEV_API_KEY
 
-  const initial = (companyName || '?')[0].toUpperCase()
+  const initial = companyName ? companyName[0].toUpperCase() : '—'
   const borderRadius = shape === 'circle' ? '50%' : '4px'
 
   // If we have a domain and the key, try logo.dev
