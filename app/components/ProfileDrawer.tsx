@@ -173,20 +173,7 @@ export default function ProfileDrawer({ person, experiences, education, signals,
 
             {person.location_name && <Field label="Location"><span style={{ color: 'var(--fg-primary)' }}>{person.location_name}</span></Field>}
 
-            {person.years_experience_estimate != null && (
-              <Field label="Experience">
-                <span style={{ color: 'var(--fg-primary)' }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>{person.years_experience_estimate}</span> years
-                  {person.career_stage_assigned && (
-                    <span style={{ marginLeft: 8, padding: '1px 8px', background: 'var(--bg-surface-raised)', color: 'var(--fg-tertiary)', borderRadius: 'var(--r-full)', fontSize: 'var(--fs-12)', border: '1px solid var(--border-subtle)' }}>
-                      {person.career_stage_assigned.replace(/_/g, ' ')}
-                    </span>
-                  )}
-                </span>
-              </Field>
-            )}
-
-            {/* Education */}
+            {/* Education — near top, high-signal for recruiters */}
             {education.length > 0 && (
               <Field label="Education">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -202,6 +189,19 @@ export default function ProfileDrawer({ person, experiences, education, signals,
                     </div>
                   ))}
                 </div>
+              </Field>
+            )}
+
+            {person.years_experience_estimate != null && (
+              <Field label="Experience">
+                <span style={{ color: 'var(--fg-primary)' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>{person.years_experience_estimate}</span> years
+                  {person.career_stage_assigned && (
+                    <span style={{ marginLeft: 8, padding: '1px 8px', background: 'var(--bg-surface-raised)', color: 'var(--fg-tertiary)', borderRadius: 'var(--r-full)', fontSize: 'var(--fs-12)', border: '1px solid var(--border-subtle)' }}>
+                      {person.career_stage_assigned.replace(/_/g, ' ')}
+                    </span>
+                  )}
+                </span>
               </Field>
             )}
 

@@ -170,13 +170,16 @@ export function guessSchoolDomain(schoolName: string | null | undefined): string
     'caltech': 'caltech.edu',
     'ucla': 'ucla.edu',
     'university of california, los angeles': 'ucla.edu',
+    'ucsd': 'ucsd.edu',
     'uc san diego': 'ucsd.edu',
     'university of california, san diego': 'ucsd.edu',
     'nyu': 'nyu.edu',
     'penn': 'upenn.edu',
     'the wharton school': 'wharton.upenn.edu',
     'columbia': 'columbia.edu',
+    'cornell': 'cornell.edu',
     'cornell university': 'cornell.edu',
+    'princeton': 'princeton.edu',
     'princeton university': 'princeton.edu',
     'dartmouth': 'dartmouth.edu',
     'yale': 'yale.edu',
@@ -187,10 +190,13 @@ export function guessSchoolDomain(schoolName: string | null | undefined): string
     'university of michigan': 'umich.edu',
     'university of texas at austin': 'utexas.edu',
     'the university of texas at austin': 'utexas.edu',
+    'usc': 'usc.edu',
     'university of southern california': 'usc.edu',
     'university of oxford': 'ox.ac.uk',
     'university of cambridge': 'cam.ac.uk',
+    'georgia tech': 'gatech.edu',
     'georgia institute of technology': 'gatech.edu',
+    'carnegie mellon': 'cmu.edu',
     'carnegie mellon university': 'cmu.edu',
     'university of waterloo': 'uwaterloo.ca',
     'university of toronto': 'utoronto.ca',
@@ -204,6 +210,7 @@ export function guessSchoolDomain(schoolName: string | null | undefined): string
     'technion - israel institute of technology': 'technion.ac.il',
     'the hebrew university of jerusalem': 'huji.ac.il',
     'indian institute of technology, kharagpur': 'iitkgp.ac.in',
+    'lmu': 'lmu.edu',
     'loyola marymount university': 'lmu.edu',
     'loyola marymount university, college of business administration': 'lmu.edu',
     'pasadena city college': 'pasadena.edu',
@@ -229,12 +236,7 @@ export function guessSchoolDomain(schoolName: string | null | undefined): string
 
   if (OVERRIDES[lower]) return OVERRIDES[lower]
 
-  // Generic: strip "University of", "The", common suffixes, then .edu
-  const cleaned = lower
-    .replace(/^the\s+/, '')
-    .replace(/\s*\(.*?\)\s*/g, '')
-    .replace(/,.*$/, '')
-    .replace(/[^a-z0-9]/g, '')
-  if (cleaned.length >= 2) return `${cleaned}.edu`
+  // No generic fallback for schools — logo.dev returns broken placeholders
+  // for unknown .edu domains. Only show logos for schools in the override map.
   return null
 }
