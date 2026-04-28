@@ -1054,7 +1054,7 @@ export default function ProfileTable() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} title={fullText}>
                               <CompanyLogo domain={guessSchoolDomain(edu.schoolName)} companyName={edu.schoolName} size={20} shape="circle" />
                               <span style={{ color: 'var(--fg-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {edu.schoolName}{edu.degree ? <span style={{ color: 'var(--fg-tertiary)' }}> · {edu.degree}</span> : ''}
+                                {edu.schoolName}
                               </span>
                             </div>
                           )
