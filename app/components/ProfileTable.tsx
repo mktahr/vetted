@@ -162,19 +162,40 @@ export default function ProfileTable() {
   const [companyChipExpanded, setCompanyChipExpanded] = useState(false)
 
   // Filter state
-  const [roleSel, setRoleSel] = useState<string[]>([])
   const [bucketSel, setBucketSel] = useState<string[]>([])
   const [stageSel, setStageSel] = useState<string[]>([])
-  const [senioritySel, setSenioritySel] = useState<string[]>([])
   const [schoolSel, setSchoolSel] = useState<string[]>([])
   const [locationSel, setLocationSel] = useState<string[]>([])
-  const [specialtySel, setSpecialtySel] = useState<string[]>([])
   const [clearanceSel, setClearanceSel] = useState<string[]>([])
-  // Temporal scope type: 'ever' (default) | 'currently' | 'previously'
+  // Per-pill scope: each selected value has its own temporal scope
   type TemporalScope = 'ever' | 'currently' | 'previously'
-  const [roleScope, setRoleScope] = useState<TemporalScope>('ever')
-  const [specialtyScope, setSpecialtyScope] = useState<TemporalScope>('ever')
-  const [seniorityScope, setSeniorityScope] = useState<TemporalScope>('ever')
+  type ScopedPill = { value: string; scope: TemporalScope }
+  const [rolePills, setRolePills] = useState<ScopedPill[]>([])
+  const [specialtyPills, setSpecialtyPills] = useState<ScopedPill[]>([])
+  const [seniorityPills, setSeniorityPills] = useState<ScopedPill[]>([])
+  // Derived flat arrays for backward compat with code reading sel arrays
+  const roleSel = rolePills.map(p => p.value)
+  const specialtySel = specialtyPills.map(p => p.value)
+  const senioritySel = seniorityPills.map(p => p.value)
+  // Setter wrappers: when MultiSelect changes values, wrap new ones with default scope 'ever'
+  const setRoleSel = (vals: string[]) => {
+    setRolePills(vals.map(v => {
+      const existing = rolePills.find(p => p.value === v)
+      return existing || { value: v, scope: 'ever' as TemporalScope }
+    }))
+  }
+  const setSpecialtySel = (vals: string[]) => {
+    setSpecialtyPills(vals.map(v => {
+      const existing = specialtyPills.find(p => p.value === v)
+      return existing || { value: v, scope: 'ever' as TemporalScope }
+    }))
+  }
+  const setSenioritySel = (vals: string[]) => {
+    setSeniorityPills(vals.map(v => {
+      const existing = seniorityPills.find(p => p.value === v)
+      return existing || { value: v, scope: 'ever' as TemporalScope }
+    }))
+  }
   const [focusScope, setFocusScope] = useState<FocusScope>('all')
   const [compoundCompany, setCompoundCompany] = useState<string[]>([])
   const [compoundCompanyScope, setCompoundCompanyScope] = useState<TemporalScope>('ever')
@@ -231,15 +252,25 @@ export default function ProfileTable() {
     if (!raw) { setUrlHydrated(true); return }
     try {
       const f = JSON.parse(decodeURIComponent(raw))
-      if (f.roleSel) setRoleSel(f.roleSel)
-      if (f.roleScope) setRoleScope(f.roleScope)
-      if (f.specialtySel) setSpecialtySel(f.specialtySel)
-      // Backward compat: old 'any'/'current' → 'ever'/'currently'
-      if (f.specialtyScope === 'any') setSpecialtyScope('ever')
-      else if (f.specialtyScope === 'current') setSpecialtyScope('currently')
-      else if (f.specialtyScope) setSpecialtyScope(f.specialtyScope)
-      if (f.senioritySel) setSenioritySel(f.senioritySel)
-      if (f.seniorityScope) setSeniorityScope(f.seniorityScope)
+      // Per-pill scope: new format has rolePills, old format has roleSel + roleScope
+      if (f.rolePills) setRolePills(f.rolePills)
+      else if (f.roleSel) {
+        const scope = f.roleScope || 'ever'
+        setRolePills((f.roleSel as string[]).map(v => ({ value: v, scope })))
+      }
+      if (f.specialtyPills) setSpecialtyPills(f.specialtyPills)
+      else if (f.specialtySel) {
+        let scope: TemporalScope = 'ever'
+        if (f.specialtyScope === 'any' || f.specialtyScope === 'ever') scope = 'ever'
+        else if (f.specialtyScope === 'current' || f.specialtyScope === 'currently') scope = 'currently'
+        else if (f.specialtyScope === 'previously') scope = 'previously'
+        setSpecialtyPills((f.specialtySel as string[]).map(v => ({ value: v, scope })))
+      }
+      if (f.seniorityPills) setSeniorityPills(f.seniorityPills)
+      else if (f.senioritySel) {
+        const scope = f.seniorityScope || 'ever'
+        setSeniorityPills((f.senioritySel as string[]).map(v => ({ value: v, scope })))
+      }
       if (f.bucketSel) setBucketSel(f.bucketSel)
       if (f.stageSel) setStageSel(f.stageSel)
       if (f.yearsMin) setYearsMin(f.yearsMin)
@@ -482,22 +513,17 @@ export default function ProfileTable() {
     if (searchQuery) { const q = searchQuery.toLowerCase(); rows = rows.filter(p => p.full_name?.toLowerCase().includes(q) || p.current_company_name?.toLowerCase().includes(q) || p.current_title_raw?.toLowerCase().includes(q) || p.location_name?.toLowerCase().includes(q)) }
     if (bucketSel.length > 0) { const s = new Set(bucketSel); rows = rows.filter(p => p.latest_bucket && s.has(p.latest_bucket)) }
     if (stageSel.length > 0) { const s = new Set(stageSel); rows = rows.filter(p => p.career_stage_assigned && s.has(p.career_stage_assigned)) }
-    // Seniority with temporal scope
-    if (senioritySel.length > 0) {
-      const s = new Set(senioritySel)
-      if (seniorityScope === 'currently') {
-        // Match current role's seniority (from experiences_lite where is_current)
-        rows = rows.filter(p => p.experiences_lite.some(e => e.is_current && e.seniority && s.has(e.seniority)))
-      } else if (seniorityScope === 'previously') {
-        // Had seniority in past but NOT in current role
-        rows = rows.filter(p => {
-          const hasPast = p.experiences_lite.some(e => !e.is_current && e.seniority && s.has(e.seniority))
-          const hasCurrent = p.experiences_lite.some(e => e.is_current && e.seniority && s.has(e.seniority))
+    // Seniority with per-pill scope (OR across pills)
+    if (seniorityPills.length > 0) {
+      rows = rows.filter(p => seniorityPills.some(pill => {
+        if (pill.scope === 'currently') return p.experiences_lite.some(e => e.is_current && e.seniority === pill.value)
+        if (pill.scope === 'previously') {
+          const hasPast = p.experiences_lite.some(e => !e.is_current && e.seniority === pill.value)
+          const hasCurrent = p.experiences_lite.some(e => e.is_current && e.seniority === pill.value)
           return hasPast && !hasCurrent
-        })
-      } else {
-        rows = rows.filter(p => p.highest_seniority_reached && s.has(p.highest_seniority_reached))
-      }
+        }
+        return p.highest_seniority_reached === pill.value
+      }))
     }
 
     // School with temporal scope (infer current from end_year)
@@ -522,37 +548,32 @@ export default function ProfileTable() {
       rows = rows.filter(p => { if (!p.location_name) return false; return locationSel.some(sel => p.location_name!.toLowerCase().includes(sel.toLowerCase())) })
     }
 
-    // Role filter with its own temporal scope
-    if (roleSel.length > 0) {
-      const roleSpecs = new Set<string>()
-      for (const rid of roleSel) { for (const s of roleSpecialtyMap[rid] || []) roleSpecs.add(s) }
-      if (roleScope === 'currently') {
-        rows = rows.filter(p => p.primary_specialty && roleSpecs.has(p.primary_specialty))
-      } else if (roleScope === 'previously') {
-        rows = rows.filter(p => {
-          const hasPast = p.experiences_lite.some(e => !e.is_current && e.specialty && roleSpecs.has(e.specialty))
-          const hasCurrent = p.primary_specialty && roleSpecs.has(p.primary_specialty)
+    // Role filter with per-pill scope (OR across pills)
+    if (rolePills.length > 0) {
+      rows = rows.filter(p => rolePills.some(pill => {
+        const specs = new Set(roleSpecialtyMap[pill.value] || [])
+        if (specs.size === 0) return false
+        if (pill.scope === 'currently') return p.primary_specialty && specs.has(p.primary_specialty)
+        if (pill.scope === 'previously') {
+          const hasPast = p.experiences_lite.some(e => !e.is_current && e.specialty && specs.has(e.specialty))
+          const hasCurrent = p.primary_specialty && specs.has(p.primary_specialty)
           return hasPast && !hasCurrent
-        })
-      } else {
-        rows = rows.filter(p => Array.from(p.all_specialties).some(s => roleSpecs.has(s)))
-      }
+        }
+        return Array.from(p.all_specialties).some(s => specs.has(s))
+      }))
     }
 
-    // Specialty filter with temporal scope
-    if (specialtySel.length > 0) {
-      const s = new Set(specialtySel)
-      if (specialtyScope === 'currently') {
-        rows = rows.filter(p => p.primary_specialty && s.has(p.primary_specialty))
-      } else if (specialtyScope === 'previously') {
-        rows = rows.filter(p => {
-          const hasPast = p.experiences_lite.some(e => !e.is_current && e.specialty && s.has(e.specialty))
-          const hasCurrent = p.primary_specialty && s.has(p.primary_specialty)
+    // Specialty filter with per-pill scope (OR across pills)
+    if (specialtyPills.length > 0) {
+      rows = rows.filter(p => specialtyPills.some(pill => {
+        if (pill.scope === 'currently') return p.primary_specialty === pill.value
+        if (pill.scope === 'previously') {
+          const hasPast = p.experiences_lite.some(e => !e.is_current && e.specialty === pill.value)
+          const hasCurrent = p.primary_specialty === pill.value
           return hasPast && !hasCurrent
-        })
-      } else {
-        rows = rows.filter(p => Array.from(p.all_specialties).some(spec => s.has(spec)))
-      }
+        }
+        return p.all_specialties && (p.all_specialties as Set<string>).has(pill.value)
+      }))
     }
 
     if (clearanceSel.length > 0) { const s = new Set(clearanceSel); rows = rows.filter(p => p.clearance_level && s.has(p.clearance_level)) }
@@ -755,7 +776,7 @@ export default function ProfileTable() {
 
     if (sortField) rows.sort((a, b) => { const av = (a[sortField] as number) ?? -1, bv = (b[sortField] as number) ?? -1; return sortDirection === 'asc' ? av - bv : bv - av })
     return rows
-  }, [people, searchQuery, bucketSel, stageSel, roleSel, roleScope, senioritySel, seniorityScope, schoolSel, schoolTemporalScope, locationSel, specialtySel, specialtyScope, clearanceSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel, companyConditions, schoolConditions, companiesRaw, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap])
+  }, [people, searchQuery, bucketSel, stageSel, rolePills, seniorityPills, schoolSel, schoolTemporalScope, locationSel, specialtyPills, clearanceSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel, companyConditions, schoolConditions, companiesRaw, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap])
 
   const activeFilterCount =
     (roleSel.length > 0 ? 1 : 0) + (bucketSel.length > 0 ? 1 : 0) + (stageSel.length > 0 ? 1 : 0) +
@@ -774,7 +795,7 @@ export default function ProfileTable() {
     setYearsMin(''); setYearsMax(''); setTitleBoolean(''); setTitleBooleanScope('ever'); setExperienceBoolean('')
     setSignalSel([]); setSchoolGroupSel([]); setCompanyGroupSel([]); setAcceleratorSel([])
     setCompanyConditions([]); setSchoolConditions([])
-    setRoleScope('ever'); setSpecialtyScope('ever'); setSeniorityScope('ever'); setCompoundCompanyScope('ever')
+    setRolePills([]); setSpecialtyPills([]); setSeniorityPills([]); setCompoundCompanyScope('ever')
     setSchoolTemporalScope('ever'); setSchoolGroupScope('ever'); setCompanyGroupScope('ever')
   }
 
@@ -797,12 +818,9 @@ export default function ProfileTable() {
 
   const chips: Array<{ label: string; onRemove: () => void }> = []
   if (focusScope !== 'all') chips.push({ label: `Scope: ${focusScope.replace('_', ' ')}`, onRemove: () => setFocusScope('all') })
-  const roleScopeLabel = roleScope !== 'ever' ? ` · ${roleScope}` : ''
-  for (const v of roleSel) { const r = roleOptions.find(o => o.value === v); chips.push({ label: `Role: ${r?.label || v}${roleScopeLabel}`, onRemove: () => setRoleSel(roleSel.filter(x => x !== v)) }) }
-  const specScopeLabel = specialtyScope !== 'ever' ? ` · ${specialtyScope}` : ''
-  for (const v of specialtySel) chips.push({ label: `Specialty: ${v.replace(/_/g, ' ')}${specScopeLabel}`, onRemove: () => setSpecialtySel(specialtySel.filter(x => x !== v)) })
-  const senScopeLabel = seniorityScope !== 'ever' ? ` · ${seniorityScope}` : ''
-  for (const v of senioritySel) chips.push({ label: `Seniority: ${v.replace(/_/g, ' ')}${senScopeLabel}`, onRemove: () => setSenioritySel(senioritySel.filter(x => x !== v)) })
+  for (const pill of rolePills) { const r = roleOptions.find(o => o.value === pill.value); chips.push({ label: `Role: ${r?.label || pill.value}${pill.scope !== 'ever' ? ` · ${pill.scope}` : ''}`, onRemove: () => setRolePills(rolePills.filter(p => p.value !== pill.value)) }) }
+  for (const pill of specialtyPills) chips.push({ label: `Specialty: ${pill.value.replace(/_/g, ' ')}${pill.scope !== 'ever' ? ` · ${pill.scope}` : ''}`, onRemove: () => setSpecialtyPills(specialtyPills.filter(p => p.value !== pill.value)) })
+  for (const pill of seniorityPills) chips.push({ label: `Seniority: ${pill.value.replace(/_/g, ' ')}${pill.scope !== 'ever' ? ` · ${pill.scope}` : ''}`, onRemove: () => setSeniorityPills(seniorityPills.filter(p => p.value !== pill.value)) })
   for (const v of bucketSel) chips.push({ label: `Bucket: ${v.replace(/_/g, ' ')}`, onRemove: () => setBucketSel(bucketSel.filter(x => x !== v)) })
   for (const v of stageSel) chips.push({ label: `Stage: ${v.replace(/_/g, ' ')}`, onRemove: () => setStageSel(stageSel.filter(x => x !== v)) })
   if (yearsMin || yearsMax) chips.push({ label: `Yrs: ${yearsMin || '0'}–${yearsMax || '∞'}`, onRemove: () => { setYearsMin(''); setYearsMax('') } })
@@ -833,11 +851,11 @@ export default function ProfileTable() {
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)' }}>
       <FilterSidebar
-        roleSel={roleSel} setRoleSel={setRoleSel} roleScope={roleScope} setRoleScope={setRoleScope} roleOptions={roleOptions}
+        roleSel={roleSel} setRoleSel={setRoleSel} rolePills={rolePills} setRolePills={setRolePills} roleOptions={roleOptions}
         specialtySel={specialtySel} setSpecialtySel={setSpecialtySel}
-        specialtyScope={specialtyScope} setSpecialtyScope={setSpecialtyScope}
+        specialtyPills={specialtyPills} setSpecialtyPills={setSpecialtyPills}
         specialtyOptions={filteredSpecialtyOptions} allSpecialtyOptions={allSpecialtyOptions}
-        senioritySel={senioritySel} setSenioritySel={setSenioritySel} seniorityOptions={seniorityOptions}
+        senioritySel={senioritySel} setSenioritySel={setSenioritySel} seniorityPills={seniorityPills} setSeniorityPills={setSeniorityPills} seniorityOptions={seniorityOptions}
         bucketSel={bucketSel} setBucketSel={setBucketSel}
         stageSel={stageSel} setStageSel={setStageSel}
         yearsMin={yearsMin} setYearsMin={setYearsMin} yearsMax={yearsMax} setYearsMax={setYearsMax}
@@ -864,7 +882,7 @@ export default function ProfileTable() {
         onOpenBuilder={() => {
           // Encode current filter state as JSON in URL param
           const state = {
-            roleSel, roleScope, specialtySel, specialtyScope, senioritySel, seniorityScope, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel,
+            rolePills, specialtyPills, seniorityPills, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel,
             cc: companyConditions.map(conditionToCompact),
             sc: schoolConditions.map(conditionToCompact),
           }

@@ -15,13 +15,17 @@ type FocusScope = 'all' | 'hard_tech' | 'all_tech'
 
 export interface FilterSidebarProps {
   roleSel: string[];             setRoleSel: (v: string[]) => void
-  roleScope: 'ever' | 'currently' | 'previously'; setRoleScope: (v: 'ever' | 'currently' | 'previously') => void
+  rolePills: Array<{ value: string; scope: 'ever' | 'currently' | 'previously' }>
+  setRolePills: (v: Array<{ value: string; scope: 'ever' | 'currently' | 'previously' }>) => void
   roleOptions: MultiSelectOption[]
   specialtySel: string[];        setSpecialtySel: (v: string[]) => void
-  specialtyScope: 'ever' | 'currently' | 'previously'; setSpecialtyScope: (v: 'ever' | 'currently' | 'previously') => void
+  specialtyPills: Array<{ value: string; scope: 'ever' | 'currently' | 'previously' }>
+  setSpecialtyPills: (v: Array<{ value: string; scope: 'ever' | 'currently' | 'previously' }>) => void
   specialtyOptions: MultiSelectOption[]
   allSpecialtyOptions: MultiSelectOption[]
   senioritySel: string[];        setSenioritySel: (v: string[]) => void
+  seniorityPills: Array<{ value: string; scope: 'ever' | 'currently' | 'previously' }>
+  setSeniorityPills: (v: Array<{ value: string; scope: 'ever' | 'currently' | 'previously' }>) => void
   seniorityOptions: MultiSelectOption[]
   bucketSel: string[];           setBucketSel: (v: string[]) => void
   stageSel: string[];            setStageSel: (v: string[]) => void
@@ -147,29 +151,62 @@ export default function FilterSidebar(props: FilterSidebarProps) {
         {/* WHO THEY ARE */}
         <SH icon={<IconUser />} label="Who they are" />
         <div style={{ marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-            <Lbl>Role</Lbl>
-            <div style={{ display: 'flex', gap: 2 }}>
-              <ToggleBtn active={props.roleScope === 'ever'} onClick={() => props.setRoleScope('ever')}>Ever</ToggleBtn>
-              <ToggleBtn active={props.roleScope === 'currently'} onClick={() => props.setRoleScope('currently')}>Currently</ToggleBtn>
-              <ToggleBtn active={props.roleScope === 'previously'} onClick={() => props.setRoleScope('previously')}>Previously</ToggleBtn>
-            </div>
-          </div>
+          <Lbl>Role</Lbl>
           <MultiSelect label="" options={props.roleOptions} selected={props.roleSel} onChange={props.setRoleSel} placeholder="Any role" />
+          {props.rolePills.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
+              {props.rolePills.map(pill => {
+                const label = props.roleOptions.find(o => o.value === pill.value)?.label || pill.value
+                return (
+                  <span key={pill.value} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, padding: '1px 6px', fontSize: 'var(--fs-11)', fontFamily: 'var(--font-sans)', background: 'var(--bg-surface-raised)', border: '1px solid var(--border-default)', borderRadius: 'var(--r-chip)' }}>
+                    <span style={{ color: 'var(--fg-primary)' }}>{label}</span>
+                    <select value={pill.scope} onChange={e => props.setRolePills(props.rolePills.map(p => p.value === pill.value ? { ...p, scope: e.target.value as any } : p))} style={{ background: 'none', border: 'none', color: 'var(--fg-tertiary)', fontSize: 'var(--fs-10)', fontFamily: 'var(--font-sans)', cursor: 'pointer', padding: 0 }}>
+                      <option value="ever">ever</option>
+                      <option value="currently">currently</option>
+                      <option value="previously">previously</option>
+                    </select>
+                  </span>
+                )
+              })}
+            </div>
+          )}
         </div>
         <div style={{ marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-            <Lbl>Specialty</Lbl>
-            <div style={{ display: 'flex', gap: 2 }}>
-              <ToggleBtn active={props.specialtyScope === 'ever'} onClick={() => props.setSpecialtyScope('ever')}>Ever</ToggleBtn>
-              <ToggleBtn active={props.specialtyScope === 'currently'} onClick={() => props.setSpecialtyScope('currently')}>Currently</ToggleBtn>
-              <ToggleBtn active={props.specialtyScope === 'previously'} onClick={() => props.setSpecialtyScope('previously')}>Previously</ToggleBtn>
-            </div>
-          </div>
+          <Lbl>Specialty</Lbl>
           <MultiSelect label="" options={displayedSpecialties} selected={props.specialtySel} onChange={props.setSpecialtySel}
             placeholder={props.roleSel.length > 0 ? 'Specialties for selected role(s)' : 'Any specialty'} emptyMessage="No match" />
+          {props.specialtyPills.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
+              {props.specialtyPills.map(pill => (
+                <span key={pill.value} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, padding: '1px 6px', fontSize: 'var(--fs-11)', fontFamily: 'var(--font-sans)', background: 'var(--bg-surface-raised)', border: '1px solid var(--border-default)', borderRadius: 'var(--r-chip)' }}>
+                  <span style={{ color: 'var(--fg-primary)' }}>{pill.value.replace(/_/g, ' ')}</span>
+                  <select value={pill.scope} onChange={e => props.setSpecialtyPills(props.specialtyPills.map(p => p.value === pill.value ? { ...p, scope: e.target.value as any } : p))} style={{ background: 'none', border: 'none', color: 'var(--fg-tertiary)', fontSize: 'var(--fs-10)', fontFamily: 'var(--font-sans)', cursor: 'pointer', padding: 0 }}>
+                    <option value="ever">ever</option>
+                    <option value="currently">currently</option>
+                    <option value="previously">previously</option>
+                  </select>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-        <div style={{ marginBottom: 12 }}><MultiSelect label="Seniority" options={props.seniorityOptions} selected={props.senioritySel} onChange={props.setSenioritySel} placeholder="Any seniority" /></div>
+        <div style={{ marginBottom: 12 }}>
+          <MultiSelect label="Seniority" options={props.seniorityOptions} selected={props.senioritySel} onChange={props.setSenioritySel} placeholder="Any seniority" />
+          {props.seniorityPills.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
+              {props.seniorityPills.map(pill => (
+                <span key={pill.value} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, padding: '1px 6px', fontSize: 'var(--fs-11)', fontFamily: 'var(--font-sans)', background: 'var(--bg-surface-raised)', border: '1px solid var(--border-default)', borderRadius: 'var(--r-chip)' }}>
+                  <span style={{ color: 'var(--fg-primary)' }}>{pill.value.replace(/_/g, ' ')}</span>
+                  <select value={pill.scope} onChange={e => props.setSeniorityPills(props.seniorityPills.map(p => p.value === pill.value ? { ...p, scope: e.target.value as any } : p))} style={{ background: 'none', border: 'none', color: 'var(--fg-tertiary)', fontSize: 'var(--fs-10)', fontFamily: 'var(--font-sans)', cursor: 'pointer', padding: 0 }}>
+                    <option value="ever">ever</option>
+                    <option value="currently">currently</option>
+                    <option value="previously">previously</option>
+                  </select>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
         <div style={{ marginBottom: 12 }}><MultiSelect label="Bucket" options={BUCKET_OPTIONS} selected={props.bucketSel} onChange={props.setBucketSel} placeholder="Any bucket" /></div>
         <div style={{ marginBottom: 12 }}><MultiSelect label="Career stage" options={STAGE_OPTIONS} selected={props.stageSel} onChange={props.setStageSel} placeholder="Any stage" /></div>
         <div style={{ marginBottom: 12 }}>

@@ -68,18 +68,50 @@ function ScopeSelector({ value, onChange, label }: { value: TemporalScope; onCha
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
+type ScopedPillType = { value: string; scope: TemporalScope }
+
+function PillScopeRow({ pills, setPills, options, formatLabel }: {
+  pills: ScopedPillType[]
+  setPills: (p: ScopedPillType[]) => void
+  options?: Array<{ value: string; label: string }>
+  formatLabel?: (v: string) => string
+}) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
+      {pills.map(pill => {
+        const label = options?.find(o => o.value === pill.value)?.label || (formatLabel ? formatLabel(pill.value) : pill.value)
+        return (
+          <span key={pill.value} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, padding: '1px 6px', fontSize: 'var(--fs-11)', fontFamily: 'var(--font-sans)', background: 'var(--bg-surface-raised)', border: '1px solid var(--border-default)', borderRadius: 'var(--r-chip)' }}>
+            <span style={{ color: 'var(--fg-primary)' }}>{label}</span>
+            <select value={pill.scope} onChange={e => setPills(pills.map(p => p.value === pill.value ? { ...p, scope: e.target.value as TemporalScope } : p))} style={{ background: 'none', border: 'none', color: 'var(--fg-tertiary)', fontSize: 'var(--fs-10)', fontFamily: 'var(--font-sans)', cursor: 'pointer', padding: 0 }}>
+              <option value="ever">ever</option>
+              <option value="currently">currently</option>
+              <option value="previously">previously</option>
+            </select>
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 function SearchBuilderInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
 
   // ─── Filter state ───────────────────────────────────────────────────────
-  const [roleSel, setRoleSel] = useState<string[]>([])
-  const [roleScope, setRoleScope] = useState<TemporalScope>('ever')
-  const [specialtySel, setSpecialtySel] = useState<string[]>([])
-  const [specialtyScope, setSpecialtyScope] = useState<TemporalScope>('ever')
-  const [senioritySel, setSenioritySel] = useState<string[]>([])
-  const [seniorityScope, setSeniorityScope] = useState<TemporalScope>('ever')
+  type ScopedPill = { value: string; scope: TemporalScope }
+  const [rolePills, setRolePills] = useState<ScopedPill[]>([])
+  const [specialtyPills, setSpecialtyPills] = useState<ScopedPill[]>([])
+  const [seniorityPills, setSeniorityPills] = useState<ScopedPill[]>([])
+  // Derived for MultiSelect compat
+  const roleSel = rolePills.map(p => p.value)
+  const setRoleSel = (vals: string[]) => setRolePills(vals.map(v => rolePills.find(p => p.value === v) || { value: v, scope: 'ever' as TemporalScope }))
+  const specialtySel = specialtyPills.map(p => p.value)
+  const setSpecialtySel = (vals: string[]) => setSpecialtyPills(vals.map(v => specialtyPills.find(p => p.value === v) || { value: v, scope: 'ever' as TemporalScope }))
+  const senioritySel = seniorityPills.map(p => p.value)
+  const setSenioritySel = (vals: string[]) => setSeniorityPills(vals.map(v => seniorityPills.find(p => p.value === v) || { value: v, scope: 'ever' as TemporalScope }))
   const [bucketSel, setBucketSel] = useState<string[]>([])
   const [stageSel, setStageSel] = useState<string[]>([])
   const [yearsMin, setYearsMin] = useState('')
@@ -204,15 +236,12 @@ function SearchBuilderInner() {
       if (raw) {
         try {
           const f = JSON.parse(decodeURIComponent(raw))
-          if (f.roleSel) setRoleSel(f.roleSel)
-          if (f.roleScope) setRoleScope(f.roleScope)
-          if (f.specialtySel) setSpecialtySel(f.specialtySel)
-          // Backward compat: old 'any'/'current' maps to 'ever'/'currently'
-          if (f.specialtyScope === 'any') setSpecialtyScope('ever')
-          else if (f.specialtyScope === 'current') setSpecialtyScope('currently')
-          else if (f.specialtyScope) setSpecialtyScope(f.specialtyScope)
-          if (f.senioritySel) setSenioritySel(f.senioritySel)
-          if (f.seniorityScope) setSeniorityScope(f.seniorityScope)
+          if (f.rolePills) setRolePills(f.rolePills)
+          else if (f.roleSel) setRoleSel(f.roleSel)
+          if (f.specialtyPills) setSpecialtyPills(f.specialtyPills)
+          else if (f.specialtySel) setSpecialtySel(f.specialtySel)
+          if (f.seniorityPills) setSeniorityPills(f.seniorityPills)
+          else if (f.senioritySel) setSenioritySel(f.senioritySel)
           if (f.bucketSel) setBucketSel(f.bucketSel)
           if (f.stageSel) setStageSel(f.stageSel)
           if (f.yearsMin) setYearsMin(f.yearsMin)
@@ -253,7 +282,7 @@ function SearchBuilderInner() {
 
   function runSearch() {
     const state = {
-      roleSel, specialtySel, specialtyScope, senioritySel, seniorityScope,
+      rolePills, specialtyPills, seniorityPills,
       bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, focusScope,
       compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax,
       schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean,
@@ -296,16 +325,19 @@ function SearchBuilderInner() {
           <div style={headingStyle}>Who They Are</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
-              <ScopeSelector label="Role" value={roleScope} onChange={setRoleScope} />
+              <label style={lblStyle}>Role</label>
               <MultiSelect label="" options={roleOptions} selected={roleSel} onChange={setRoleSel} placeholder="Any role" />
+              {rolePills.length > 0 && <PillScopeRow pills={rolePills} setPills={setRolePills} options={roleOptions} />}
             </div>
             <div>
-              <ScopeSelector label="Specialty" value={specialtyScope} onChange={setSpecialtyScope} />
+              <label style={lblStyle}>Specialty</label>
               <MultiSelect label="" options={specialtyOptions} selected={specialtySel} onChange={setSpecialtySel} placeholder="Any specialty" />
+              {specialtyPills.length > 0 && <PillScopeRow pills={specialtyPills} setPills={setSpecialtyPills} formatLabel={v => v.replace(/_/g, ' ')} />}
             </div>
             <div>
-              <ScopeSelector label="Seniority" value={seniorityScope} onChange={setSeniorityScope} />
+              <label style={lblStyle}>Seniority</label>
               <MultiSelect label="" options={seniorityOptions} selected={senioritySel} onChange={setSenioritySel} placeholder="Any seniority" />
+              {seniorityPills.length > 0 && <PillScopeRow pills={seniorityPills} setPills={setSeniorityPills} formatLabel={v => v.replace(/_/g, ' ')} />}
             </div>
             <MultiSelect label="Bucket" options={BUCKET_OPTIONS} selected={bucketSel} onChange={setBucketSel} placeholder="Any bucket" />
             <MultiSelect label="Career Stage" options={STAGE_OPTIONS} selected={stageSel} onChange={setStageSel} placeholder="Any stage" />
