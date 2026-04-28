@@ -163,12 +163,25 @@ export default function ProfileDrawer({ person, experiences, education, signals,
               </Field>
             )}
 
-            {person.primary_specialty && (
-              <Field label="Specialty">
-                <span style={{ padding: '2px 8px', background: 'var(--tag-mist-bg)', color: 'var(--tag-mist-text)', border: '1px solid var(--tag-mist-border)', borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)' }}>
-                  {person.primary_specialty.replace(/_/g, ' ')}
-                </span>
-              </Field>
+            {/* Classification metadata — quiet label-value pairs */}
+            {(person.primary_specialty || person.current_function_normalized || person.highest_seniority_reached) && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 12px', fontSize: 'var(--fs-13)', fontFamily: 'var(--font-sans)' }}>
+                {person.primary_specialty && (
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Specialty</span><span style={{ color: 'var(--fg-primary)' }}>{person.primary_specialty.replace(/_/g, ' ')}</span></>
+                )}
+                {person.secondary_specialty && (
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Secondary</span><span style={{ color: 'var(--fg-primary)' }}>{person.secondary_specialty.replace(/_/g, ' ')}</span></>
+                )}
+                {person.current_function_normalized && (
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Function</span><span style={{ color: 'var(--fg-primary)' }}>{person.current_function_normalized.replace(/_/g, ' ')}</span></>
+                )}
+                {person.highest_seniority_reached && (
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Seniority</span><span style={{ color: 'var(--fg-primary)' }}>{person.highest_seniority_reached.replace(/_/g, ' ')}</span></>
+                )}
+                {person.title_level_slope && person.title_level_slope !== 'insufficient_data' && (
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Progression</span><span style={{ color: 'var(--fg-primary)' }}>{person.title_level_slope}</span></>
+                )}
+              </div>
             )}
 
             {person.location_name && <Field label="Location"><span style={{ color: 'var(--fg-primary)' }}>{person.location_name}</span></Field>}
@@ -208,10 +221,6 @@ export default function ProfileDrawer({ person, experiences, education, signals,
                   )}
                 </span>
               </Field>
-            )}
-
-            {person.current_function_normalized && (
-              <Field label="Function"><span style={{ color: 'var(--fg-primary)' }}>{person.current_function_normalized.replace(/_/g, ' ')}</span></Field>
             )}
 
             {person.headline_raw && (
@@ -269,9 +278,10 @@ export default function ProfileDrawer({ person, experiences, education, signals,
                           const url = sig.evidence_url || sig.canonical_url
                           const tooltip = `${sig.category.replace(/_/g, ' ')} · ${sig.source.replace(/_/g, ' ')}${sig.source_text ? ` · "${sig.source_text}"` : ''}`
 
+                          // Toned-down signal chips: dark muted bg, white text, subtle border
                           const chipStyle: React.CSSProperties = isCatchall
-                            ? { padding: '1px 7px', fontSize: 'var(--fs-11)', background: 'var(--bg-surface-raised)', color: 'var(--fg-tertiary)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-chip)', fontFamily: 'var(--font-sans)', cursor: url ? 'pointer' : 'default', textDecoration: 'none', lineHeight: '1.5' }
-                            : { padding: '1px 7px', fontSize: 'var(--fs-12)', background: 'var(--tag-mist-bg)', color: 'var(--tag-mist-text)', border: '1px solid var(--tag-mist-border)', borderRadius: 'var(--r-chip)', fontFamily: 'var(--font-sans)', cursor: url ? 'pointer' : 'default', textDecoration: 'none', lineHeight: '1.5' }
+                            ? { padding: '1px 6px', fontSize: 'var(--fs-11)', background: 'var(--bg-surface-raised)', color: 'var(--fg-tertiary)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-chip)', fontFamily: 'var(--font-sans)', cursor: url ? 'pointer' : 'default', textDecoration: 'none', lineHeight: '1.4' }
+                            : { padding: '1px 6px', fontSize: 'var(--fs-11)', background: 'var(--bg-surface-raised)', color: 'var(--fg-secondary)', border: '1px solid var(--border-default)', borderRadius: 'var(--r-chip)', fontFamily: 'var(--font-sans)', cursor: url ? 'pointer' : 'default', textDecoration: 'none', lineHeight: '1.4' }
 
                           if (url) {
                             return (

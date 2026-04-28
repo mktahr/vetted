@@ -49,6 +49,8 @@ export default function ProfilePage() {
   const [narrativeError, setNarrativeError] = useState<string | null>(null)
   const [skillsTags, setSkillsTags] = useState<string[]>([])
   const [skillsOpen, setSkillsOpen] = useState(false)
+  const [profileSignals, setProfileSignals] = useState<Array<{ canonical_name: string; category: string; evidence_url: string | null; canonical_url: string | null }>>([])
+
 
   useEffect(() => {
     async function fetchAll() {
@@ -107,6 +109,16 @@ export default function ProfilePage() {
           school_name: row.schools?.school_name || null,
         }))
         setEducation(edus)
+
+        // Fetch signals
+        const { data: sigData } = await supabase
+          .from('person_signals_active')
+          .select('signal_id, canonical_name, category, evidence_url, canonical_url')
+          .eq('person_id', params.id)
+          .order('confidence', { ascending: false })
+        // Deduplicate by signal_id
+        const seen = new Set<string>()
+        setProfileSignals((sigData || []).filter(s => { if (seen.has(s.signal_id)) return false; seen.add(s.signal_id); return true }))
 
         // Fetch latest bucket assignment
         const { data: bucketData } = await supabase
@@ -417,52 +429,49 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Derived signals */}
-        <div className="flex flex-wrap gap-2 mb-6">
-          {person.primary_specialty ? (
-            <span className="px-2 py-1 bg-info/10 text-info rounded text-xs border border-info/30">
-              {person.primary_specialty.replace(/_/g, ' ')}
-            </span>
-          ) : (
-            <span className="px-2 py-1 bg-background text-tertiary rounded text-xs border border-border">
-              specialty: unknown
-            </span>
+        {/* Classification metadata — quiet label-value grid */}
+        <div className="grid gap-x-4 gap-y-0.5 mb-6 text-sm" style={{ gridTemplateColumns: 'auto 1fr', maxWidth: 400 }}>
+          {person.primary_specialty && (
+            <><span className="text-muted-foreground">Specialty</span><span>{person.primary_specialty.replace(/_/g, ' ')}</span></>
           )}
           {person.secondary_specialty && (
-            <span className="px-2 py-1 bg-info/10 text-info rounded text-xs border border-info/20">
-              also: {person.secondary_specialty.replace(/_/g, ' ')}
-            </span>
+            <><span className="text-muted-foreground">Secondary</span><span>{person.secondary_specialty.replace(/_/g, ' ')}</span></>
           )}
-          {person.specialty_transition_flag && person.historical_specialty && (
-            <span className="px-2 py-1 bg-watch/10 text-watch rounded text-xs border border-watch/30">
-              career transition — previously {person.historical_specialty.replace(/_/g, ' ')}
-            </span>
-          )}
-          {person.title_level_slope && person.title_level_slope !== 'insufficient_data' && (
-            <span className={`px-2 py-1 rounded text-xs border ${
-              person.title_level_slope === 'rising' ? 'bg-positive/10 text-positive border-positive/30' :
-              person.title_level_slope === 'declining' ? 'bg-destructive/10 text-destructive border-destructive/30' :
-              'bg-background text-muted-foreground border-border'
-            }`}>
-              progression: {person.title_level_slope}
-            </span>
+          {person.current_function_normalized && (
+            <><span className="text-muted-foreground">Function</span><span>{person.current_function_normalized.replace(/_/g, ' ')}</span></>
           )}
           {person.highest_seniority_reached && (
-            <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded text-xs border border-purple-200">
-              top seniority: {person.highest_seniority_reached.replace(/_/g, ' ')}
-            </span>
+            <><span className="text-muted-foreground">Seniority</span><span>{person.highest_seniority_reached.replace(/_/g, ' ')}</span></>
+          )}
+          {person.title_level_slope && person.title_level_slope !== 'insufficient_data' && (
+            <><span className="text-muted-foreground">Progression</span><span>{person.title_level_slope}</span></>
           )}
           {person.has_early_stage_experience && (
-            <span className="px-2 py-1 bg-orange-50 text-orange-700 rounded text-xs border border-orange-200">
-              early-stage experience ({person.early_stage_companies_count})
-            </span>
+            <><span className="text-muted-foreground">Early-stage</span><span>{person.early_stage_companies_count} companies</span></>
           )}
           {person.has_hypergrowth_experience && (
-            <span className="px-2 py-1 bg-pink-50 text-pink-700 rounded text-xs border border-pink-200">
-              hypergrowth experience ({person.hypergrowth_companies_count})
-            </span>
+            <><span className="text-muted-foreground">Hypergrowth</span><span>{person.hypergrowth_companies_count} companies</span></>
           )}
         </div>
+
+        {/* Achievement signals — toned-down chips */}
+        {profileSignals.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">Signals</h2>
+            <div className="flex flex-wrap gap-1.5">
+              {profileSignals.map(sig => {
+                const url = sig.evidence_url || sig.canonical_url
+                const chip = (
+                  <span key={sig.canonical_name + sig.category} className="px-1.5 py-0.5 text-xs rounded border" style={{ background: 'var(--bg-surface-raised)', color: 'var(--fg-secondary)', borderColor: 'var(--border-default)' }}>
+                    {sig.canonical_name}
+                  </span>
+                )
+                if (url) return <a key={sig.canonical_name + sig.category} href={url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>{chip}</a>
+                return chip
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Admin — clearance */}
         <div className="mb-8 p-4 bg-muted border border-border rounded-lg">
