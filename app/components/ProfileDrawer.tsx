@@ -13,6 +13,13 @@ export interface DrawerExperience {
   employment_type: string | null
 }
 
+export interface DrawerEducation {
+  schoolName: string
+  degree: string
+  startYear: number | null
+  endYear: number | null
+}
+
 export interface DrawerSignal {
   signal_id: string
   canonical_name: string
@@ -27,6 +34,7 @@ export interface DrawerSignal {
 interface ProfileDrawerProps {
   person: Person | null
   experiences: DrawerExperience[]
+  education: DrawerEducation[]
   signals: DrawerSignal[]
   isOpen: boolean
   onClose: () => void
@@ -100,7 +108,7 @@ const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
   greek_life: 'Greek Life',
 }
 
-export default function ProfileDrawer({ person, experiences, signals, isOpen, onClose, onPrev, onNext }: ProfileDrawerProps) {
+export default function ProfileDrawer({ person, experiences, education, signals, isOpen, onClose, onPrev, onNext }: ProfileDrawerProps) {
   if (!isOpen || !person) return null
 
   const companyName = cleanCompanyName(person.current_company_name)
@@ -175,6 +183,25 @@ export default function ProfileDrawer({ person, experiences, signals, isOpen, on
                     </span>
                   )}
                 </span>
+              </Field>
+            )}
+
+            {/* Education */}
+            {education.length > 0 && (
+              <Field label="Education">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {education.map((edu, i) => (
+                    <div key={i}>
+                      <div style={{ color: 'var(--fg-primary)', fontWeight: 'var(--fw-medium)' }}>{edu.schoolName}</div>
+                      {edu.degree && <div style={{ color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)' }}>{edu.degree}</div>}
+                      {(edu.startYear || edu.endYear) && (
+                        <div style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-mono)' }}>
+                          {edu.startYear || '?'} – {edu.endYear || 'Present'}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </Field>
             )}
 

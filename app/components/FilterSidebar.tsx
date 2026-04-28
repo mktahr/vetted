@@ -15,6 +15,7 @@ type FocusScope = 'all' | 'hard_tech' | 'all_tech'
 
 export interface FilterSidebarProps {
   roleSel: string[];             setRoleSel: (v: string[]) => void
+  roleScope: 'ever' | 'currently' | 'previously'; setRoleScope: (v: 'ever' | 'currently' | 'previously') => void
   roleOptions: MultiSelectOption[]
   specialtySel: string[];        setSpecialtySel: (v: string[]) => void
   specialtyScope: 'ever' | 'currently' | 'previously'; setSpecialtyScope: (v: 'ever' | 'currently' | 'previously') => void
@@ -132,7 +133,17 @@ export default function FilterSidebar(props: FilterSidebarProps) {
 
         {/* WHO THEY ARE */}
         <SH icon={<IconUser />} label="Who they are" />
-        <div style={{ marginBottom: 12 }}><MultiSelect label="Role" options={props.roleOptions} selected={props.roleSel} onChange={props.setRoleSel} placeholder="Any role" /></div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Lbl>Role</Lbl>
+            <div style={{ display: 'flex', gap: 2 }}>
+              <ToggleBtn active={props.roleScope === 'ever'} onClick={() => props.setRoleScope('ever')}>Ever</ToggleBtn>
+              <ToggleBtn active={props.roleScope === 'currently'} onClick={() => props.setRoleScope('currently')}>Currently</ToggleBtn>
+              <ToggleBtn active={props.roleScope === 'previously'} onClick={() => props.setRoleScope('previously')}>Previously</ToggleBtn>
+            </div>
+          </div>
+          <MultiSelect label="" options={props.roleOptions} selected={props.roleSel} onChange={props.setRoleSel} placeholder="Any role" />
+        </div>
         <div style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
             <Lbl>Specialty</Lbl>

@@ -45,7 +45,7 @@ const scopeBtn = (active: boolean): React.CSSProperties => ({
 })
 
 const lblStyle: React.CSSProperties = { fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', marginBottom: 2, fontFamily: 'var(--font-sans)' }
-const inputStyle: React.CSSProperties = { width: '100%', padding: '4px 8px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-button)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)', background: 'var(--bg-surface)', color: 'var(--fg-primary)' }
+const inputStyle: React.CSSProperties = { width: '100%', maxWidth: 120, padding: '4px 8px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-button)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)', background: 'var(--bg-surface)', color: 'var(--fg-primary)' }
 
 export default function ConditionRowEditor({
   row, entityType, entityOptions, specialtyOptions, seniorityOptions,
@@ -134,11 +134,12 @@ export default function ConditionRowEditor({
     cursor: 'pointer', lineHeight: '1.5',
   }
 
-  // Inline expand: normal flow element inside the section card
+  // Inline expand: normal flow element, constrained width
   return (
     <div style={{
       padding: 12, background: 'var(--bg-canvas)', border: '1px solid var(--border-default)',
       borderRadius: 'var(--r-card, 8px)', fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-12)',
+      maxWidth: 480,
     }}>
       {/* Segmented control for target type */}
       <div style={{ display: 'flex', marginBottom: 8 }}>

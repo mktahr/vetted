@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, fetchAllRows } from '@/lib/supabase'
 import { Person, SortField, SortDirection, CandidateBucket } from '../types'
-import ProfileDrawer, { DrawerExperience, DrawerSignal } from './ProfileDrawer'
+import ProfileDrawer, { DrawerExperience, DrawerEducation, DrawerSignal } from './ProfileDrawer'
 import { MultiSelectOption } from './MultiSelect'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from './CompanyLogo'
 import type { ConditionRow } from './condition-rows/types'
@@ -171,6 +171,7 @@ export default function ProfileTable() {
   const [clearanceSel, setClearanceSel] = useState<string[]>([])
   // Temporal scope type: 'ever' (default) | 'currently' | 'previously'
   type TemporalScope = 'ever' | 'currently' | 'previously'
+  const [roleScope, setRoleScope] = useState<TemporalScope>('ever')
   const [specialtyScope, setSpecialtyScope] = useState<TemporalScope>('ever')
   const [seniorityScope, setSeniorityScope] = useState<TemporalScope>('ever')
   const [focusScope, setFocusScope] = useState<FocusScope>('all')
@@ -230,6 +231,7 @@ export default function ProfileTable() {
     try {
       const f = JSON.parse(decodeURIComponent(raw))
       if (f.roleSel) setRoleSel(f.roleSel)
+      if (f.roleScope) setRoleScope(f.roleScope)
       if (f.specialtySel) setSpecialtySel(f.specialtySel)
       // Backward compat: old 'any'/'current' → 'ever'/'currently'
       if (f.specialtyScope === 'any') setSpecialtyScope('ever')
@@ -518,13 +520,13 @@ export default function ProfileTable() {
       rows = rows.filter(p => { if (!p.location_name) return false; return locationSel.some(sel => p.location_name!.toLowerCase().includes(sel.toLowerCase())) })
     }
 
-    // Role filter with specialty scope
+    // Role filter with its own temporal scope
     if (roleSel.length > 0) {
       const roleSpecs = new Set<string>()
       for (const rid of roleSel) { for (const s of roleSpecialtyMap[rid] || []) roleSpecs.add(s) }
-      if (specialtyScope === 'currently') {
+      if (roleScope === 'currently') {
         rows = rows.filter(p => p.primary_specialty && roleSpecs.has(p.primary_specialty))
-      } else if (specialtyScope === 'previously') {
+      } else if (roleScope === 'previously') {
         rows = rows.filter(p => {
           const hasPast = p.experiences_lite.some(e => !e.is_current && e.specialty && roleSpecs.has(e.specialty))
           const hasCurrent = p.primary_specialty && roleSpecs.has(p.primary_specialty)
@@ -751,7 +753,7 @@ export default function ProfileTable() {
 
     if (sortField) rows.sort((a, b) => { const av = (a[sortField] as number) ?? -1, bv = (b[sortField] as number) ?? -1; return sortDirection === 'asc' ? av - bv : bv - av })
     return rows
-  }, [people, searchQuery, bucketSel, stageSel, roleSel, senioritySel, seniorityScope, schoolSel, schoolTemporalScope, locationSel, specialtySel, specialtyScope, clearanceSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel, companyConditions, schoolConditions, companiesRaw, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap])
+  }, [people, searchQuery, bucketSel, stageSel, roleSel, roleScope, senioritySel, seniorityScope, schoolSel, schoolTemporalScope, locationSel, specialtySel, specialtyScope, clearanceSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel, companyConditions, schoolConditions, companiesRaw, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap])
 
   const activeFilterCount =
     (roleSel.length > 0 ? 1 : 0) + (bucketSel.length > 0 ? 1 : 0) + (stageSel.length > 0 ? 1 : 0) +
@@ -770,7 +772,7 @@ export default function ProfileTable() {
     setYearsMin(''); setYearsMax(''); setTitleBoolean(''); setTitleBooleanScope('ever'); setExperienceBoolean('')
     setSignalSel([]); setSchoolGroupSel([]); setCompanyGroupSel([]); setAcceleratorSel([])
     setCompanyConditions([]); setSchoolConditions([])
-    setSpecialtyScope('ever'); setSeniorityScope('ever'); setCompoundCompanyScope('ever')
+    setRoleScope('ever'); setSpecialtyScope('ever'); setSeniorityScope('ever'); setCompoundCompanyScope('ever')
     setSchoolTemporalScope('ever'); setSchoolGroupScope('ever'); setCompanyGroupScope('ever')
   }
 
@@ -793,9 +795,12 @@ export default function ProfileTable() {
 
   const chips: Array<{ label: string; onRemove: () => void }> = []
   if (focusScope !== 'all') chips.push({ label: `Scope: ${focusScope.replace('_', ' ')}`, onRemove: () => setFocusScope('all') })
-  for (const v of roleSel) { const r = roleOptions.find(o => o.value === v); chips.push({ label: `Role: ${r?.label || v}`, onRemove: () => setRoleSel(roleSel.filter(x => x !== v)) }) }
-  for (const v of specialtySel) chips.push({ label: `Specialty: ${v.replace(/_/g, ' ')}`, onRemove: () => setSpecialtySel(specialtySel.filter(x => x !== v)) })
-  for (const v of senioritySel) chips.push({ label: `Seniority: ${v.replace(/_/g, ' ')}`, onRemove: () => setSenioritySel(senioritySel.filter(x => x !== v)) })
+  const roleScopeLabel = roleScope !== 'ever' ? ` · ${roleScope}` : ''
+  for (const v of roleSel) { const r = roleOptions.find(o => o.value === v); chips.push({ label: `Role: ${r?.label || v}${roleScopeLabel}`, onRemove: () => setRoleSel(roleSel.filter(x => x !== v)) }) }
+  const specScopeLabel = specialtyScope !== 'ever' ? ` · ${specialtyScope}` : ''
+  for (const v of specialtySel) chips.push({ label: `Specialty: ${v.replace(/_/g, ' ')}${specScopeLabel}`, onRemove: () => setSpecialtySel(specialtySel.filter(x => x !== v)) })
+  const senScopeLabel = seniorityScope !== 'ever' ? ` · ${seniorityScope}` : ''
+  for (const v of senioritySel) chips.push({ label: `Seniority: ${v.replace(/_/g, ' ')}${senScopeLabel}`, onRemove: () => setSenioritySel(senioritySel.filter(x => x !== v)) })
   for (const v of bucketSel) chips.push({ label: `Bucket: ${v.replace(/_/g, ' ')}`, onRemove: () => setBucketSel(bucketSel.filter(x => x !== v)) })
   for (const v of stageSel) chips.push({ label: `Stage: ${v.replace(/_/g, ' ')}`, onRemove: () => setStageSel(stageSel.filter(x => x !== v)) })
   if (yearsMin || yearsMax) chips.push({ label: `Yrs: ${yearsMin || '0'}–${yearsMax || '∞'}`, onRemove: () => { setYearsMin(''); setYearsMax('') } })
@@ -826,7 +831,7 @@ export default function ProfileTable() {
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)' }}>
       <FilterSidebar
-        roleSel={roleSel} setRoleSel={setRoleSel} roleOptions={roleOptions}
+        roleSel={roleSel} setRoleSel={setRoleSel} roleScope={roleScope} setRoleScope={setRoleScope} roleOptions={roleOptions}
         specialtySel={specialtySel} setSpecialtySel={setSpecialtySel}
         specialtyScope={specialtyScope} setSpecialtyScope={setSpecialtyScope}
         specialtyOptions={filteredSpecialtyOptions} allSpecialtyOptions={allSpecialtyOptions}
@@ -857,7 +862,7 @@ export default function ProfileTable() {
         onOpenBuilder={() => {
           // Encode current filter state as JSON in URL param
           const state = {
-            roleSel, specialtySel, specialtyScope, senioritySel, seniorityScope, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel,
+            roleSel, roleScope, specialtySel, specialtyScope, senioritySel, seniorityScope, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, focusScope, compoundCompany, compoundCompanyScope, compoundSpecialties, compoundYearMin, compoundYearMax, schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel,
             cc: companyConditions.map(conditionToCompact),
             sc: schoolConditions.map(conditionToCompact),
           }
@@ -955,7 +960,7 @@ export default function ProfileTable() {
                     <th style={{ ...eyebrow, width: 36, padding: '8px 4px' }} title="LinkedIn">
                       <svg viewBox="0 0 24 24" width="14" height="14" fill="var(--fg-tertiary)"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                     </th>
-                    {[{h:'Name',sort:false},{h:'Company',sort:false},{h:'School',sort:false},{h:'Title',sort:false},{h:'Specialty',sort:false},{h:'Yrs',sort:true},{h:'Location',sort:false}].map(({h,sort}) => (
+                    {[{h:'Name',sort:false},{h:'Company',sort:false},{h:'Title',sort:false},{h:'Specialty',sort:false},{h:'School',sort:false},{h:'Yrs',sort:true},{h:'Location',sort:false}].map(({h,sort}) => (
                       <th key={h} onClick={sort ? () => handleSort('years_experience_estimate') : undefined}
                         style={{ ...eyebrow, cursor: sort ? 'pointer' : 'default' }}>
                         {h}{h === 'Yrs' && sortField === 'years_experience_estimate' && (sortDirection === 'asc' ? ' ↑' : ' ↓')}
@@ -1011,6 +1016,14 @@ export default function ProfileTable() {
                           <span style={{ color: 'var(--fg-primary)' }}>{cleanCompanyName(person.current_company_name) || '—'}</span>
                         </div>
                       </td>
+                      {/* Title */}
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-primary)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {(person.current_title_normalized || person.current_title_raw || '—').split(/\s*[|–—]\s*/)[0].split(/,\s*/)[0]}
+                      </td>
+                      {/* Specialty */}
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)' }}>
+                        {person.primary_specialty ? person.primary_specialty.replace(/_/g, ' ') : <span style={{ opacity: 0.4 }}>—</span>}
+                      </td>
                       {/* School */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {(() => {
@@ -1027,14 +1040,6 @@ export default function ProfileTable() {
                           )
                         })()}
                       </td>
-                      {/* Title (text only, no pills) */}
-                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-primary)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {(person.current_title_normalized || person.current_title_raw || '—').split(/\s*[|–—]\s*/)[0].split(/,\s*/)[0]}
-                      </td>
-                      {/* Specialty (plain text, quiet) */}
-                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)' }}>
-                        {person.primary_specialty ? person.primary_specialty.replace(/_/g, ' ') : <span style={{ opacity: 0.4 }}>—</span>}
-                      </td>
                       {/* Years */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', color: 'var(--fg-secondary)' }}>{person.years_experience_estimate ?? '—'}</td>
                       {/* Location */}
@@ -1050,6 +1055,23 @@ export default function ProfileTable() {
 
       <ProfileDrawer person={selectedPerson} isOpen={isDrawerOpen}
         signals={selectedPerson ? (signalsByPerson[selectedPerson.person_id] || []) : []}
+        education={(() => {
+          if (!selectedPerson) return []
+          const sp = people.find(p => p.person_id === selectedPerson.person_id)
+          if (!sp) return []
+          // Filter to university-type, format for drawer
+          return sp.education_lite
+            .filter(e => !e.school_type || e.school_type === 'university')
+            .map(e => {
+              const sn = schoolNameMap[e.school_id] || e.school_name_raw || '?'
+              let deg = ''
+              if (e.degree_level && DEGREE_ABBREV[e.degree_level]) {
+                deg = DEGREE_ABBREV[e.degree_level]
+                if (e.field_of_study_raw) deg += ' ' + e.field_of_study_raw
+              } else if (e.degree_raw) deg = e.degree_raw
+              return { schoolName: sn, degree: deg, startYear: null, endYear: e.end_year } satisfies DrawerEducation
+            })
+        })()}
         experiences={(() => {
           if (!selectedPerson) return []
           const sp = people.find(p => p.person_id === selectedPerson.person_id)

@@ -75,6 +75,7 @@ function SearchBuilderInner() {
 
   // ─── Filter state ───────────────────────────────────────────────────────
   const [roleSel, setRoleSel] = useState<string[]>([])
+  const [roleScope, setRoleScope] = useState<TemporalScope>('ever')
   const [specialtySel, setSpecialtySel] = useState<string[]>([])
   const [specialtyScope, setSpecialtyScope] = useState<TemporalScope>('ever')
   const [senioritySel, setSenioritySel] = useState<string[]>([])
@@ -204,6 +205,7 @@ function SearchBuilderInner() {
         try {
           const f = JSON.parse(decodeURIComponent(raw))
           if (f.roleSel) setRoleSel(f.roleSel)
+          if (f.roleScope) setRoleScope(f.roleScope)
           if (f.specialtySel) setSpecialtySel(f.specialtySel)
           // Backward compat: old 'any'/'current' maps to 'ever'/'currently'
           if (f.specialtyScope === 'any') setSpecialtyScope('ever')
@@ -293,7 +295,10 @@ function SearchBuilderInner() {
         <div style={sectionStyle}>
           <div style={headingStyle}>Who They Are</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <MultiSelect label="Role" options={roleOptions} selected={roleSel} onChange={setRoleSel} placeholder="Any role" />
+            <div>
+              <ScopeSelector label="Role" value={roleScope} onChange={setRoleScope} />
+              <MultiSelect label="" options={roleOptions} selected={roleSel} onChange={setRoleSel} placeholder="Any role" />
+            </div>
             <div>
               <ScopeSelector label="Specialty" value={specialtyScope} onChange={setSpecialtyScope} />
               <MultiSelect label="" options={specialtyOptions} selected={specialtySel} onChange={setSpecialtySel} placeholder="Any specialty" />
