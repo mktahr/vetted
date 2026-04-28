@@ -134,6 +134,7 @@ async function upsertSchool(supabase: SupabaseClient, schoolName: string | null 
 
   const name = schoolName.trim();
 
+  // 1. Direct match on school_name
   const { data: existing } = await supabase
     .from('schools')
     .select('school_id')
@@ -142,6 +143,17 @@ async function upsertSchool(supabase: SupabaseClient, schoolName: string | null 
 
   if (existing) return existing.school_id;
 
+  // 2. Check school_aliases before creating a new record
+  // Prevents re-creating duplicates (e.g., "Harvard University" → canonical "Harvard")
+  const { data: alias } = await supabase
+    .from('school_aliases')
+    .select('school_id')
+    .ilike('alias_name', name)
+    .single();
+
+  if (alias) return alias.school_id;
+
+  // 3. No match — create new school record
   const { data: created, error } = await supabase
     .from('schools')
     .insert({ school_name: name })
