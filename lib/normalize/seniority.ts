@@ -16,7 +16,6 @@
 //   5. If title is empty → unknown
 
 import { SupabaseClient } from '@supabase/supabase-js'
-import { getFtExperiences, type FtExperience, type FtEducation } from '@/lib/tenure/helpers'
 
 export type SeniorityLevel =
   | 'unknown'
@@ -429,7 +428,6 @@ export function roleOverlapsEducation(
  */
 export function computeYearsExperienceEstimate(
   experiences: Array<{
-    company_id?: string | null
     title_raw?: string | null
     start_date?: string | null
     end_date?: string | null
@@ -445,30 +443,18 @@ export function computeYearsExperienceEstimate(
     degree_level?: string | null
   }>,
 ): number | null {
-  // Use the unified FT helper for consistent classification across YOE and tenure.
-  // Map server-side field names to the helper's generic interface.
-  const ftExps: FtExperience[] = experiences.map(e => ({
-    company_id: (e as any).company_id ?? null,
-    title_raw: e.title_raw ?? null,
-    start_date: e.start_date ?? null,
-    end_date: e.end_date ?? null,
-    is_current: e.is_current ?? false,
-    employment_type: e.employment_type_normalized ?? null,
-    seniority: e.seniority_normalized ?? null,
-  }))
-  const eduMapped: FtEducation[] = education.map(e => ({
-    start_year: e.start_year ?? null,
-    end_year: e.end_year ?? null,
-    degree_raw: e.degree_raw ?? e.degree ?? null,
-    degree_level: e.degree_level ?? null,
-  }))
-  const qualifying = getFtExperiences(ftExps, eduMapped, 'yoe')
-
+  const gradDate = graduationDateFromEducation(education)
   let earliest: Date | null = null
-  for (const e of qualifying) {
+  for (const e of experiences) {
     if (!e.start_date) continue
+    if (!e.title_raw || !e.title_raw.trim()) continue
+    if (e.seniority_normalized === 'student') continue
+    if (/\bintern\b|\binternship\b|\bco-?op\b/i.test(e.title_raw)) continue
+    if (isExplicitStudentTitle(e.title_raw)) continue
+    if (isAssistantshipTitle(e.title_raw) && roleOverlapsEducation(e, education)) continue
     const start = new Date(e.start_date)
     if (isNaN(start.getTime())) continue
+    if (gradDate && start.getFullYear() < gradDate.getFullYear()) continue
     if (earliest === null || start < earliest) earliest = start
   }
   if (earliest === null) return null

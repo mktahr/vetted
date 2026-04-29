@@ -127,7 +127,7 @@ export interface Education {
   school_name?: string | null
 }
 
-export type SortField = 'years_experience_estimate' | 'current_tenure' | 'avg_tenure' | null
+export type SortField = 'years_experience_estimate' | null
 export type SortDirection = 'asc' | 'desc'
 
 // ─── Company types ─────────────────────────────────────────────────────────

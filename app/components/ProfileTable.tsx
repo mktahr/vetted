@@ -14,7 +14,6 @@ import type { ConditionRow } from './condition-rows/types'
 import { conditionToCompact, compactToCondition, migrateOldCompanyState, migrateOldSchoolState } from './condition-rows/types'
 import FilterSidebar from './FilterSidebar'
 import { buildLocationOptions } from '@/lib/locations/us-locations'
-import { computeTenureSummary, type FtExperience, type FtEducation, type TenureSummary } from '@/lib/tenure/helpers'
 
 function cleanCompanyName(name: string | null | undefined): string | null {
   if (!name) return null
@@ -68,7 +67,6 @@ interface PersonWithFilters extends Person {
   experiences_lite: ExperienceLite[]
   education_lite: EducationLite[]
   all_specialties: Set<string>
-  tenure: TenureSummary
 }
 
 // ─── Boolean keyword matcher ────────────────────────────────────────────────
@@ -220,12 +218,6 @@ export default function ProfileTable() {
   const [titleBoolean, setTitleBoolean] = useState('')
   const [titleBooleanScope, setTitleBooleanScope] = useState<TemporalScope>('ever')
   const [experienceBoolean, setExperienceBoolean] = useState('')
-  // Tenure filters
-  const [currentTenureMin, setCurrentTenureMin] = useState<string>('')
-  const [currentTenureMax, setCurrentTenureMax] = useState<string>('')
-  const [avgTenureMin, setAvgTenureMin] = useState<string>('')
-  const [avgTenureMax, setAvgTenureMax] = useState<string>('')
-  const [avgTenureIncludeCurrent, setAvgTenureIncludeCurrent] = useState(true)
 
   // Options
   const [roleOptions, setRoleOptions] = useState<MultiSelectOption[]>([])
@@ -410,10 +402,6 @@ export default function ProfileTable() {
           company_ids_all: companyIds[r.person_id] || new Set(), school_ids_all: schoolIds[r.person_id] || new Set(),
           experiences_lite: expLite[r.person_id] || [], education_lite: eduLite[r.person_id] || [],
           all_specialties: allSpecs[r.person_id] || new Set(),
-          tenure: computeTenureSummary(
-            (expLite[r.person_id] || []).map((e: ExperienceLite) => ({ company_id: e.company_id, title_raw: e.title_raw, start_date: e.start_date, end_date: e.end_date, is_current: e.is_current, employment_type: e.employment_type, seniority: e.seniority } as FtExperience)),
-            (eduLite[r.person_id] || []).map((e: EducationLite) => ({ start_year: e.start_year, end_year: e.end_year, degree_raw: e.degree_raw, degree_level: e.degree_level } as FtEducation)),
-          ),
         })))
 
         setSeniorityOptions((srs || []).map(s => ({ value: s.seniority_normalized, label: s.seniority_normalized.replace(/_/g, ' ') })))
@@ -795,29 +783,9 @@ export default function ProfileTable() {
       })
     }
 
-    // Tenure filters
-    const ctMin = currentTenureMin ? parseFloat(currentTenureMin) : null
-    const ctMax = currentTenureMax ? parseFloat(currentTenureMax) : null
-    if (ctMin !== null && !isNaN(ctMin)) rows = rows.filter(p => p.tenure.currentTenureYears != null && p.tenure.currentTenureYears >= ctMin)
-    if (ctMax !== null && !isNaN(ctMax)) rows = rows.filter(p => p.tenure.currentTenureYears != null && p.tenure.currentTenureYears <= ctMax)
-    const atMin = avgTenureMin ? parseFloat(avgTenureMin) : null
-    const atMax = avgTenureMax ? parseFloat(avgTenureMax) : null
-    const getAvg = (p: PersonWithFilters) => avgTenureIncludeCurrent ? p.tenure.avgTenureIncCurrentYears : p.tenure.avgTenureYears
-    if (atMin !== null && !isNaN(atMin)) rows = rows.filter(p => { const v = getAvg(p); return v != null && v >= atMin })
-    if (atMax !== null && !isNaN(atMax)) rows = rows.filter(p => { const v = getAvg(p); return v != null && v <= atMax })
-
-    // Sort
-    if (sortField) {
-      rows.sort((a, b) => {
-        let av: number, bv: number
-        if (sortField === 'current_tenure') { av = a.tenure.currentTenureYears ?? -1; bv = b.tenure.currentTenureYears ?? -1 }
-        else if (sortField === 'avg_tenure') { av = getAvg(a) ?? -1; bv = getAvg(b) ?? -1 }
-        else { av = (a[sortField] as number) ?? -1; bv = (b[sortField] as number) ?? -1 }
-        return sortDirection === 'asc' ? av - bv : bv - av
-      })
-    }
+    if (sortField) rows.sort((a, b) => { const av = (a[sortField] as number) ?? -1, bv = (b[sortField] as number) ?? -1; return sortDirection === 'asc' ? av - bv : bv - av })
     return rows
-  }, [people, searchQuery, bucketSel, stageSel, rolePills, seniorityPills, schoolSel, schoolTemporalScope, locationSel, specialtyPills, clearanceSel, focusScope, compoundCompanyPills, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel, companyConditions, schoolConditions, companiesRaw, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap, currentTenureMin, currentTenureMax, avgTenureMin, avgTenureMax, avgTenureIncludeCurrent])
+  }, [people, searchQuery, bucketSel, stageSel, rolePills, seniorityPills, schoolSel, schoolTemporalScope, locationSel, specialtyPills, clearanceSel, focusScope, compoundCompanyPills, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel, companyConditions, schoolConditions, companiesRaw, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap])
 
   const activeFilterCount =
     (roleSel.length > 0 ? 1 : 0) + (bucketSel.length > 0 ? 1 : 0) + (stageSel.length > 0 ? 1 : 0) +
@@ -826,8 +794,7 @@ export default function ProfileTable() {
     (compoundCompany.length > 0 ? 1 : 0) + (yearsMin || yearsMax ? 1 : 0) + (titleBoolean ? 1 : 0) + (experienceBoolean ? 1 : 0) +
     (signalSel.length > 0 ? 1 : 0) + (schoolGroupSel.length > 0 ? 1 : 0) + (companyGroupSel.length > 0 ? 1 : 0) +
     (acceleratorSel.length > 0 ? 1 : 0) +
-    (companyConditions.length > 0 ? 1 : 0) + (schoolConditions.length > 0 ? 1 : 0) +
-    (currentTenureMin || currentTenureMax ? 1 : 0) + (avgTenureMin || avgTenureMax ? 1 : 0)
+    (companyConditions.length > 0 ? 1 : 0) + (schoolConditions.length > 0 ? 1 : 0)
 
   const clearAllFilters = () => {
     setSearchQuery(''); setRoleSel([]); setBucketSel([]); setStageSel([]); setSenioritySel([])
@@ -839,7 +806,6 @@ export default function ProfileTable() {
     setCompanyConditions([]); setSchoolConditions([])
     setRolePills([]); setSpecialtyPills([]); setSeniorityPills([]); setCompoundCompanyPills([])
     setSchoolTemporalScope('ever'); setSchoolGroupScope('ever'); setCompanyGroupScope('ever')
-    setCurrentTenureMin(''); setCurrentTenureMax(''); setAvgTenureMin(''); setAvgTenureMax(''); setAvgTenureIncludeCurrent(true)
   }
 
   const handleSort = (field: SortField) => {
@@ -917,11 +883,6 @@ export default function ProfileTable() {
         schoolConditionCount={schoolConditions.length}
         titleBoolean={titleBoolean} setTitleBoolean={setTitleBoolean}
         experienceBoolean={experienceBoolean} setExperienceBoolean={setExperienceBoolean}
-        currentTenureMin={currentTenureMin} setCurrentTenureMin={setCurrentTenureMin}
-        currentTenureMax={currentTenureMax} setCurrentTenureMax={setCurrentTenureMax}
-        avgTenureMin={avgTenureMin} setAvgTenureMin={setAvgTenureMin}
-        avgTenureMax={avgTenureMax} setAvgTenureMax={setAvgTenureMax}
-        avgTenureIncludeCurrent={avgTenureIncludeCurrent} setAvgTenureIncludeCurrent={setAvgTenureIncludeCurrent}
         clearAllFilters={clearAllFilters} activeFilterCount={activeFilterCount}
         onOpenBuilder={() => {
           // Encode current filter state as JSON in URL param
@@ -1000,23 +961,17 @@ export default function ProfileTable() {
                     <th style={{ ...eyebrow, width: 36, padding: '8px 4px' }} title="LinkedIn">
                       <svg viewBox="0 0 24 24" width="14" height="14" fill="var(--fg-tertiary)"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                     </th>
-                    {[
-                      {h:'Name',field:null},{h:'Company',field:null},{h:'Title',field:null},{h:'Specialty',field:null},{h:'School',field:null},
-                      {h:'Yrs',field:'years_experience_estimate' as SortField},
-                      {h:'Cur Ten',field:'current_tenure' as SortField},
-                      {h:'Avg Ten',field:'avg_tenure' as SortField},
-                      {h:'Location',field:null},
-                    ].map(({h,field}) => (
-                      <th key={h} onClick={field ? () => handleSort(field) : undefined}
-                        style={{ ...eyebrow, cursor: field ? 'pointer' : 'default' }}>
-                        {h}{field && sortField === field && (sortDirection === 'asc' ? ' ↑' : ' ↓')}
+                    {[{h:'Name',sort:false},{h:'Company',sort:false},{h:'Title',sort:false},{h:'Specialty',sort:false},{h:'School',sort:false},{h:'Yrs',sort:true},{h:'Location',sort:false}].map(({h,sort}) => (
+                      <th key={h} onClick={sort ? () => handleSort('years_experience_estimate') : undefined}
+                        style={{ ...eyebrow, cursor: sort ? 'pointer' : 'default' }}>
+                        {h}{h === 'Yrs' && sortField === 'years_experience_estimate' && (sortDirection === 'asc' ? ' ↑' : ' ↓')}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredPeople.length === 0 ? (
-                    <tr><td colSpan={10} style={{ padding: 24, textAlign: 'center', color: 'var(--fg-tertiary)' }}>No candidates match these filters</td></tr>
+                    <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: 'var(--fg-tertiary)' }}>No candidates match these filters</td></tr>
                   ) : filteredPeople.map(person => {
                     const isSelected = selectedPerson?.person_id === person.person_id
                     return (
@@ -1088,10 +1043,6 @@ export default function ProfileTable() {
                       </td>
                       {/* Years */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', color: 'var(--fg-secondary)' }}>{person.years_experience_estimate ?? '—'}</td>
-                      {/* Current Tenure */}
-                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', color: 'var(--fg-secondary)' }}>{person.tenure.currentTenureYears != null ? person.tenure.currentTenureYears + 'y' : '—'}</td>
-                      {/* Avg Tenure */}
-                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', color: 'var(--fg-secondary)' }}>{(() => { const v = avgTenureIncludeCurrent ? person.tenure.avgTenureIncCurrentYears : person.tenure.avgTenureYears; return v != null ? v + 'y' : '—' })()}</td>
                       {/* Location */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)' }}>{person.location_name || '—'}</td>
                     </tr>
