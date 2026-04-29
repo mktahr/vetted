@@ -105,8 +105,11 @@ function derivePrimaryEducation(
 ): { schoolName: string; degree: string } | null {
   if (eduLite.length === 0) return null
 
-  // Filter to degree-granting institutions (university only, skip accelerators/bootcamps/high schools)
-  const degreeGranting = eduLite.filter(e => !e.school_type || e.school_type === 'university')
+  // Filter to degree-granting institutions (skip accelerators/bootcamps/high schools)
+  const isHighSchool = (e: EducationLite) =>
+    e.school_type === 'high_school' || e.degree_level === 'high_school' ||
+    /\bhigh school\b|\bsecondary\b|\bprep school\b|\bpreparatory\b/i.test(e.school_name_raw || '')
+  const degreeGranting = eduLite.filter(e => !isHighSchool(e) && (!e.school_type || e.school_type === 'university'))
 
   // Priority: bachelor (earliest by end_year) → highest degree_level → first row with field_of_study → first row
   const candidates = degreeGranting.length > 0 ? degreeGranting : eduLite
@@ -120,9 +123,10 @@ function derivePrimaryEducation(
     if (withLevel.length > 0) {
       primary = withLevel.sort((a, b) => (DEGREE_LEVEL_PRIORITY[b.degree_level || ''] ?? 0) - (DEGREE_LEVEL_PRIORITY[a.degree_level || ''] ?? 0))[0]
     } else {
-      // No degree_level at all — prefer row with field_of_study_raw (more informative)
-      const withField = candidates.filter(e => e.field_of_study_raw)
-      primary = withField.length > 0 ? withField[0] : candidates[0]
+      // No degree_level at all — prefer most recent by end_year, then row with field_of_study_raw
+      const sorted = [...candidates].sort((a, b) => (b.end_year ?? 0) - (a.end_year ?? 0))
+      const withField = sorted.filter(e => e.field_of_study_raw)
+      primary = withField.length > 0 ? withField[0] : sorted[0]
     }
   }
 
@@ -1056,9 +1060,13 @@ export default function ProfileTable() {
           if (!selectedPerson) return []
           const sp = people.find(p => p.person_id === selectedPerson.person_id)
           if (!sp) return []
-          // Filter to university-type, format for drawer
+          // Filter to university-type (exclude high schools), sort most recent first
+          const isHS = (e: EducationLite) =>
+            e.school_type === 'high_school' || e.degree_level === 'high_school' ||
+            /\bhigh school\b|\bsecondary\b|\bprep school\b|\bpreparatory\b/i.test(e.school_name_raw || '')
           return sp.education_lite
-            .filter(e => !e.school_type || e.school_type === 'university')
+            .filter(e => !isHS(e) && (!e.school_type || e.school_type === 'university'))
+            .sort((a, b) => (b.end_year ?? 0) - (a.end_year ?? 0))
             .map(e => {
               const sn = schoolNameMap[e.school_id] || e.school_name_raw || '?'
               let deg = ''
