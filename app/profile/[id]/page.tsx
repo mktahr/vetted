@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Person, Experience, Education, BucketAssignment, CandidateBucket, ClearanceLevel, ScoreComponent } from '../../types'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from '../../components/CompanyLogo'
+import { filterEducationForDisplay } from '@/lib/education/display-filter'
 
 function cleanCompanyName(name: string | null | undefined): string | null {
   if (!name) return null
@@ -344,11 +345,13 @@ export default function ProfilePage() {
         </div>
 
         {/* Education — right after overview, before summary */}
-        {education.length > 0 && (
+        {education.length > 0 && (() => {
+          const displayEdus = filterEducationForDisplay(education)
+          return displayEdus.length > 0 ? (
           <div className="mb-6">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">Education</h2>
             <div className="space-y-3">
-              {education.map((edu) => (
+              {displayEdus.map((edu) => (
                 <div key={edu.person_education_id} className="flex items-start gap-3">
                   <CompanyLogo domain={guessSchoolDomain(edu.school_name || edu.school_name_raw)} companyName={edu.school_name || edu.school_name_raw} size={20} shape="circle" />
                   <div>
@@ -367,7 +370,8 @@ export default function ProfilePage() {
               ))}
             </div>
           </div>
-        )}
+          ) : null
+        })()}
 
         {/* AI narrative summary */}
         <div className="mb-6 p-4 bg-card border border-border rounded-lg">

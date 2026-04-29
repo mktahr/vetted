@@ -23,11 +23,12 @@ The core insight: instead of asking AI to judge a candidate, we build our own di
 ## What Already Exists (DO NOT BREAK)
 
 ### Live Supabase Tables — PRESERVE THESE
-- `profiles` — legacy display layer, still written to by the ingest pipeline
-- `profile_snapshots` — raw scrape storage (append-only)
+- `profiles` — legacy display layer, **no longer written to** (deprecated 2026-04-24)
+- `profile_snapshots` — legacy raw scrape storage, **no longer written to** (deprecated 2026-04-24). Replaced by `raw_ingest_events`.
+- `raw_ingest_events` — new raw payload archive (migration 028). Every ingest writes here first.
 
-### Live Supabase Function — PRESERVE THIS
-- `upsert_profile_from_snapshot` — the legacy write path called from the ingest route
+### Live Supabase Function — READ-ONLY ARCHIVE
+- `upsert_profile_from_snapshot` — legacy RPC, no longer called from application code. Can be dropped.
 
 ### Chrome Extension (separate repo)
 - Located at: **`/Users/matt/Desktop/DEV/vetted-extension/`** (not inside this repo)
@@ -533,6 +534,10 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 │           ├── crust-v2.ts                      ← mapPersonSearchToCanonical() for /person/search v2 responses (live)
 │           ├── crust.ts                         ← legacy — mapCrustToCanonical() for old /screener/persondb/search
 │           └── generic.ts                       ← mapGenericToCanonical() — best-effort aliasing for unknown JSON
+│   ├── tenure/
+│   │   └── helpers.ts                           ← CLIENT-SIDE ONLY — FT classification + company tenure calc
+│   └── education/
+│       └── display-filter.ts                    ← CLIENT-SIDE ONLY — filters junk education for display
 │
 └── scripts/                                     ← one-shot + backfill scripts (all .mjs, run with node)
     ├── reseed-companies.mjs                     ← clears + re-seeds companies + company_year_scores from CSV
@@ -700,3 +705,130 @@ Confirm directly with Crust:
 - Full list of valid `SENIORITY_LEVEL` values accepted by the filter
 - Whether a `school` filter is available
 - Direct URL to the full authenticated API docs (our current docs are public-facing and partial)
+
+---
+
+## Development Rules — MUST FOLLOW
+
+### Pre-push verification
+
+Before pushing ANY commit to main, run `npm run build` locally and confirm it completes with no errors or warnings. Production deployments should never go down due to a missed build error. The Vercel deploy is triggered by push to main — there is no staging environment.
+
+### Module structure for shared constants
+
+When adding files with top-level constants (regex arrays, allowlists, `new Set([...])`, enum lists, dictionaries):
+
+1. Place them in their own dedicated file with no cross-imports to consumer modules.
+2. **Do NOT import these constants from files that span client/server boundaries.** A file imported by both a `'use client'` React component AND a server-side API route can create a shared webpack chunk where `Set()` constructors and `const` initializers haven't run before client-side execution — causing a Temporal Dead Zone (TDZ) runtime crash in production.
+3. If the same dictionary must be used in both client and server contexts, duplicate the import path or load via a server-only helper.
+
+**Incident reference:** Commit `49bcbb7` broke production with "Cannot access 'U' before initialization" because `lib/normalize/seniority.ts` (re-exported through a barrel, used by server-side ingest route) imported from `lib/tenure/helpers.ts` (also imported by client-side `ProfileTable.tsx`). The shared webpack chunk executed `Set()` constructors before they were initialized.
+
+**Rule:** `lib/tenure/helpers.ts` and `lib/education/display-filter.ts` are **client-side only**. Never import them from `lib/normalize/`, `lib/scoring/`, or any server-side route. If the same logic is needed server-side, duplicate it or use a dynamic `require()` inside the function body (not at module scope).
+
+---
+
+## Raw Ingest Archive (Post-Migration 028)
+
+Every ingest writes the verbatim payload to `raw_ingest_events` BEFORE normalization. If mapping fails, the raw row stays for replay. If a mapper bug corrupts normalized data, the archive enables re-mapping without re-fetching.
+
+### Table: `raw_ingest_events`
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | UUID PK | |
+| `linkedin_url` | TEXT NOT NULL | |
+| `source` | TEXT NOT NULL | `chrome_extension_voyager`, `crust_v1`, `crust_v2`, `manual_admin` |
+| `source_version` | TEXT | Extension version, Crust API version |
+| `mapper_version` | TEXT | Semver from mapper module constant |
+| `payload` | JSONB NOT NULL | Verbatim, no mutation |
+| `payload_hash` | TEXT | SHA-256 hex |
+| `fetched_at` | TIMESTAMPTZ | Default `now()` |
+| `mapped_at` | TIMESTAMPTZ | Set when status → `mapped` |
+| `processing_status` | TEXT | `pending`, `mapped`, `mapping_failed`, `superseded` |
+| `mapping_error` | TEXT | Error message on failure |
+| `person_id` | UUID FK | Set after successful mapping |
+
+### Provenance columns on normalized tables
+
+`people`, `person_experiences`, `person_education` all have:
+- `last_ingest_source TEXT` — which source last wrote this row
+- `last_ingest_at TIMESTAMPTZ` — when
+- `last_mapper_version TEXT` (people only) — which mapper version
+
+### Ingest route behavior
+
+1. `source` is **required** on every POST to `/api/ingest`. Missing → 400.
+2. Step 0: compute `payload_hash`, check 24h dedup (same URL + hash → 200 skip), insert `raw_ingest_events` with `status='pending'`. If insert fails → 500 abort.
+3. Existing normalization pipeline runs.
+4. On success → update to `status='mapped'`, set `person_id`, `mapped_at`.
+5. On failure → update to `status='mapping_failed'`, store error.
+
+### Mapper versioning
+
+Each mapper in `lib/ingest/mappers/` exports `MAPPER_VERSION = '1.0.0'`. Bump per semver when output shape or field extraction changes. Version is stored in `raw_ingest_events.mapper_version` and `people.last_mapper_version`.
+
+---
+
+## Tenure Helper (`lib/tenure/helpers.ts`) — CLIENT-SIDE ONLY
+
+Two-pass pipeline for determining which experiences count as full-time:
+
+### Pass 1 — `isCountedAsFt(exp, education, mode)`
+
+Hard exclusions applied per individual experience:
+- No title or no start_date
+- `employment_type = 'internship'`
+- Hard non-FT title patterns: intern, co-op, volunteer
+- Student title patterns: student, undergrad, doctoral candidate
+- Assistantship + education date overlap (RA/TA during school)
+- Mode-specific date filter:
+  - `'yoe'`: exclude if `start_date.year < gradYear` (anchoring logic)
+  - `'tenure'`: exclude if `end_date < gradYear + 0.5` (student-era)
+
+### Pass 2 — `filterSecondaryCompanySpans()`
+
+Concurrent company-span filtering at the company level (NOT individual role level):
+1. Group Pass-1 survivors by `company_id`, merge contiguous stints (gap ≤ 30 days).
+2. Compare company-level spans. When two overlap by >3 months:
+   - If one company's roles are ALL soft-non-FT-titled (advisor, board member, consultant at non-consulting-firm, contractor, freelancer) OR the company name is self-employed (Freelance, Self-Employed, Independent, etc.) → that company is secondary.
+   - Otherwise → longest span wins, most recent start tiebreak.
+3. Standalone soft-non-FT roles with no concurrent overlap are KEPT (e.g., TJ Fontaine's NexaGen "Consultant" 2009-2010).
+
+### Consulting firms allowlist
+
+"Consultant" titles are soft-non-FT UNLESS at a known consulting firm: McKinsey, Bain, BCG, Deloitte, PwC, EY, KPMG, Accenture, Capgemini, Booz Allen, Oliver Wyman, L.E.K., Strategy&, Roland Berger, Kearney, ZS, Putnam, IBM Consulting, Cognizant, Infosys, TCS, Wipro.
+
+### Self-employed company names
+
+Always treated as soft-non-FT regardless of title: Freelance, Freelancer, Self-Employed, Self, Independent, Independent Contractor, Consulting (exact), Personal, N/A, Various, Sole Proprietor.
+
+### Known limitations (backlog)
+
+- **Long-running side commitments without non-FT title signal** (e.g., Co-Founder at a side project, Core Developer for open-source) can win the concurrent-span tiebreak because the title doesn't match any soft-non-FT pattern. Needs company-quality/prestige-score input or explicit flag. Affected: Tanner Robinson (SDR Huddle Co-Founder vs Gong), Gregory P. Smith (CPython Core Developer vs Anthropic).
+- **Waterloo-style co-op detection:** Short stints (<6 months) at multiple different companies pre-graduation without explicit co-op title signal.
+- **Concurrent-role tiebreak when both are real companies** with legit titles and the secondary just has a missing `end_date`.
+
+---
+
+## Education Display Filter (`lib/education/display-filter.ts`) — CLIENT-SIDE ONLY
+
+Filters education entries for display in the drawer, full profile page, and list view school column. Data stays in `person_education` — this is display-only.
+
+### Rules (in order)
+
+1. **Blocklist** — always removed: yoga/yogi schools, NOLS/outdoor programs, IDEO/Acumen certificates, summer programs, bootcamps, workshops. Also removes `degree_level = 'certificate'` or `'coursework'`.
+2. **Incubator/accelerator** — removed from education: Singularity University, Y Combinator, Techstars, 500 Startups, AngelPad, MassChallenge, Startup Chile.
+3. **Degree allowlist** — only entries with recognized degree levels or patterns kept (bachelor, master, MBA, PhD, JD, MD, associate, IB). If nothing passes, falls back to the blocklist-filtered set.
+4. **Dedupe** — by `school_name_raw + degree_raw` (case-insensitive).
+5. **Sort** — `end_year DESC`.
+
+---
+
+## Seniority Display (Drawer + Profile Page)
+
+Two separate lines in the classification metadata grid:
+- **"Seniority"** — current role's `seniority_normalized` (from `is_current=true` experience)
+- **"Highest seniority"** — `people.highest_seniority_reached` (only shown when different from current)
+
+This distinction matters: a candidate can be an IC in their current role but have reached Lead IC at a previous company.

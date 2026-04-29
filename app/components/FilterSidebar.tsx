@@ -57,6 +57,11 @@ export interface FilterSidebarProps {
   acceleratorOptions: MultiSelectOption[]
   titleBoolean: string;          setTitleBoolean: (v: string) => void
   experienceBoolean: string;     setExperienceBoolean: (v: string) => void
+  currentTenureMin: string;      setCurrentTenureMin: (v: string) => void
+  currentTenureMax: string;      setCurrentTenureMax: (v: string) => void
+  avgTenureMin: string;          setAvgTenureMin: (v: string) => void
+  avgTenureMax: string;          setAvgTenureMax: (v: string) => void
+  avgTenureIncludeCurrent: boolean; setAvgTenureIncludeCurrent: (v: boolean) => void
   clearAllFilters: () => void
   activeFilterCount: number
   onOpenBuilder?: () => void
@@ -216,6 +221,28 @@ export default function FilterSidebar(props: FilterSidebarProps) {
             <input type="number" min="0" step="0.5" value={props.yearsMin} onChange={e => props.setYearsMin(e.target.value)} placeholder="min" style={inputStyle} />
             <span style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)' }}>–</span>
             <input type="number" min="0" step="0.5" value={props.yearsMax} onChange={e => props.setYearsMax(e.target.value)} placeholder="max" style={inputStyle} />
+          </div>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <Lbl>Current tenure (years)</Lbl>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <input type="number" min="0.25" step="0.25" value={props.currentTenureMin} onChange={e => props.setCurrentTenureMin(e.target.value)} placeholder="min" style={inputStyle} />
+            <span style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)' }}>–</span>
+            <input type="number" min="0.25" step="0.25" value={props.currentTenureMax} onChange={e => props.setCurrentTenureMax(e.target.value)} placeholder="10+" style={inputStyle} />
+          </div>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Lbl>Avg tenure (years)</Lbl>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={props.avgTenureIncludeCurrent} onChange={e => props.setAvgTenureIncludeCurrent(e.target.checked)} style={{ accentColor: 'var(--accent-500)' }} />
+              Incl. current
+            </label>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <input type="number" min="0.1" step="0.1" value={props.avgTenureMin} onChange={e => props.setAvgTenureMin(e.target.value)} placeholder="min" style={inputStyle} />
+            <span style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)' }}>–</span>
+            <input type="number" min="0.1" step="0.1" value={props.avgTenureMax} onChange={e => props.setAvgTenureMax(e.target.value)} placeholder="10+" style={inputStyle} />
           </div>
         </div>
         <div style={{ marginBottom: 12 }}><MultiSelect label="Clearance" options={CLEARANCE_OPTIONS} selected={props.clearanceSel} onChange={props.setClearanceSel} placeholder="Any clearance" /></div>
