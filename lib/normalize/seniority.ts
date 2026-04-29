@@ -16,7 +16,7 @@
 //   5. If title is empty → unknown
 
 import { SupabaseClient } from '@supabase/supabase-js'
-import type { FtExperience, FtEducation } from '@/lib/tenure/helpers'
+import { getFtExperiences, type FtExperience, type FtEducation } from '@/lib/tenure/helpers'
 
 export type SeniorityLevel =
   | 'unknown'
@@ -463,11 +463,6 @@ export function computeYearsExperienceEstimate(
     degree_raw: e.degree_raw ?? e.degree ?? null,
     degree_level: e.degree_level ?? null,
   }))
-  // Dynamic require to avoid circular-import TDZ issue — seniority.ts is
-  // re-exported through lib/normalize barrel which shares a webpack chunk
-  // with client code that also imports from tenure/helpers.
-  // eslint-disable-next-line
-  const { getFtExperiences } = require('@/lib/tenure/helpers') as typeof import('@/lib/tenure/helpers')
   const qualifying = getFtExperiences(ftExps, eduMapped, 'yoe')
 
   let earliest: Date | null = null
