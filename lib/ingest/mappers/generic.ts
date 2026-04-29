@@ -7,6 +7,8 @@
 //
 // When in doubt, write a dedicated mapper (like crust.ts) for better fidelity.
 
+export const MAPPER_VERSION = '1.0.0'
+
 import type {
   IngestPayload,
   CanonicalProfile,
@@ -181,5 +183,6 @@ export function mapGenericToCanonical(record: Record<string, unknown>): IngestPa
     full_name,
     canonical_json: canonical,
     raw_json: record,
+    mapper_version: MAPPER_VERSION,
   }
 }

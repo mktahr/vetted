@@ -12,6 +12,8 @@
 //   experience.employment_details.past[]                         → past experiences
 //   education.schools[]                                          → education
 
+export const MAPPER_VERSION = '1.0.0'
+
 import type { IngestPayload, CanonicalProfile, RawExperience, RawEducation } from './crust'
 import type { PersonSearchResult, PersonSearchEmployer, PersonSearchSchool } from '../crust-person-search'
 
@@ -203,5 +205,8 @@ export function mapPersonSearchToCanonical(record: PersonSearchResult): IngestPa
     full_name,
     canonical_json: canonical,
     raw_json: record as unknown as Record<string, unknown>,
+    source: 'crust_v2' as const,
+    source_version: '2025-11-01',
+    mapper_version: MAPPER_VERSION,
   }
 }

@@ -8,6 +8,7 @@
 // Auth: x-ingest-secret header
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createHash } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   normalizeTitle,
@@ -36,11 +37,17 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+const VALID_SOURCES = ['chrome_extension_voyager', 'crust_v1', 'crust_v2', 'manual_admin'] as const;
+type IngestSource = typeof VALID_SOURCES[number];
+
 interface IngestPayload {
   linkedin_url: string;
   full_name: string;
   canonical_json: CanonicalProfile;
   raw_json?: Record<string, unknown>;
+  source?: string;
+  source_version?: string;
+  mapper_version?: string;
 }
 
 interface CanonicalProfile {
@@ -231,6 +238,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'linkedin_url and full_name are required' }, { status: 400 });
   }
 
+  if (!payload.source || !VALID_SOURCES.includes(payload.source as IngestSource)) {
+    return NextResponse.json({
+      error: `source is required and must be one of: ${VALID_SOURCES.join(', ')}`,
+    }, { status: 400 });
+  }
+  const source = payload.source as IngestSource;
+
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     console.error('[ingest] Missing SUPABASE env vars');
     return NextResponse.json({
@@ -242,26 +256,59 @@ export async function POST(req: NextRequest) {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   const canonical = payload.canonical_json || {};
 
-  console.log('[ingest] Processing:', payload.linkedin_url);
+  console.log('[ingest] Processing:', payload.linkedin_url, `(source=${source})`);
+
+  // ── Step 0: Archive raw payload ──────────────────────────────────────────
+  // Non-negotiable: if this fails, abort the entire ingest.
+  const rawPayload = payload.raw_json || payload.canonical_json || {};
+  const payloadJson = JSON.stringify(rawPayload);
+  const payloadHash = createHash('sha256').update(payloadJson).digest('hex');
+
+  // Dedup: skip if same linkedin_url + same payload hash within 24h
+  const { data: existingRaw } = await supabase
+    .from('raw_ingest_events')
+    .select('id')
+    .eq('linkedin_url', payload.linkedin_url)
+    .eq('payload_hash', payloadHash)
+    .gte('fetched_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+    .limit(1)
+    .maybeSingle();
+
+  if (existingRaw) {
+    console.log('[ingest] Duplicate payload, skipping:', payload.linkedin_url);
+    return NextResponse.json({
+      success: true,
+      skipped: true,
+      message: 'Duplicate payload within 24h window, skipped',
+    });
+  }
+
+  const { data: rawEvent, error: rawError } = await supabase
+    .from('raw_ingest_events')
+    .insert({
+      linkedin_url: payload.linkedin_url,
+      source,
+      source_version: payload.source_version || null,
+      mapper_version: payload.mapper_version || null,
+      payload: rawPayload,
+      payload_hash: payloadHash,
+      processing_status: 'pending',
+    })
+    .select('id')
+    .single();
+
+  if (rawError || !rawEvent) {
+    console.error('[ingest] Raw archive write failed — aborting:', rawError);
+    return NextResponse.json({
+      success: false,
+      message: 'Failed to archive raw payload',
+    }, { status: 500 });
+  }
+
+  const rawEventId = rawEvent.id;
+  const ingestTimestamp = new Date().toISOString();
 
   try {
-
-  // Deprecated 2026-04-24: profiles table no longer written on ingest.
-  // Zero application code reads from profiles. Kept as read-only archive.
-  // The RPC function itself remains in the DB for now; can be dropped later.
-  //
-  // const { error: legacyError } = await supabase.rpc('upsert_profile_from_snapshot', {
-  //   p_linkedin_url: payload.linkedin_url,
-  //   p_full_name: payload.full_name,
-  //   p_canonical_json: canonical,
-  //   p_raw_json: payload.raw_json || canonical,
-  // });
-  //
-  // if (legacyError) {
-  //   console.error('[ingest] Legacy upsert failed:', legacyError);
-  //   // Don't hard-fail — continue to normalized path
-  // }
-  const legacyError = null;
 
   // ── Step 2: Normalize company ────────────────────────────────────────────
   const currentCompanyId = await upsertCompany(supabase, canonical.current_company);
@@ -284,7 +331,10 @@ export async function POST(req: NextRequest) {
     current_function_normalized: titleData?.function_normalized || null,
     years_experience_estimate: canonical.years_experience || null,
     career_stage_assigned: careerStage,
-    updated_at: new Date().toISOString(),
+    last_ingest_source: source,
+    last_ingest_at: ingestTimestamp,
+    last_mapper_version: payload.mapper_version || null,
+    updated_at: ingestTimestamp,
   };
 
   const { data: person, error: personError } = await supabase
@@ -298,7 +348,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: false,
       message: 'Failed to upsert person',
-      legacy_ok: !legacyError,
     }, { status: 500 });
   }
 
@@ -418,7 +467,9 @@ export async function POST(req: NextRequest) {
         : 'no_match',
       full_time_inference_confidence: expTitleData?.confidence || null,
       is_full_time_role: employmentType === 'full_time',
-      updated_at: new Date().toISOString(),
+      last_ingest_source: source,
+      last_ingest_at: ingestTimestamp,
+      updated_at: ingestTimestamp,
     };
 
     const { error: expError } = await supabase
@@ -562,7 +613,9 @@ export async function POST(req: NextRequest) {
       is_verified_degree: false,
       is_coursework_only: degreeData?.is_coursework || false,
       is_certificate_only: degreeData?.is_certificate || false,
-      updated_at: new Date().toISOString(),
+      last_ingest_source: source,
+      last_ingest_at: ingestTimestamp,
+      updated_at: ingestTimestamp,
     };
 
     // Persist education text fields when present (Chrome extension Voyager scrape)
@@ -656,12 +709,18 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // ── Mark raw event as successfully mapped ─────────────────────────────
+  await supabase.from('raw_ingest_events').update({
+    processing_status: 'mapped',
+    person_id: personId,
+    mapped_at: new Date().toISOString(),
+  }).eq('id', rawEventId);
+
   console.log('[ingest] Success:', payload.linkedin_url, '| person_id:', personId);
 
   return NextResponse.json({
     success: true,
     person_id: personId,
-    legacy_ok: !legacyError,
     bucket,
     total_score: totalScore,
     current_function: titleData?.function_normalized ?? null,
@@ -672,6 +731,12 @@ export async function POST(req: NextRequest) {
   });
 
   } catch (err) {
+    // Mark raw event as failed — keep the raw row for replay
+    await supabase.from('raw_ingest_events').update({
+      processing_status: 'mapping_failed',
+      mapping_error: err instanceof Error ? err.message : 'Unknown error',
+    }).eq('id', rawEventId);
+
     console.error('[ingest] Unhandled error:', err);
     return NextResponse.json({
       success: false,

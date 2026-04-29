@@ -30,6 +30,8 @@
 // Dates arrive as "2022-05-01T00:00:00". The ingest API's toDateString()
 // only accepts YYYY-MM-DD or "Mon YYYY", so we strip the time component here.
 
+export const MAPPER_VERSION = '1.0.0'
+
 // ─── Canonical payload shape (mirrors app/api/ingest/route.ts) ──────────────
 
 export interface RawExperience {
@@ -71,6 +73,9 @@ export interface IngestPayload {
   full_name: string
   canonical_json: CanonicalProfile
   raw_json: Record<string, unknown>
+  source?: string          // 'chrome_extension_voyager' | 'crust_v1' | 'crust_v2' | 'manual_admin'
+  source_version?: string  // extension version, Crust API version, etc.
+  mapper_version?: string  // semver from mapper module constant
 }
 
 // ─── Crust Data response shapes (from live /screener/persondb/search) ───────
@@ -372,5 +377,8 @@ export function mapCrustToCanonical(record: CrustPerson): IngestPayload | null {
     full_name,
     canonical_json: canonical,
     raw_json: record as unknown as Record<string, unknown>,
+    source: 'crust_v1' as const,
+    source_version: undefined,
+    mapper_version: MAPPER_VERSION,
   }
 }
