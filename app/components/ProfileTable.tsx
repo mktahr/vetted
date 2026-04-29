@@ -1056,6 +1056,13 @@ export default function ProfileTable() {
 
       <ProfileDrawer person={selectedPerson} isOpen={isDrawerOpen}
         signals={selectedPerson ? (signalsByPerson[selectedPerson.person_id] || []) : []}
+        currentSeniority={(() => {
+          if (!selectedPerson) return null
+          const sp = people.find(p => p.person_id === selectedPerson.person_id)
+          if (!sp) return null
+          const current = sp.experiences_lite.find(e => e.is_current && e.seniority && e.seniority !== 'unknown')
+          return current?.seniority ?? null
+        })()}
         education={(() => {
           if (!selectedPerson) return []
           const sp = people.find(p => p.person_id === selectedPerson.person_id)

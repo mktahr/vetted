@@ -36,6 +36,7 @@ interface ProfileDrawerProps {
   experiences: DrawerExperience[]
   education: DrawerEducation[]
   signals: DrawerSignal[]
+  currentSeniority?: string | null
   isOpen: boolean
   onClose: () => void
   onPrev: (() => void) | null
@@ -108,7 +109,7 @@ const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
   greek_life: 'Greek Life',
 }
 
-export default function ProfileDrawer({ person, experiences, education, signals, isOpen, onClose, onPrev, onNext }: ProfileDrawerProps) {
+export default function ProfileDrawer({ person, experiences, education, signals, currentSeniority, isOpen, onClose, onPrev, onNext }: ProfileDrawerProps) {
   if (!isOpen || !person) return null
 
   const companyName = cleanCompanyName(person.current_company_name)
@@ -164,7 +165,7 @@ export default function ProfileDrawer({ person, experiences, education, signals,
             )}
 
             {/* Classification metadata — quiet label-value pairs */}
-            {(person.primary_specialty || person.current_function_normalized || person.highest_seniority_reached) && (
+            {(person.primary_specialty || person.current_function_normalized || currentSeniority || person.highest_seniority_reached) && (
               <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 12px', fontSize: 'var(--fs-13)', fontFamily: 'var(--font-sans)' }}>
                 {person.primary_specialty && (
                   <><span style={{ color: 'var(--fg-tertiary)' }}>Specialty</span><span style={{ color: 'var(--fg-primary)' }}>{person.primary_specialty.replace(/_/g, ' ')}</span></>
@@ -175,8 +176,11 @@ export default function ProfileDrawer({ person, experiences, education, signals,
                 {person.current_function_normalized && (
                   <><span style={{ color: 'var(--fg-tertiary)' }}>Function</span><span style={{ color: 'var(--fg-primary)' }}>{person.current_function_normalized.replace(/_/g, ' ')}</span></>
                 )}
-                {person.highest_seniority_reached && (
-                  <><span style={{ color: 'var(--fg-tertiary)' }}>Seniority</span><span style={{ color: 'var(--fg-primary)' }}>{person.highest_seniority_reached.replace(/_/g, ' ')}</span></>
+                {currentSeniority && (
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Seniority</span><span style={{ color: 'var(--fg-primary)' }}>{currentSeniority.replace(/_/g, ' ')}</span></>
+                )}
+                {person.highest_seniority_reached && person.highest_seniority_reached !== currentSeniority && (
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Highest seniority</span><span style={{ color: 'var(--fg-primary)' }}>{person.highest_seniority_reached.replace(/_/g, ' ')}</span></>
                 )}
                 {person.title_level_slope && person.title_level_slope !== 'insufficient_data' && (
                   <><span style={{ color: 'var(--fg-tertiary)' }}>Progression</span><span style={{ color: 'var(--fg-primary)' }}>{person.title_level_slope}</span></>

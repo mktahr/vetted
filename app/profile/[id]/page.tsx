@@ -440,9 +440,18 @@ export default function ProfilePage() {
           {person.current_function_normalized && (
             <><span className="text-muted-foreground">Function</span><span>{person.current_function_normalized.replace(/_/g, ' ')}</span></>
           )}
-          {person.highest_seniority_reached && (
-            <><span className="text-muted-foreground">Seniority</span><span>{person.highest_seniority_reached.replace(/_/g, ' ')}</span></>
-          )}
+          {(() => {
+            const currentExp = experiences.find(e => e.is_current && e.seniority_normalized && e.seniority_normalized !== 'unknown')
+            const currentSen = currentExp?.seniority_normalized ?? null
+            return <>
+              {currentSen && (
+                <><span className="text-muted-foreground">Seniority</span><span>{currentSen.replace(/_/g, ' ')}</span></>
+              )}
+              {person.highest_seniority_reached && person.highest_seniority_reached !== currentSen && (
+                <><span className="text-muted-foreground">Highest seniority</span><span>{person.highest_seniority_reached.replace(/_/g, ' ')}</span></>
+              )}
+            </>
+          })()}
           {person.title_level_slope && person.title_level_slope !== 'insufficient_data' && (
             <><span className="text-muted-foreground">Progression</span><span>{person.title_level_slope}</span></>
           )}
