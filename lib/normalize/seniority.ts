@@ -449,7 +449,6 @@ export function computeYearsExperienceEstimate(
   // Map server-side field names to the helper's generic interface.
   const ftExps: FtExperience[] = experiences.map(e => ({
     company_id: (e as any).company_id ?? null,
-    company_name: (e as any).companies?.company_name ?? null,
     title_raw: e.title_raw ?? null,
     start_date: e.start_date ?? null,
     end_date: e.end_date ?? null,

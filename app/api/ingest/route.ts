@@ -642,7 +642,7 @@ export async function POST(req: NextRequest) {
   try {
     const { data: refreshedExps } = await supabase
       .from('person_experiences')
-      .select('company_id, title_raw, start_date, end_date, is_current, seniority_normalized, employment_type_normalized, companies:company_id ( company_name )')
+      .select('title_raw, start_date, end_date, is_current, seniority_normalized, employment_type_normalized')
       .eq('person_id', personId);
     const { data: refreshedEdus } = await supabase
       .from('person_education')

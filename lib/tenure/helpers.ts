@@ -17,7 +17,6 @@
 
 export interface FtExperience {
   company_id: string | null
-  company_name?: string | null     // for consulting-firm allowlist + self-employed detection
   title_raw: string | null
   start_date: string | null
   end_date: string | null
@@ -39,62 +38,14 @@ export type FtMode = 'yoe' | 'tenure'
 
 // "Soft" non-FT patterns — excluded only when overlapping a longer concurrent
 // company span. Standalone post-grad consulting/advisory roles count.
-// Note: \bconsultant\b is handled separately with a consulting-firms allowlist.
 const SOFT_NON_FT_TITLE_PATTERNS = [
   /\badvisor\b/i,
   /\badvisory\b(?!\s+(services|group))/i,
   /\bboard\s+(member|director|observer|of\s+directors)\b/i,
+  /^(independent\s+)?consultant$/i,
   /\bcontractor\b/i,
   /\bfreelance[r]?\b/i,
 ]
-
-// Consultant titles are soft-non-FT UNLESS at a known consulting firm.
-const CONSULTANT_TITLE_PATTERN = /\bconsultant\b/i
-
-const CONSULTING_FIRMS_ALLOWLIST = new Set([
-  'mckinsey', 'mckinsey & company',
-  'bain', 'bain & company',
-  'boston consulting group', 'bcg',
-  'deloitte', 'deloitte consulting',
-  'pwc', 'pricewaterhousecoopers',
-  'ey', 'ernst & young', 'ernst and young',
-  'kpmg',
-  'accenture',
-  'capgemini', 'cap gemini',
-  'booz allen hamilton', 'booz allen',
-  'oliver wyman',
-  'l.e.k. consulting', 'lek consulting',
-  'strategy&', 'strategy and',
-  'roland berger',
-  'kearney', 'a.t. kearney',
-  'zs associates', 'zs',
-  'putnam associates',
-  'ibm consulting',
-  'cognizant',
-  'infosys consulting', 'infosys',
-  'tata consultancy services', 'tcs',
-  'wipro',
-])
-
-// Company names that are always treated as self-employed / non-FT.
-const SELF_EMPLOYED_COMPANY_NAMES = new Set([
-  'freelance', 'freelancer',
-  'self-employed', 'self employed', 'self',
-  'independent', 'independent contractor',
-  'consulting',  // exact match — not a real company name
-  'personal', 'n/a', 'various', '(various)',
-  'sole proprietor',
-])
-
-function isSelfEmployedCompany(companyName: string | null): boolean {
-  if (!companyName) return false
-  return SELF_EMPLOYED_COMPANY_NAMES.has(companyName.toLowerCase().trim())
-}
-
-function isConsultingFirm(companyName: string | null): boolean {
-  if (!companyName) return false
-  return CONSULTING_FIRMS_ALLOWLIST.has(companyName.toLowerCase().trim())
-}
 
 // "Hard" non-FT patterns — always excluded regardless of concurrency.
 const HARD_NON_FT_TITLE_PATTERNS = [
@@ -121,15 +72,9 @@ const ASSISTANTSHIP_PATTERNS = [
   /\bgrad assistant\b/i,
 ]
 
-/**
- * True if the title matches a soft non-FT pattern.
- * For "consultant" titles, also checks company against the allowlist.
- */
-export function isSoftNonFtTitle(title: string, companyName?: string | null): boolean {
-  if (SOFT_NON_FT_TITLE_PATTERNS.some(r => r.test(title))) return true
-  // "Consultant" in title is soft-non-FT unless at a known consulting firm
-  if (CONSULTANT_TITLE_PATTERN.test(title) && !isConsultingFirm(companyName ?? null)) return true
-  return false
+/** True if the title matches a soft non-FT pattern. */
+export function isSoftNonFtTitle(title: string): boolean {
+  return SOFT_NON_FT_TITLE_PATTERNS.some(r => r.test(title))
 }
 
 // ─── Graduation year logic ──────────────────────────────────────────────────
@@ -326,13 +271,10 @@ function buildCompanySpans(experiences: FtExperience[]): CompanySpan[] {
     const overallEnd = merged[merged.length - 1].end.getTime()
     const isCurrent = merged.some(m => m.isCurrent)
 
-    // Check if this company span is soft-non-FT:
-    // 1. Company name is self-employed (Freelance, Self-Employed, etc.) — always soft
-    // 2. All roles have soft non-FT titles (advisor, consultant at non-consulting-firm, etc.)
-    const companyName = roles[0]?.company_name ?? null
-    const allSoftNonFt = isSelfEmployedCompany(companyName) || roles.every(r => {
+    // Check if ALL roles at this company have soft non-FT titles
+    const allSoftNonFt = roles.every(r => {
       const t = r.title_raw?.trim() || ''
-      return t.length > 0 && isSoftNonFtTitle(t, companyName)
+      return t.length > 0 && isSoftNonFtTitle(t)
     })
 
     spans.push({
