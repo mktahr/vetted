@@ -15,6 +15,7 @@ import { conditionToCompact, compactToCondition, migrateOldCompanyState, migrate
 import FilterSidebar from './FilterSidebar'
 import { buildLocationOptions } from '@/lib/locations/us-locations'
 import { computeTenureSummary, type FtExperience, type FtEducation, type TenureSummary } from '@/lib/tenure/helpers'
+import { filterEducationForDisplay } from '@/lib/education/display-filter'
 
 function cleanCompanyName(name: string | null | undefined): string | null {
   if (!name) return null
@@ -107,11 +108,8 @@ function derivePrimaryEducation(
 ): { schoolName: string; degree: string } | null {
   if (eduLite.length === 0) return null
 
-  // Filter to degree-granting institutions (skip accelerators/bootcamps/high schools)
-  const isHighSchool = (e: EducationLite) =>
-    e.school_type === 'high_school' || e.degree_level === 'high_school' ||
-    /\bhigh school\b|\bsecondary\b|\bprep school\b|\bpreparatory\b/i.test(e.school_name_raw || '')
-  const degreeGranting = eduLite.filter(e => !isHighSchool(e) && (!e.school_type || e.school_type === 'university'))
+  // Use the shared display filter to remove junk (yoga, bootcamps, incubators, etc.)
+  const degreeGranting = filterEducationForDisplay(eduLite)
 
   // Priority: bachelor (earliest by end_year) → highest degree_level → first row with field_of_study → first row
   const candidates = degreeGranting.length > 0 ? degreeGranting : eduLite
@@ -411,7 +409,7 @@ export default function ProfileTable() {
           experiences_lite: expLite[r.person_id] || [], education_lite: eduLite[r.person_id] || [],
           all_specialties: allSpecs[r.person_id] || new Set(),
           tenure: computeTenureSummary(
-            (expLite[r.person_id] || []).map((e: ExperienceLite) => ({ company_id: e.company_id, title_raw: e.title_raw, start_date: e.start_date, end_date: e.end_date, is_current: e.is_current, employment_type: e.employment_type, seniority: e.seniority } as FtExperience)),
+            (expLite[r.person_id] || []).map((e: ExperienceLite) => ({ company_id: e.company_id, company_name: e.company_id ? cMap[e.company_id] || null : null, title_raw: e.title_raw, start_date: e.start_date, end_date: e.end_date, is_current: e.is_current, employment_type: e.employment_type, seniority: e.seniority } as FtExperience)),
             (eduLite[r.person_id] || []).map((e: EducationLite) => ({ start_year: e.start_year, end_year: e.end_year, degree_raw: e.degree_raw, degree_level: e.degree_level } as FtEducation)),
           ),
         })))
@@ -1116,13 +1114,8 @@ export default function ProfileTable() {
           if (!selectedPerson) return []
           const sp = people.find(p => p.person_id === selectedPerson.person_id)
           if (!sp) return []
-          // Filter to university-type (exclude high schools), sort most recent first
-          const isHS = (e: EducationLite) =>
-            e.school_type === 'high_school' || e.degree_level === 'high_school' ||
-            /\bhigh school\b|\bsecondary\b|\bprep school\b|\bpreparatory\b/i.test(e.school_name_raw || '')
-          return sp.education_lite
-            .filter(e => !isHS(e) && (!e.school_type || e.school_type === 'university'))
-            .sort((a, b) => (b.end_year ?? 0) - (a.end_year ?? 0))
+          // Filter education for display: remove junk, sort, dedupe
+          return filterEducationForDisplay(sp.education_lite)
             .map(e => {
               const sn = schoolNameMap[e.school_id] || e.school_name_raw || '?'
               let deg = ''
