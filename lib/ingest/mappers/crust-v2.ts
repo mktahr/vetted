@@ -79,6 +79,11 @@ function mapEmployer(e: PersonSearchEmployer, isCurrent: boolean): RawExperience
     start_date: start,
     end_date: end,
     is_current: isCurrent,
+    // Preserve Crust's is_default flag so the ingest layer can identify
+    // the candidate's primary current role even when multiple current[]
+    // entries exist (e.g., still-listed internships overlapping with the
+    // real current job).
+    is_primary_current: isCurrent && e.is_default === true,
     duration_months: monthsBetween(start, end),
     description: undefined,  // v2 API doesn't include description
     employment_type: undefined,

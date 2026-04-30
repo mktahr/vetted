@@ -74,6 +74,7 @@ interface RawExperience {
   start_date?: string;
   end_date?: string;
   is_current?: boolean;
+  is_primary_current?: boolean;  // Crust v2 only: from is_default flag
   duration_months?: number;
   description?: string;
   employment_type?: string;
@@ -460,6 +461,7 @@ export async function POST(req: NextRequest) {
       start_date: roleStartDate,
       end_date: toDateString(exp.end_date),
       is_current: exp.is_current || false,
+      is_primary_current: exp.is_primary_current || false,
       duration_months: exp.duration_months || null,
       description_raw: exp.description || null,
       full_time_inference_reason: expTitleData
@@ -501,12 +503,23 @@ export async function POST(req: NextRequest) {
 
   // ── Step 6b: Derive current role from inserted experiences ─────────────
   // Don't trust canonical.current_company/current_title — derive from
-  // the actual is_current=true experiences, preferring non-student roles
-  // with the latest start_date.
+  // the actual is_current=true experiences.
+  //
+  // Selection priority:
+  //   1. is_primary_current=true (from Crust v2's is_default flag) — highest signal
+  //   2. Non-student-titled role with latest start_date
+  //   3. Any non-student-titled role
+  //   4. Any role with a title
+  //   5. First role
+  //
+  // Backlog: isStudentTitle below only checks the title regex. Stale
+  // "current" internships from Crust may have non-student-style titles
+  // and slip through this filter. Cross-check employment_type='internship'
+  // when that signal becomes available in v2 responses.
   {
     const { data: currentExps } = await supabase
       .from('person_experiences')
-      .select('title_raw, company_id, start_date')
+      .select('title_raw, company_id, start_date, is_primary_current')
       .eq('person_id', personId)
       .eq('is_current', true)
       .order('start_date', { ascending: false });
@@ -515,8 +528,10 @@ export async function POST(req: NextRequest) {
       const isStudentTitle = (t: string | null) =>
         !!t && /\bintern\b|\binternship\b|\bco-?op\b|\bstudent\b/i.test(t);
 
-      // Prefer non-student current role with a title; fall back gracefully
-      const bestCurrent = currentExps.find(e => e.title_raw && !isStudentTitle(e.title_raw))
+      // 1. Crust v2's is_default flag wins outright if set
+      // 2-5. Existing heuristic fallback
+      const bestCurrent = currentExps.find(e => e.is_primary_current === true)
+        ?? currentExps.find(e => e.title_raw && !isStudentTitle(e.title_raw))
         ?? currentExps.find(e => !isStudentTitle(e.title_raw))
         ?? currentExps.find(e => e.title_raw)
         ?? currentExps[0];

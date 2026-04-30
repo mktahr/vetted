@@ -1,30 +1,36 @@
-// app/api/admin/import/route.ts
+// app/api/admin/crust-import/run/route.ts
 //
-// Streaming bulk import from Crust Data Person Search API (v2).
+// Streaming full import. NDJSON response (one event per line).
+// Loops Crust /person/search → mapPersonSearchToCanonical → POST /api/ingest
+// until volume target reached or no more results. Writes to crust_import_log.
 //
-// POST body:
-//   { company_name?, location?, seniority_level?, function_category?,
-//     total_count?: number (from preview — used as progress denominator) }
+// Request body: {
+//   filters: UIFilterState,
+//   volume: number,            // hard cap 5000
+// }
 //
-// Response: newline-delimited JSON (NDJSON) events for live progress.
-//
-// Before starting, queries existing linkedin_urls from `people` and passes
-// them to Crust via post_processing.exclude_profiles so we don't re-import
-// duplicates. Paginates via next_cursor at 100 per page until exhausted.
+// NDJSON events:
+//   { type: 'start', volume, excluded_count, filter_body }
+//   { type: 'progress', current, total, name?, status: 'success'|'failed'|'skipped', error? }
+//   { type: 'info', message }
+//   { type: 'error', message }
+//   { type: 'complete', processed, success, failed, skipped, errors[] }
 
 import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { fetchAllRows } from '@/lib/supabase'
+import { fetchPersonSearch } from '@/lib/crust/api'
+import { buildCrustFilter } from '@/lib/crust/build-filter'
+import { writeCrustLog, estimateCredits } from '@/lib/crust/log'
 import { mapPersonSearchToCanonical } from '@/lib/ingest/mappers/crust-v2'
-import {
-  buildPersonSearchBody,
-  fetchPersonSearchPage,
-  type PersonSearchInputs,
-} from '@/lib/ingest/crust-person-search'
 import { postIngest } from '@/lib/ingest/crust-api'
+import type { PersonSearchResult } from '@/lib/ingest/crust-person-search'
+import { HARD_VOLUME_CAP, type UIFilterState } from '@/lib/crust/types'
 
 export const maxDuration = 300
 
 const PAGE_SIZE = 100
+const EXCLUDE_PROFILES_CAP = 50000
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.CRUSTDATA_API_KEY
@@ -34,23 +40,31 @@ export async function POST(req: NextRequest) {
 
   if (!apiKey) return Response.json({ error: 'CRUSTDATA_API_KEY not set' }, { status: 500 })
   if (!ingestSecret) return Response.json({ error: 'INGEST_SECRET not set' }, { status: 500 })
-  if (!supabaseUrl || !supabaseKey) return Response.json({ error: 'Missing SUPABASE env vars' }, { status: 500 })
+  if (!supabaseUrl || !supabaseKey) {
+    return Response.json({ error: 'Missing SUPABASE env vars' }, { status: 500 })
+  }
 
-  let inputs: PersonSearchInputs & { total_count?: number }
+  let body: { filters?: UIFilterState; volume?: number }
   try {
-    inputs = await req.json()
+    body = await req.json()
   } catch {
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  // Validate filters
-  try {
-    buildPersonSearchBody(inputs, { limit: 1 })
-  } catch (err) {
-    return Response.json(
-      { error: err instanceof Error ? err.message : 'Bad inputs' },
-      { status: 400 },
-    )
+  if (!body.filters) return Response.json({ error: 'filters required' }, { status: 400 })
+  if (!body.filters.function_category?.trim()) {
+    return Response.json({ error: 'function_category is required' }, { status: 400 })
+  }
+
+  const volume = Math.min(
+    Math.max(1, Math.floor(body.volume || 100)),
+    HARD_VOLUME_CAP,
+  )
+
+  const supabase = createClient(supabaseUrl, supabaseKey)
+  const filterBody = buildCrustFilter(body.filters)
+  if (!filterBody) {
+    return Response.json({ error: 'No filters resolved from UI state' }, { status: 400 })
   }
 
   const host = req.headers.get('host')
@@ -58,16 +72,21 @@ export async function POST(req: NextRequest) {
   const ingestUrl = `${proto}://${host}/api/ingest`
 
   // Fetch existing linkedin_urls for exclude_profiles dedup
-  const supabase = createClient(supabaseUrl, supabaseKey)
-  const { data: existingPeople } = await supabase
-    .from('people')
-    .select('linkedin_url')
-    .not('linkedin_url', 'is', null)
-  const excludeProfiles = (existingPeople || [])
-    .map(p => p.linkedin_url as string)
-    .filter(Boolean)
+  let excludeProfiles: string[] = []
+  try {
+    const existing = await fetchAllRows<{ linkedin_url: string | null }>(
+      'people',
+      'linkedin_url',
+      'linkedin_url',
+    )
+    excludeProfiles = existing
+      .map(r => r.linkedin_url)
+      .filter((u): u is string => !!u && u.trim().length > 0)
+      .slice(0, EXCLUDE_PROFILES_CAP)
+  } catch (err) {
+    console.error('[crust-import/run] exclude_profiles fetch failed:', err)
+  }
 
-  const estimatedTotal = inputs.total_count ?? null
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream({
@@ -78,44 +97,48 @@ export async function POST(req: NextRequest) {
 
       send({
         type: 'start',
-        estimated_total: estimatedTotal,
+        volume,
         excluded_count: excludeProfiles.length,
-        filters: {
-          company_name: inputs.company_name || null,
-          location: inputs.location || null,
-          seniority_level: inputs.seniority_level || null,
-          function_category: inputs.function_category || null,
-        },
+        filter_body: filterBody,
       })
 
       let processed = 0
       let success = 0
       let failed = 0
       let skipped = 0
+      let totalCount: number | null = null
       const errors: Array<Record<string, unknown>> = []
       let cursor: string | null = null
 
       try {
-        // Paginate until Crust runs out of results.
-        while (true) {
-          const body = buildPersonSearchBody(inputs, {
-            limit: PAGE_SIZE,
+        while (processed < volume) {
+          const remaining = volume - processed
+          const pageLimit = Math.min(PAGE_SIZE, remaining)
+
+          const page = await fetchPersonSearch(apiKey, {
+            filters: filterBody,
+            limit: pageLimit,
             cursor: cursor ?? undefined,
-            excludeProfiles,
+            post_processing: excludeProfiles.length > 0 ? { exclude_profiles: excludeProfiles } : undefined,
           })
 
-          const page = await fetchPersonSearchPage(apiKey, body)
           if (page.error) {
             send({ type: 'error', message: page.error })
             errors.push({ phase: 'crust_search', error: page.error })
             break
           }
-          if (page.records.length === 0) {
+
+          if (totalCount === null && page.total_count !== null) {
+            totalCount = page.total_count
+            send({ type: 'info', message: `Crust reports ${totalCount} total matches` })
+          }
+
+          if (page.profiles.length === 0) {
             send({ type: 'info', message: 'No more results from Crust' })
             break
           }
 
-          for (const record of page.records) {
+          for (const record of page.profiles as PersonSearchResult[]) {
             processed++
 
             const payload = mapPersonSearchToCanonical(record)
@@ -125,7 +148,7 @@ export async function POST(req: NextRequest) {
               send({
                 type: 'progress',
                 current: processed,
-                total: estimatedTotal,
+                total: volume,
                 name: rawName,
                 status: 'skipped',
                 error: 'missing linkedin_url or full_name',
@@ -142,7 +165,7 @@ export async function POST(req: NextRequest) {
               send({
                 type: 'progress',
                 current: processed,
-                total: estimatedTotal,
+                total: volume,
                 name: payload.full_name,
                 linkedin_url: payload.linkedin_url,
                 status: 'success',
@@ -163,17 +186,28 @@ export async function POST(req: NextRequest) {
               send({
                 type: 'progress',
                 current: processed,
-                total: estimatedTotal,
+                total: volume,
                 name: payload.full_name,
                 status: 'failed',
                 error: msg,
               })
             }
+
+            if (processed >= volume) break
           }
 
-          cursor = page.cursor
+          cursor = page.next_cursor
           if (!cursor) break
         }
+
+        // Log the run
+        await writeCrustLog(supabase, {
+          request_kind: 'run',
+          filter_body: filterBody as unknown,
+          results_count: processed,
+          credits_used: estimateCredits(processed),
+          error_message: errors.length > 0 ? errors[0].error as string : null,
+        })
 
         send({
           type: 'complete',
@@ -181,12 +215,18 @@ export async function POST(req: NextRequest) {
           success,
           failed,
           skipped,
+          total_count: totalCount,
           errors: errors.slice(0, 50),
         })
       } catch (err) {
-        send({
-          type: 'error',
-          message: err instanceof Error ? err.message : 'Unknown error',
+        const msg = err instanceof Error ? err.message : 'Unknown error'
+        send({ type: 'error', message: msg })
+        await writeCrustLog(supabase, {
+          request_kind: 'run',
+          filter_body: filterBody as unknown,
+          results_count: processed,
+          credits_used: estimateCredits(processed),
+          error_message: msg,
         })
         send({ type: 'complete', processed, success, failed, skipped, errors })
       } finally {
