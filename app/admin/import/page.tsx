@@ -46,6 +46,65 @@ function Section({ title, children, defaultOpen = true }: { title: string; child
 
 // ─── Page ───────────────────────────────────────────────────────────────────
 
+// ─── Sample row helpers ────────────────────────────────────────────────────
+//
+// Crust v2 /person/search response does NOT include `years_of_experience_raw`
+// or `years_at_company_raw` — those are filter-only fields per the docs.
+// We compute YOE and tenure locally from start_date fields that ARE returned.
+// Same approach the existing crust-v2 mapper uses for years_experience.
+
+function parseStartYear(iso: string | null | undefined): number | null {
+  if (!iso || typeof iso !== 'string') return null
+  const m = iso.match(/^(\d{4})-(\d{2})/)
+  if (!m) return null
+  const y = parseInt(m[1], 10)
+  const mo = parseInt(m[2], 10)
+  if (isNaN(y) || isNaN(mo)) return null
+  return y + (mo - 1) / 12
+}
+
+function yearsBetween(startYearFractional: number | null, endYearFractional: number | null): number | null {
+  if (startYearFractional === null) return null
+  const end = endYearFractional ?? (new Date().getFullYear() + new Date().getMonth() / 12)
+  const diff = end - startYearFractional
+  return diff >= 0 ? Math.round(diff * 10) / 10 : null
+}
+
+function isInternshipTitle(title: string | undefined | null): boolean {
+  if (!title) return false
+  return /\bintern\b|\binternship\b|\bco-?op\b/i.test(title)
+}
+
+/**
+ * Years of experience: span from earliest non-internship start_date to now.
+ * Walks both current and past employers.
+ */
+function computeYOE(profile: any): number | null {
+  const cur = profile?.experience?.employment_details?.current ?? []
+  const past = profile?.experience?.employment_details?.past ?? []
+  const all = [...cur, ...past] as Array<{ title?: string; start_date?: string }>
+  let earliest: number | null = null
+  for (const e of all) {
+    if (isInternshipTitle(e.title)) continue
+    const y = parseStartYear(e.start_date)
+    if (y === null) continue
+    if (earliest === null || y < earliest) earliest = y
+  }
+  return yearsBetween(earliest, null)
+}
+
+/**
+ * Years at current company: prefer the is_default=true current role's
+ * start_date. Fall back to current[0].start_date.
+ */
+function computeTenure(profile: any): number | null {
+  const cur = profile?.experience?.employment_details?.current ?? []
+  if (cur.length === 0) return null
+  const primary = cur.find((c: any) => c?.is_default === true) ?? cur[0]
+  const y = parseStartYear(primary?.start_date)
+  return yearsBetween(y, null)
+}
+
 interface ProgressEvent {
   type: string
   current?: number
@@ -522,44 +581,48 @@ export default function CrustImportPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-12)' }}>
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-surface)', zIndex: 1 }}>
                   <tr style={{ borderBottom: '1px solid var(--border-strong)' }}>
+                    <th style={{ ...thStyle, width: 36, padding: '6px 4px' }} title="LinkedIn">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="var(--fg-tertiary)" style={{ display: 'inline-block', verticalAlign: 'middle' }}><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                    </th>
                     <th style={thStyle}>Name</th>
                     <th style={thStyle}>Title</th>
                     <th style={thStyle}>Company</th>
                     <th style={thStyle}>Location</th>
-                    <th style={thStyleRight}>YOE</th>
-                    <th style={thStyleRight}>YOC</th>
-                    <th style={{ ...thStyle, width: 36, textAlign: 'center' }} title="LinkedIn">in</th>
+                    <th style={thStyleRight} title="Years of experience (computed from earliest non-intern start_date)">YOE</th>
+                    <th style={thStyleRight} title="Years at current company (computed from current role start_date)">Tenure</th>
                   </tr>
                 </thead>
                 <tbody>
                   {previewProfiles.map((p: any, i) => {
                     const cur = p.experience?.employment_details?.current?.[0]
-                    const yoe = p.years_of_experience_raw ?? p.experience?.years_of_experience_raw ?? null
-                    const yoc = cur?.years_at_company_raw ?? null
+                    const yoe = computeYOE(p)
+                    const tenure = computeTenure(p)
                     const linkedinUrl = p.social_handles?.professional_network_identifier?.profile_url
                       ?? p.social_handles?.professional_network?.profile_url
                       ?? null
                     return (
                       <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                        <td style={tdStyle}>{p.basic_profile?.name || '—'}</td>
-                        <td style={tdStyle}>{cur?.title || '—'}</td>
-                        <td style={tdStyle}>{cur?.name || '—'}</td>
-                        <td style={tdStyle}>{p.basic_profile?.location?.raw || '—'}</td>
-                        <td style={tdStyleRight}>{typeof yoe === 'number' ? yoe.toFixed(1) : '—'}</td>
-                        <td style={tdStyleRight}>{typeof yoc === 'number' ? yoc.toFixed(1) : '—'}</td>
-                        <td style={{ ...tdStyle, textAlign: 'center', width: 36 }}>
+                        <td style={{ ...tdStyle, textAlign: 'center', width: 36, padding: '6px 4px' }}>
                           {linkedinUrl ? (
                             <a
                               href={linkedinUrl} target="_blank" rel="noopener noreferrer"
-                              style={{ color: 'var(--fg-tertiary)', textDecoration: 'none' }}
+                              style={{ color: 'var(--fg-tertiary)', textDecoration: 'none', display: 'inline-block' }}
                               title={linkedinUrl}
+                              onMouseEnter={e => (e.currentTarget.style.color = 'var(--fg-primary)')}
+                              onMouseLeave={e => (e.currentTarget.style.color = 'var(--fg-tertiary)')}
                             >
                               <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                                 <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
                               </svg>
                             </a>
-                          ) : '—'}
+                          ) : <span style={{ opacity: 0.3 }}>—</span>}
                         </td>
+                        <td style={tdStyle}>{p.basic_profile?.name || '—'}</td>
+                        <td style={tdStyle}>{cur?.title || '—'}</td>
+                        <td style={tdStyle}>{cur?.name || '—'}</td>
+                        <td style={tdStyle}>{p.basic_profile?.location?.raw || '—'}</td>
+                        <td style={tdStyleRight}>{typeof yoe === 'number' ? yoe.toFixed(1) : '—'}</td>
+                        <td style={tdStyleRight}>{typeof tenure === 'number' ? tenure.toFixed(1) : '—'}</td>
                       </tr>
                     )
                   })}
