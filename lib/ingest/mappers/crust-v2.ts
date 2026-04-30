@@ -12,7 +12,7 @@
 //   experience.employment_details.past[]                         → past experiences
 //   education.schools[]                                          → education
 
-export const MAPPER_VERSION = '1.0.0'
+export const MAPPER_VERSION = '1.1.0'
 
 import type { IngestPayload, CanonicalProfile, RawExperience, RawEducation } from './crust'
 import type { PersonSearchResult, PersonSearchEmployer, PersonSearchSchool } from '../crust-person-search'
@@ -73,8 +73,15 @@ function extractLinkedInUrl(r: PersonSearchResult): string | null {
 function mapEmployer(e: PersonSearchEmployer, isCurrent: boolean): RawExperience {
   const start = dateOnly(e.start_date)
   const end = dateOnly(e.end_date)
+  // Capture the company's canonical LinkedIn URL when present. Crust returns
+  // this on every embedded employer in v2 person responses; the ingest path
+  // uses it as the canonical match key for upsertCompany(). Only the URL is
+  // available — domain/website/industry/founding_year live on the separate
+  // /company/search endpoint and require a richer enrichment pass.
+  const companyLinkedinUrl = e.company_professional_network_profile_url?.trim() || undefined
   return {
     company_name: e.name?.trim() || undefined,
+    company_linkedin_url: companyLinkedinUrl,
     title: e.title?.trim() || undefined,
     start_date: start,
     end_date: end,
@@ -191,6 +198,7 @@ export function mapPersonSearchToCanonical(record: PersonSearchResult): IngestPa
     full_name,
     location_resolved: resolveLocation(record),
     current_company: primaryCurrent?.name?.trim() || null,
+    current_company_linkedin_url: primaryCurrent?.company_professional_network_profile_url?.trim() || null,
     current_title: primaryCurrent?.title?.trim() || record.basic_profile?.current_title?.trim() || null,
     years_experience: yearsExperience,
     years_at_current_company: yearsAtCurrent,
