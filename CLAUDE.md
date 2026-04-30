@@ -705,6 +705,16 @@ Confirm directly with Crust:
 
 ## Development Rules — MUST FOLLOW
 
+### Two lessons from 2026-04-29 (top of mind)
+
+**1. Forward-referenced `const` inside a synchronous closure → runtime TDZ.**
+TypeScript will accept code like `setPeople(rows.map(r => ({ x: cMap[r.id] })))` where `const cMap = ...` is declared LATER in the same scope. The compiler is correct that closures CAN capture forward-declared bindings — but only if the closure runs AFTER the declaration line. `.map()` callbacks inside `setState(...)` execute synchronously, so they hit the const before its initializer runs and V8 throws `Cannot access 'X' before initialization`. **Always declare consts BEFORE any synchronous callback that references them.**
+
+**2. Curl HTTP 200 ≠ "preview works."**
+Next.js prerenders the static shell server-side and bails out to client-side rendering for pages with dynamic data. Curl gets the shell. The browser executes JS during hydration and that's when client-side TDZ / runtime errors fire. **Before declaring a preview deploy verified, load the URL in an actual incognito browser window.** No exceptions for "I can see the title in the HTML."
+
+See "TDZ from forward-referenced const inside synchronous closure" section below for the full diagnostic flow when this class of bug appears.
+
 ### Hard gates
 
 When the user says "show me X before pushing," that's a hard gate. Pushing without showing is a process violation. Wait for explicit approval before proceeding past a gate.
