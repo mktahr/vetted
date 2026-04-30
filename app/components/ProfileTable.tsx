@@ -402,6 +402,14 @@ export default function ProfileTable() {
           }
         }
 
+        // Build cMap BEFORE setPeople — the tenure mapping below reads cMap
+        // synchronously inside its .map() callback. Declaring const cMap after
+        // setPeople(...) creates a Temporal Dead Zone violation on the client
+        // (Cannot access 'cMap' before initialization) even though TypeScript
+        // accepts the forward reference.
+        const cMap: Record<string, string> = {}
+        for (const c of companies || []) cMap[c.company_id] = c.company_name
+
         setPeople((peopleData || []).map((r: any) => ({
           ...r, current_company_name: r.companies?.company_name || null,
           latest_bucket: latestBucket[r.person_id]?.bucket ?? null, latest_bucket_reason: latestBucket[r.person_id]?.reason ?? null,
@@ -416,8 +424,6 @@ export default function ProfileTable() {
 
         setSeniorityOptions((srs || []).map(s => ({ value: s.seniority_normalized, label: s.seniority_normalized.replace(/_/g, ' ') })))
         setCompanyOptions((companies || []).filter((c: any) => c.focus === 'hard_tech' || c.focus === 'all_tech').map((c: any) => ({ value: c.company_id, label: c.company_name, sublabel: c.primary_industry_tag || undefined })))
-        const cMap: Record<string, string> = {}
-        for (const c of companies || []) cMap[c.company_id] = c.company_name
         setCompanyNameMap(cMap)
         setCompaniesRaw(companies || [])
         setSchoolOptions((schools || []).filter((s: any) => s.school_score != null).map((s: any) => ({ value: s.school_id, label: s.school_name, sublabel: s.is_foreign ? "Int'l" : undefined })))
