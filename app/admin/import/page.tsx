@@ -96,6 +96,32 @@ function computeYOE(profile: any): number | null {
 }
 
 /**
+ * Top school for the preview table — most recent post-secondary entry by
+ * end_year (start_year tiebreak). No school_score table available client-
+ * side, so "most recent non-high-school" is the canonical fallback. Same
+ * spirit as graduationDateFromEducation in the canonical mapper, but here
+ * we want the school name, not a date.
+ */
+function topSchoolName(profile: any): string | null {
+  const schools = profile?.education?.schools ?? []
+  if (!Array.isArray(schools) || schools.length === 0) return null
+  const isHighSchoolish = (s: any) => /high school|secondary school|\bged\b/i.test(s?.degree || '')
+  const named = schools.filter((s: any) => typeof s?.school === 'string' && s.school.trim())
+  const postSec = named.filter((s: any) => !isHighSchoolish(s))
+  const pool = postSec.length > 0 ? postSec : named
+  if (pool.length === 0) return null
+  const sorted = [...pool].sort((a: any, b: any) => {
+    const ae = typeof a.end_year === 'number' ? a.end_year : -Infinity
+    const be = typeof b.end_year === 'number' ? b.end_year : -Infinity
+    if (ae !== be) return be - ae
+    const as = typeof a.start_year === 'number' ? a.start_year : -Infinity
+    const bs = typeof b.start_year === 'number' ? b.start_year : -Infinity
+    return bs - as
+  })
+  return sorted[0].school.trim()
+}
+
+/**
  * Years at current company: prefer the is_default=true current role's
  * start_date. Fall back to current[0].start_date.
  */
@@ -131,7 +157,16 @@ export default function CrustImportPage() {
   // common case. Clear-all below resets to EMPTY_FILTERS (truly empty) so
   // users can start from zero. See lib/crust/types.ts for the difference.
   const [ui, setUi] = useState<UIFilterState>(INITIAL_FILTERS)
-  const [volume, setVolume] = useState<number>(100)
+  // volumeText is the raw input string so the user can clear/type freely
+  // (transient empty state allowed). The numeric `volume` is derived and
+  // clamped for credit estimates + the actual import call. onBlur fills
+  // empty/invalid back to a sensible default.
+  const [volumeText, setVolumeText] = useState<string>('100')
+  const volume = useMemo(() => {
+    const n = parseInt(volumeText, 10)
+    if (isNaN(n) || n < 1) return 1
+    return Math.min(HARD_VOLUME_CAP, n)
+  }, [volumeText])
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [previewTotalCount, setPreviewTotalCount] = useState<number | null>(null)
@@ -506,8 +541,14 @@ export default function CrustImportPage() {
               <div style={lblStyle}>Pull how many?</div>
               <input
                 type="number" min={1} max={HARD_VOLUME_CAP} step={1}
-                value={volume}
-                onChange={e => setVolume(Math.max(1, Math.min(HARD_VOLUME_CAP, parseInt(e.target.value) || 1)))}
+                value={volumeText}
+                onChange={e => setVolumeText(e.target.value)}
+                onBlur={() => {
+                  const n = parseInt(volumeText, 10)
+                  if (isNaN(n) || n < 1) setVolumeText('1')
+                  else if (n > HARD_VOLUME_CAP) setVolumeText(String(HARD_VOLUME_CAP))
+                  else setVolumeText(String(n))
+                }}
                 style={{ ...inputStyle, width: 120 }}
               />
               <div style={{ fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', marginTop: 2 }}>
@@ -575,17 +616,32 @@ export default function CrustImportPage() {
                 Autocomplete + sample fetches are free per Crust pricing
               </span>
             </div>
-            <div style={{ maxHeight: 'min(70vh, 720px)', minHeight: 480, overflowY: 'auto', borderTop: '1px solid var(--border-subtle)' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-12)' }}>
+            <div style={{ maxHeight: 'min(70vh, 720px)', minHeight: 480, overflowY: 'auto', overflowX: 'hidden', borderTop: '1px solid var(--border-subtle)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-12)', tableLayout: 'fixed' }}>
+                {/* tableLayout: fixed honors these column widths regardless
+                    of content length — combined with ellipsis truncation in
+                    tdStyle, the table always fits the container. YOE/Tenure
+                    are short numbers so they get minimal width. */}
+                <colgroup>
+                  <col style={{ width: 32 }} />
+                  <col style={{ width: '14%' }} />
+                  <col style={{ width: '21%' }} />
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '17%' }} />
+                  <col style={{ width: 56 }} />
+                  <col style={{ width: 64 }} />
+                </colgroup>
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-surface)', zIndex: 1 }}>
                   <tr style={{ borderBottom: '1px solid var(--border-strong)' }}>
-                    <th style={{ ...thStyle, width: 36, padding: '6px 4px' }} title="LinkedIn">
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="var(--fg-tertiary)" style={{ display: 'inline-block', verticalAlign: 'middle' }}><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                    </th>
+                    {/* Header above LinkedIn icons stays blank — the link
+                        belongs in each row, not as a column label. */}
+                    <th style={{ ...thStyle, padding: '6px 4px' }} aria-label="LinkedIn link" />
                     <th style={thStyle}>Name</th>
                     <th style={thStyle}>Title</th>
                     <th style={thStyle}>Company</th>
                     <th style={thStyle}>Location</th>
+                    <th style={thStyle}>Education</th>
                     <th style={thStyleRight} title="Years of experience (computed from earliest non-intern start_date)">YOE</th>
                     <th style={thStyleRight} title="Years at current company (computed from current role start_date)">Tenure</th>
                   </tr>
@@ -599,12 +655,17 @@ export default function CrustImportPage() {
                     const cur = currents.find((c: any) => c?.is_default === true) ?? currents[0]
                     const yoe = computeYOE(p)
                     const tenure = computeTenure(p)
+                    const school = topSchoolName(p)
                     const linkedinUrl = p.social_handles?.professional_network_identifier?.profile_url
                       ?? p.social_handles?.professional_network?.profile_url
                       ?? null
+                    const name = p.basic_profile?.name || '—'
+                    const title = cur?.title || '—'
+                    const companyName = cur?.name || '—'
+                    const location = p.basic_profile?.location?.raw || '—'
                     return (
                       <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                        <td style={{ ...tdStyle, textAlign: 'center', width: 36, padding: '6px 4px' }}>
+                        <td style={{ ...tdStyle, textAlign: 'center', padding: '6px 4px' }}>
                           {linkedinUrl ? (
                             <a
                               href={linkedinUrl} target="_blank" rel="noopener noreferrer"
@@ -619,10 +680,11 @@ export default function CrustImportPage() {
                             </a>
                           ) : <span style={{ opacity: 0.3 }}>—</span>}
                         </td>
-                        <td style={tdStyle}>{p.basic_profile?.name || '—'}</td>
-                        <td style={tdStyle}>{cur?.title || '—'}</td>
-                        <td style={tdStyle}>{cur?.name || '—'}</td>
-                        <td style={tdStyle}>{p.basic_profile?.location?.raw || '—'}</td>
+                        <td style={tdStyle} title={name}>{name}</td>
+                        <td style={tdStyle} title={title}>{title}</td>
+                        <td style={tdStyle} title={companyName}>{companyName}</td>
+                        <td style={tdStyle} title={location}>{location}</td>
+                        <td style={tdStyle} title={school || ''}>{school || '—'}</td>
                         <td style={tdStyleRight}>{typeof yoe === 'number' ? yoe.toFixed(1) : '—'}</td>
                         <td style={tdStyleRight}>{typeof tenure === 'number' ? tenure.toFixed(1) : '—'}</td>
                       </tr>
@@ -772,7 +834,7 @@ const thStyle: React.CSSProperties = {
 const thStyleRight: React.CSSProperties = { ...thStyle, textAlign: 'right' }
 const tdStyle: React.CSSProperties = {
   padding: '6px 8px', whiteSpace: 'nowrap',
-  overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 240,
+  overflow: 'hidden', textOverflow: 'ellipsis',
 }
 const tdStyleRight: React.CSSProperties = {
   ...tdStyle, textAlign: 'right',
