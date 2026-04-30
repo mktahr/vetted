@@ -73,6 +73,8 @@ export default function CrustImportPage() {
   const [previewTotalCount, setPreviewTotalCount] = useState<number | null>(null)
   const [previewExcluded, setPreviewExcluded] = useState<number | null>(null)
   const [previewProfiles, setPreviewProfiles] = useState<unknown[]>([])
+  const [previewCursor, setPreviewCursor] = useState<string | null>(null)
+  const [previewLoadingMore, setPreviewLoadingMore] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState<ProgressEvent[]>([])
@@ -88,11 +90,12 @@ export default function CrustImportPage() {
   async function runPreview() {
     setPreviewLoading(true); setPreviewError(null)
     setPreviewProfiles([]); setPreviewTotalCount(null); setPreviewExcluded(null)
+    setPreviewCursor(null)
     try {
       const resp = await fetch('/api/admin/crust-import/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filters: ui }),
+        body: JSON.stringify({ filters: ui, limit: 50 }),
       })
       const data = await resp.json()
       if (!resp.ok || data.error) {
@@ -101,11 +104,35 @@ export default function CrustImportPage() {
         setPreviewTotalCount(data.total_count)
         setPreviewExcluded(data.excluded_count ?? 0)
         setPreviewProfiles(data.profiles || [])
+        setPreviewCursor(data.next_cursor ?? null)
       }
     } catch (err) {
       setPreviewError(err instanceof Error ? err.message : 'Network error')
     } finally {
       setPreviewLoading(false)
+    }
+  }
+
+  async function loadMorePreview() {
+    if (!previewCursor || previewProfiles.length >= 100) return
+    setPreviewLoadingMore(true); setPreviewError(null)
+    try {
+      const resp = await fetch('/api/admin/crust-import/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filters: ui, limit: 50, cursor: previewCursor }),
+      })
+      const data = await resp.json()
+      if (!resp.ok || data.error) {
+        setPreviewError(data.error || `HTTP ${resp.status}`)
+      } else {
+        setPreviewProfiles(prev => [...prev, ...(data.profiles || [])])
+        setPreviewCursor(data.next_cursor ?? null)
+      }
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : 'Network error')
+    } finally {
+      setPreviewLoadingMore(false)
     }
   }
 
@@ -176,6 +203,7 @@ export default function CrustImportPage() {
             onChange={v => update('function_category', v as string)}
             hint="experience.employment_details.current.function_category"
             placeholder="Engineering, Sales, Marketing, …"
+            helperText="Crust uses broad function categories (e.g., Engineering, Sales, Operations). To narrow within a function — say, software engineers vs hardware engineers — pick the function here and add keywords in the Title field below."
           />
           <AutocompleteSelect
             fieldKey="seniority_level"
@@ -183,6 +211,7 @@ export default function CrustImportPage() {
             value={ui.seniority_levels}
             onChange={v => update('seniority_levels', v as string[])}
             hint="experience.employment_details.current.seniority_level"
+            helperText="Crust's seniority enum: Entry Level (early IC), Entry Level Manager (first-line manager), Senior (senior IC or manager), Director, Vice President, CXO, Owner / Partner, Strategic, In Training, Experienced Manager."
           />
           <RangeInput
             label="Years of experience" unit="yrs" step={1}
@@ -192,16 +221,24 @@ export default function CrustImportPage() {
             hint="years_of_experience_raw"
           />
           <div style={{ marginBottom: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
-              <label style={lblStyle}>Title</label>
-              <span style={hintStyle}>experience.employment_details.current.title</span>
-            </div>
+            <label
+              title="experience.employment_details.current.title"
+              style={{ ...lblStyle, display: 'block', marginBottom: 4 }}
+            >
+              Title
+            </label>
             <input
               type="text" value={ui.title}
               onChange={e => update('title', e.target.value)}
-              placeholder="VP, Director, Engineer…"
+              placeholder="embedded, firmware, RTOS"
               style={inputStyle}
             />
+            <div style={{
+              marginTop: 4, fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)',
+              lineHeight: 1.4,
+            }}>
+              Comma-separated keywords. Profiles whose current title matches <strong style={{ color: 'var(--fg-secondary)' }}>any</strong> term are returned. Single term = single match.
+            </div>
           </div>
         </Section>
 
@@ -220,8 +257,13 @@ export default function CrustImportPage() {
                     color: ui.geo_mode === mode ? 'var(--accent-400)' : 'var(--fg-tertiary)',
                     cursor: 'pointer',
                   }}
-                >{mode}</button>
+                >{mode === 'region' ? 'region/state' : mode}</button>
               ))}
+            </div>
+            <div style={{
+              marginTop: 6, fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', lineHeight: 1.4,
+            }}>
+              <strong style={{ color: 'var(--fg-secondary)' }}>region/state</strong> covers US states and international regions. For city-level search, use <strong style={{ color: 'var(--fg-secondary)' }}>radius</strong>.
             </div>
           </div>
           {ui.geo_mode === 'country' && (
@@ -234,7 +276,7 @@ export default function CrustImportPage() {
           )}
           {ui.geo_mode === 'region' && (
             <AutocompleteSelect
-              fieldKey="region" label="Regions / states" multi={true}
+              fieldKey="region" label="Region / state" multi={true}
               value={ui.regions}
               onChange={v => update('regions', v as string[])}
               hint="basic_profile.location.state"
@@ -273,10 +315,12 @@ export default function CrustImportPage() {
             hint="experience.employment_details.current.company_industries"
           />
           <div style={{ marginBottom: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
-              <label style={lblStyle}>Headcount range</label>
-              <span style={hintStyle}>company_headcount_range</span>
-            </div>
+            <label
+              title="experience.employment_details.current.company_headcount_range"
+              style={{ ...lblStyle, display: 'block', marginBottom: 4 }}
+            >
+              Company headcount
+            </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {HEADCOUNT_RANGES.map(r => {
                 const active = ui.headcount_ranges.includes(r)
@@ -328,15 +372,24 @@ export default function CrustImportPage() {
           />
         </Section>
 
+        <Section title="Skills" defaultOpen={false}>
+          <AutocompleteSelect
+            fieldKey="skill" label="Skills" multi={true}
+            value={ui.skills}
+            onChange={v => update('skills', v as string[])}
+            hint="skills.professional_network_skills"
+            helperText="LinkedIn skill tags. Use specific tools to infer specialty (e.g., Cadence/Synopsys → chip, ROS → robotics, Simulink → controls)."
+          />
+        </Section>
+
         <Section title="Signals" defaultOpen={false}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-13)', cursor: 'pointer' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-13)', cursor: 'pointer' }} title="recently_changed_jobs">
             <input
               type="checkbox" checked={ui.recently_changed_jobs}
               onChange={e => update('recently_changed_jobs', e.target.checked)}
               style={{ accentColor: 'var(--accent-500)' }}
             />
             <span>Recently changed jobs</span>
-            <span style={{ ...hintStyle, marginLeft: 'auto' }}>recently_changed_jobs</span>
           </label>
         </Section>
 
@@ -457,34 +510,79 @@ export default function CrustImportPage() {
             background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
             borderRadius: 'var(--r-card)',
           }}>
-            <h3 style={{ fontSize: 'var(--fs-14)', marginBottom: 8, fontWeight: 'var(--fw-semibold)' as any }}>
-              Sample ({previewProfiles.length})
-            </h3>
-            <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <h3 style={{ fontSize: 'var(--fs-14)', fontWeight: 'var(--fw-semibold)' as any }}>
+                Sample ({previewProfiles.length}{previewProfiles.length < 100 ? ' / 100 max' : ''})
+              </h3>
+              <span style={{ fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)' }}>
+                Autocomplete + sample fetches are free per Crust pricing
+              </span>
+            </div>
+            <div style={{ maxHeight: 'min(70vh, 720px)', minHeight: 480, overflowY: 'auto', borderTop: '1px solid var(--border-subtle)' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--fs-12)' }}>
-                <thead>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-surface)', zIndex: 1 }}>
                   <tr style={{ borderBottom: '1px solid var(--border-strong)' }}>
                     <th style={thStyle}>Name</th>
                     <th style={thStyle}>Title</th>
                     <th style={thStyle}>Company</th>
                     <th style={thStyle}>Location</th>
+                    <th style={thStyleRight}>YOE</th>
+                    <th style={thStyleRight}>YOC</th>
+                    <th style={{ ...thStyle, width: 36, textAlign: 'center' }} title="LinkedIn">in</th>
                   </tr>
                 </thead>
                 <tbody>
                   {previewProfiles.map((p: any, i) => {
                     const cur = p.experience?.employment_details?.current?.[0]
+                    const yoe = p.years_of_experience_raw ?? p.experience?.years_of_experience_raw ?? null
+                    const yoc = cur?.years_at_company_raw ?? null
+                    const linkedinUrl = p.social_handles?.professional_network_identifier?.profile_url
+                      ?? p.social_handles?.professional_network?.profile_url
+                      ?? null
                     return (
                       <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                         <td style={tdStyle}>{p.basic_profile?.name || '—'}</td>
                         <td style={tdStyle}>{cur?.title || '—'}</td>
                         <td style={tdStyle}>{cur?.name || '—'}</td>
                         <td style={tdStyle}>{p.basic_profile?.location?.raw || '—'}</td>
+                        <td style={tdStyleRight}>{typeof yoe === 'number' ? yoe.toFixed(1) : '—'}</td>
+                        <td style={tdStyleRight}>{typeof yoc === 'number' ? yoc.toFixed(1) : '—'}</td>
+                        <td style={{ ...tdStyle, textAlign: 'center', width: 36 }}>
+                          {linkedinUrl ? (
+                            <a
+                              href={linkedinUrl} target="_blank" rel="noopener noreferrer"
+                              style={{ color: 'var(--fg-tertiary)', textDecoration: 'none' }}
+                              title={linkedinUrl}
+                            >
+                              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                              </svg>
+                            </a>
+                          ) : '—'}
+                        </td>
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
             </div>
+            {previewProfiles.length < 100 && previewCursor && (
+              <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
+                <button
+                  onClick={loadMorePreview}
+                  disabled={previewLoadingMore}
+                  style={{ ...buttonStyle, opacity: previewLoadingMore ? 0.5 : 1 }}
+                  title="Free per Crust pricing — autocomplete + sample fetches do not consume credits"
+                >
+                  {previewLoadingMore ? 'Loading…' : `Load 50 more (free)`}
+                </button>
+              </div>
+            )}
+            {previewProfiles.length >= 100 && (
+              <div style={{ marginTop: 12, fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', textAlign: 'center' }}>
+                Sample cap reached (100). Run the full import to ingest more.
+              </div>
+            )}
           </div>
         )}
 
@@ -606,7 +704,12 @@ const thStyle: React.CSSProperties = {
   textTransform: 'uppercase', letterSpacing: 'var(--tr-eyebrow)',
   color: 'var(--fg-tertiary)', whiteSpace: 'nowrap',
 }
+const thStyleRight: React.CSSProperties = { ...thStyle, textAlign: 'right' }
 const tdStyle: React.CSSProperties = {
   padding: '6px 8px', whiteSpace: 'nowrap',
   overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 240,
+}
+const tdStyleRight: React.CSSProperties = {
+  ...tdStyle, textAlign: 'right',
+  fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums',
 }

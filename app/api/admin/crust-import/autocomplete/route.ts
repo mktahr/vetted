@@ -12,6 +12,10 @@ import { NextRequest } from 'next/server'
 import { fetchAutocomplete } from '@/lib/crust/api'
 import { AUTOCOMPLETE_FIELDS, type AutocompleteFieldKey } from '@/lib/crust/types'
 
+// Vercel Edge runtime — no cold starts. Crust autocomplete is small and
+// pure (just proxies a fetch), so edge eliminates the 20s cold-start penalty
+// that made the dropdowns appear hung on first interaction.
+export const runtime = 'edge'
 export const maxDuration = 30
 
 export async function POST(req: NextRequest) {

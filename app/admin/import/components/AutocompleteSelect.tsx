@@ -21,7 +21,8 @@ interface Props {
   value: string | string[]
   onChange: (v: string | string[]) => void
   required?: boolean
-  hint?: string                 // tooltip text — usually the Crust field name
+  hint?: string                 // tooltip text — Crust field name for debugging
+  helperText?: string           // visible helper text below the input
 }
 
 interface Suggestion { value: string }
@@ -41,29 +42,40 @@ export default function AutocompleteSelect(props: Props) {
     : (typeof props.value === 'string' && props.value ? [props.value] : [])
 
   // Fetch on query change (300ms debounce). Empty query → top values.
+  // 30s abort timeout surfaces hung requests as a clear error rather than
+  // an indefinite "Loading..." spinner.
   useEffect(() => {
     if (!open) return
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
       setLoading(true)
       setError(null)
+      const controller = new AbortController()
+      const abortTimer = setTimeout(() => controller.abort(), 30_000)
       try {
         const resp = await fetch('/api/admin/crust-import/autocomplete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fieldKey: props.fieldKey, query, limit: 25 }),
+          signal: controller.signal,
         })
         const data = await resp.json()
         if (!resp.ok || data.error) {
           setError(data.error || `HTTP ${resp.status}`)
+          console.error('[AutocompleteSelect]', props.fieldKey, 'error:', data)
           setSuggestions([])
         } else {
           setSuggestions(Array.isArray(data.suggestions) ? data.suggestions : [])
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Network error')
+        const msg = err instanceof Error
+          ? (err.name === 'AbortError' ? 'Request timed out (>30s) — Crust may be slow' : err.message)
+          : 'Network error'
+        setError(msg)
+        console.error('[AutocompleteSelect]', props.fieldKey, 'exception:', err)
         setSuggestions([])
       } finally {
+        clearTimeout(abortTimer)
         setLoading(false)
       }
     }, 300)
@@ -105,23 +117,17 @@ export default function AutocompleteSelect(props: Props) {
 
   return (
     <div ref={containerRef} style={{ marginBottom: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
-        <label
-          title={props.hint}
-          style={{
-            fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)' as any,
-            color: 'var(--fg-tertiary)', textTransform: 'uppercase',
-            letterSpacing: 'var(--tr-eyebrow)', fontFamily: 'var(--font-sans)',
-          }}
-        >
-          {props.label}{props.required ? ' *' : ''}
-        </label>
-        {props.hint && (
-          <span style={{ fontSize: 'var(--fs-10)', color: 'var(--fg-tertiary)', opacity: 0.6, fontFamily: 'var(--font-mono)' }}>
-            {props.hint}
-          </span>
-        )}
-      </div>
+      <label
+        title={props.hint /* Crust field name shown on hover only */}
+        style={{
+          display: 'block', marginBottom: 4,
+          fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)' as any,
+          color: 'var(--fg-tertiary)', textTransform: 'uppercase',
+          letterSpacing: 'var(--tr-eyebrow)', fontFamily: 'var(--font-sans)',
+        }}
+      >
+        {props.label}{props.required ? ' *' : ''}
+      </label>
 
       {/* Selected chips (multi) or selected value (single) */}
       {selected.length > 0 && (
@@ -191,6 +197,14 @@ export default function AutocompleteSelect(props: Props) {
               ))}
             </div>
           )}
+        </div>
+      )}
+      {props.helperText && (
+        <div style={{
+          marginTop: 4, fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)',
+          lineHeight: 1.4, fontFamily: 'var(--font-sans)',
+        }}>
+          {props.helperText}
         </div>
       )}
     </div>

@@ -79,11 +79,16 @@ export function buildCrustFilter(ui: UIFilterState): CrustFilters | null {
 
   const title = nz(ui.title)
   if (title) {
-    // Free-text title — use (.) regex/contains operator
+    // Free-text title — comma-separated terms become a regex OR via Crust's
+    // (.) operator with | separator: "embedded, firmware, RTOS"
+    // → "embedded|firmware|RTOS" matches any of the three.
+    // Single term passes through unchanged.
+    const terms = title.split(',').map(t => t.trim()).filter(t => t.length > 0)
+    const regex = terms.length > 1 ? terms.join('|') : terms[0]
     conditions.push({
       field: 'experience.employment_details.current.title',
       type: '(.)',
-      value: title,
+      value: regex,
     })
   }
 
@@ -173,6 +178,11 @@ export function buildCrustFilter(ui: UIFilterState): CrustFilters | null {
   const field = multiSelectIn('education.schools.field_of_study', ui.fields_of_study)
   if (field) conditions.push(field)
 
+  // ── SKILLS ─────────────────────────────────────────────────────────────
+
+  const skills = multiSelectIn('skills.professional_network_skills', ui.skills)
+  if (skills) conditions.push(skills)
+
   // ── SIGNALS ────────────────────────────────────────────────────────────
 
   if (ui.recently_changed_jobs) {
@@ -227,6 +237,8 @@ export function summarizeFilters(ui: UIFilterState): string {
   if (ui.schools.length) parts.push(`from ${ui.schools.join('/')}`)
   if (ui.degrees.length) parts.push(ui.degrees.join('/'))
   if (ui.fields_of_study.length) parts.push(ui.fields_of_study.join('/'))
+
+  if (ui.skills.length) parts.push(`skills: ${ui.skills.join(', ')}`)
 
   if (ui.recently_changed_jobs) parts.push('recently changed jobs')
 

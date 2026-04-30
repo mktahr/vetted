@@ -73,6 +73,9 @@ export interface UIFilterState {
   degrees: string[]                         // multi-select autocomplete
   fields_of_study: string[]                 // multi-select autocomplete
 
+  // SKILLS
+  skills: string[]                          // multi-select autocomplete
+
   // SIGNALS
   recently_changed_jobs: boolean
 }
@@ -96,6 +99,7 @@ export const EMPTY_FILTERS: UIFilterState = {
   schools: [],
   degrees: [],
   fields_of_study: [],
+  skills: [],
   recently_changed_jobs: false,
 }
 
@@ -121,6 +125,7 @@ export const AUTOCOMPLETE_FIELDS = {
   school: 'education.schools.school',
   degree: 'education.schools.degree',
   field_of_study: 'education.schools.field_of_study',
+  skill: 'skills.professional_network_skills',
 } as const
 
 export type AutocompleteFieldKey = keyof typeof AUTOCOMPLETE_FIELDS

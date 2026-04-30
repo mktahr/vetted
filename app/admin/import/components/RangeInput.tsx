@@ -14,18 +14,17 @@ interface Props {
 export default function RangeInput(props: Props) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
-        <label style={{
+      <label
+        title={props.hint}
+        style={{
+          display: 'block', marginBottom: 4,
           fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)' as any,
           color: 'var(--fg-tertiary)', textTransform: 'uppercase',
           letterSpacing: 'var(--tr-eyebrow)', fontFamily: 'var(--font-sans)',
-        }}>{props.label}</label>
-        {props.hint && (
-          <span style={{ fontSize: 'var(--fs-10)', color: 'var(--fg-tertiary)', opacity: 0.6, fontFamily: 'var(--font-mono)' }}>
-            {props.hint}
-          </span>
-        )}
-      </div>
+        }}
+      >
+        {props.label}
+      </label>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <input
           type="number" min={0} step={props.step ?? 1}

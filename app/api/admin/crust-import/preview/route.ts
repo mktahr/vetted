@@ -22,7 +22,8 @@ import type { UIFilterState } from '@/lib/crust/types'
 
 export const maxDuration = 60
 
-const SAMPLE_LIMIT = 25
+const DEFAULT_SAMPLE_LIMIT = 50
+const MAX_SAMPLE_LIMIT = 100
 const EXCLUDE_PROFILES_CAP = 50000  // Crust supports up to this; chunk above
 
 export async function POST(req: NextRequest) {
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Missing SUPABASE env vars' }, { status: 500 })
   }
 
-  let body: { filters?: UIFilterState }
+  let body: { filters?: UIFilterState; limit?: number; cursor?: string }
   try {
     body = await req.json()
   } catch {
@@ -74,10 +75,14 @@ export async function POST(req: NextRequest) {
     console.error('[crust-import/preview] exclude_profiles fetch failed:', err)
   }
 
-  // Hit Crust with limit=SAMPLE_LIMIT
+  const limit = Math.min(
+    Math.max(1, Math.floor(body.limit || DEFAULT_SAMPLE_LIMIT)),
+    MAX_SAMPLE_LIMIT,
+  )
   const page = await fetchPersonSearch(apiKey, {
     filters: filterBody,
-    limit: SAMPLE_LIMIT,
+    limit,
+    cursor: body.cursor,
     post_processing: excludeProfiles.length > 0 ? { exclude_profiles: excludeProfiles } : undefined,
   })
 
@@ -101,5 +106,6 @@ export async function POST(req: NextRequest) {
     sample_count: page.profiles.length,
     profiles: page.profiles,
     excluded_count: excludeProfiles.length,
+    next_cursor: page.next_cursor,
   })
 }
