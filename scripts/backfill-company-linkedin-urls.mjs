@@ -64,9 +64,15 @@ for (const c of nullUrlCompanies) {
 
 const PAGE = 500
 let cursor = 0
-const candidates = new Map()  // company_id -> { url, fetched_at, payload_source }
+// company_id -> { url, fetched_at, name, allUrls: Map<url,count> }
+const candidates = new Map()
 let scanned = 0
 let withCompanyData = 0
+const malformedUrls = new Set()
+
+function looksLikeLinkedInCompanyUrl(u) {
+  return /^https?:\/\/([a-z]{2,3}\.)?linkedin\.com\/(company|school|showcase)\//i.test(u)
+}
 
 while (true) {
   const { data, error } = await supa
@@ -91,13 +97,20 @@ while (true) {
       if (!empName || !empUrl) continue
       const target = idByName.get(empName)
       if (!target) continue
-      // Newest-fetched-first ordering means the first hit is the most recent
-      if (!candidates.has(target.company_id)) {
+      if (!looksLikeLinkedInCompanyUrl(empUrl)) {
+        malformedUrls.add(`${target.name} -> ${empUrl}`)
+        continue
+      }
+      const existing = candidates.get(target.company_id)
+      if (!existing) {
         candidates.set(target.company_id, {
           url: empUrl,
           fetched_at: row.fetched_at,
           name: target.name,
+          allUrls: new Map([[empUrl, 1]]),
         })
+      } else {
+        existing.allUrls.set(empUrl, (existing.allUrls.get(empUrl) || 0) + 1)
       }
     }
   }
@@ -108,6 +121,32 @@ while (true) {
 
 console.log(`[backfill] scanned ${scanned} raw_ingest_events rows (${withCompanyData} with experience data)`)
 console.log(`[backfill] resolved URLs for ${candidates.size} / ${nullUrlCompanies.length} null-URL companies`)
+
+// ---------- 2b. Anomaly detection ----------
+const conflicts = []
+for (const [company_id, c] of candidates) {
+  if (c.allUrls.size > 1) {
+    const ranked = [...c.allUrls.entries()].sort((a, b) => b[1] - a[1])
+    conflicts.push({ name: c.name, urls: ranked, picked: c.url })
+  }
+}
+
+if (conflicts.length || malformedUrls.size) {
+  console.log(`\n[backfill] anomalies:`)
+  if (malformedUrls.size) {
+    console.log(`  malformed URLs (skipped): ${malformedUrls.size}`)
+    for (const m of [...malformedUrls].slice(0, 10)) console.log(`    - ${m}`)
+    if (malformedUrls.size > 10) console.log(`    ... and ${malformedUrls.size - 10} more`)
+  }
+  if (conflicts.length) {
+    console.log(`  multi-URL conflicts (will pick newest fetch): ${conflicts.length}`)
+    for (const c of conflicts.slice(0, 10)) {
+      console.log(`    - ${c.name}: ${c.urls.length} distinct URLs`)
+      for (const [u, n] of c.urls) console.log(`        ${u} (seen ${n}×${u === c.picked ? ', picked' : ''})`)
+    }
+    if (conflicts.length > 10) console.log(`    ... and ${conflicts.length - 10} more`)
+  }
+}
 
 // ---------- 3. Apply (or report) ----------
 
