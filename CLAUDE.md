@@ -700,3 +700,149 @@ Confirm directly with Crust:
 - Full list of valid `SENIORITY_LEVEL` values accepted by the filter
 - Whether a `school` filter is available
 - Direct URL to the full authenticated API docs (our current docs are public-facing and partial)
+
+---
+
+## Development Rules — MUST FOLLOW
+
+### Hard gates
+
+When the user says "show me X before pushing," that's a hard gate. Pushing without showing is a process violation. Wait for explicit approval before proceeding past a gate.
+
+### Pre-push verification
+
+Before pushing ANY commit to main, run `npm run build` locally and confirm it completes with no errors or warnings. Production deployments should never go down due to a missed build error. The Vercel deploy is triggered by push to main — there is no staging environment.
+
+### Architecture-level changes ship to a feature branch first
+
+Tenure helpers, scoring engine, ingest pipeline, ranking changes, etc. — anything touching multiple files or a hot path — ships to a feature branch and gets a Vercel preview URL. The user verifies in browser before merging to main. Curl-only verification is insufficient (see TDZ rule below).
+
+### Browser verification required for client-bundle changes
+
+A curl response of HTTP 200 is NOT proof a page works. Next.js often prerenders the static shell server-side and bails out to client-side rendering for pages with dynamic data. Curl gets the shell. Browser executes the JS and may hit runtime errors that curl never sees.
+
+**Before declaring "preview deploy works":** load the URL in an actual incognito browser window. Verify the data renders, no error fallback shows, and the React tree mounts cleanly. If you can't access a browser, ask the user to verify before claiming success.
+
+### TDZ from forward-referenced const inside synchronous closure (incident: 2026-04-29)
+
+This bug class is invisible to TypeScript, the build, lint, dev mode, AND curl tests of production. It only manifests when JavaScript actually executes the closure on the client.
+
+**Pattern that fails:**
+```ts
+setPeople(rows.map(r => ({
+  // This .map callback runs SYNCHRONOUSLY inside setPeople(...)
+  tenure: helper(r.experiences.map(e => ({
+    company_name: cMap[e.company_id]   // ← TDZ: cMap not yet declared
+  })))
+})))
+const cMap = {}                          // ← declared AFTER usage above
+for (const c of companies) cMap[c.company_id] = c.company_name
+```
+
+TypeScript accepts the forward reference because closures CAN capture forward-declared `const`s — but only if the closure runs AFTER the declaration line. The inner `.map(...)` callback runs synchronously inside `setPeople`, so it executes before the `const cMap` initializer line, hitting V8's Temporal Dead Zone:
+```
+ReferenceError: Cannot access 'cMap' before initialization
+```
+
+**Why this is hard to catch:**
+- `npm run build` passes (TypeScript is fine with it)
+- `next dev` may or may not show it depending on data flow
+- `npx next start` + `curl` returns HTTP 200 (server prerenders the shell, bails to CSR, curl never executes the JS)
+- Vercel preview deploy returns HTTP 200 to curl for the same reason
+- Only manifests when a real browser executes the JS during hydration
+- Minified variable name in production is a single letter (Q, U, etc.) which makes the error message look unrelated to source code
+
+**Diagnostic flow when you see "Cannot access 'X' before initialization" in production:**
+1. Pull the failing chunk from the deployed URL: `curl https://<deploy>.vercel.app/_next/static/chunks/app/page-<hash>.js`
+2. Find ALL byte positions of the minified letter as a whole word: `grep -obE '\bX\b' chunk.js`
+3. Find where it's declared: `grep -obE 'let X[ =]|var X[ =]|const X[ =]' chunk.js`
+4. Check if any usage byte position is BEFORE the declaration position. That's the TDZ.
+5. Get context with `dd if=chunk.js bs=1 skip=<usage_pos-50> count=200` to identify the source-level variable name.
+6. Find that name in source — the fix is to move the `const` declaration above any code that references it (including code inside `.map`/`.filter`/etc. callbacks that run synchronously).
+
+**Prevention rule:** When passing data into a `setState(arr.map(...))` callback that captures a `const` declared elsewhere in the same function scope, declare the `const` BEFORE the `setState` call, not after. This applies to any synchronous-executing closure (Array methods, generators, `Object.entries`, etc.) — not just `.map`.
+
+---
+
+## Raw Ingest Archive (Post-Migration 028)
+
+Every ingest writes the verbatim payload to `raw_ingest_events` BEFORE normalization. If mapping fails, the raw row stays for replay. If a mapper bug corrupts normalized data, the archive enables re-mapping without re-fetching.
+
+### Table: `raw_ingest_events`
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | UUID PK | |
+| `linkedin_url` | TEXT NOT NULL | |
+| `source` | TEXT NOT NULL | `chrome_extension_voyager`, `crust_v1`, `crust_v2`, `manual_admin` |
+| `source_version` | TEXT | Extension version, Crust API version |
+| `mapper_version` | TEXT | Semver from mapper module constant |
+| `payload` | JSONB NOT NULL | Verbatim, no mutation |
+| `payload_hash` | TEXT | SHA-256 hex |
+| `fetched_at` | TIMESTAMPTZ | Default `now()` |
+| `mapped_at` | TIMESTAMPTZ | Set when status → `mapped` |
+| `processing_status` | TEXT | `pending`, `mapped`, `mapping_failed`, `superseded` |
+| `mapping_error` | TEXT | Error message on failure |
+| `person_id` | UUID FK | Set after successful mapping |
+
+`source` is required on every POST to `/api/ingest`. Missing → 400. Step 0 of ingest writes the raw row before normalization. On success → status `mapped`, person_id set. On failure → status `mapping_failed`, error captured.
+
+Each mapper in `lib/ingest/mappers/` exports `MAPPER_VERSION = '1.0.0'`. Bump per semver when output shape or field extraction changes.
+
+Provenance columns on `people`, `person_experiences`, `person_education`: `last_ingest_source`, `last_ingest_at`. `people` also has `last_mapper_version`.
+
+---
+
+## Tenure Helper (`lib/tenure/helpers.ts`)
+
+Two-pass FT classification + company-stretch tenure:
+
+**Pass 1 — `isCountedAsFt(exp, education, mode)`:** hard exclusions (no title, no start_date, internship, hard non-FT title patterns like intern/co-op/volunteer, student titles, assistantship+edu overlap, mode-specific date filter).
+- `mode='yoe'`: exclude if start year < gradYear
+- `mode='tenure'`: exclude if end year < gradYear + 0.5
+
+**Pass 2 — `filterSecondaryCompanySpans()`:** group Pass-1 survivors by company, merge contiguous stints (gap ≤ 30 days). When two company spans overlap > 3 months: if one is all soft-non-FT-titled OR self-employed name OR known OSS project → that company is secondary. Otherwise longest span wins, most recent start tiebreak.
+
+**Soft non-FT title patterns:** advisor, advisory (not "Advisory Services/Group"), board member/director/observer, contractor, freelancer.
+
+**Consultant titles:** soft-non-FT UNLESS at a known consulting firm (McKinsey, Bain, BCG, Deloitte, etc. — see `lib/tenure/data/consulting-firms.ts`).
+
+**Self-employed company names** (always soft-non-FT regardless of title): Freelance, Self-Employed, Independent, Independent Contractor, Consulting (exact), Personal, N/A, Various, Sole Proprietor — see `lib/tenure/data/self-employed-companies.ts`.
+
+**OSS projects + role patterns:** roles like "Core Developer" / "Maintainer" / "Committer" at OSS projects (CPython, Apache, Linux Foundation, etc.) are soft-non-FT — see `lib/tenure/data/oss-projects.ts` and `lib/tenure/data/oss-role-patterns.ts`.
+
+### Module structure for client/server-shared modules — IMPORTANT
+
+`lib/tenure/helpers.ts` is imported by both client (`ProfileTable.tsx`) and server (`lib/normalize/seniority.ts`). Constants that allocate at module-top (`new Set([...])`, `new Map([...])`) are forbidden in this file. Use plain arrays exported from `lib/tenure/data/*.ts` and lazy-init Sets inside function bodies via closure-bound `let _x: Set | null = null`. The data files contain ZERO imports, ZERO constructors, ZERO function calls at module top — pure `export const FOO = [...]` only.
+
+This is a defensive pattern. Even though the actual TDZ incidents (49bcbb7, 0bb89ca, freelance-edu-fix-v3 v1) traced to forward-referenced consts in component code (not Sets), keeping the data layer purely declarative removes one entire class of bundling-order risk for files that span client/server.
+
+### Known limitations (backlog)
+
+- Long-running side commitments without non-FT title signal (e.g. Co-Founder at side project) can win concurrent-span tiebreak. Needs company-quality/prestige score input.
+- Waterloo-style co-op detection: short stints at multiple companies pre-graduation without explicit co-op title signal.
+
+---
+
+## Education Display Filter (`lib/education/display-filter.ts`)
+
+Filters education entries for display in drawer, full profile, and list view school column. Data stays in `person_education`; this is display-only.
+
+**Rules in order:**
+1. Blocklist removed: yoga/yogi schools, NOLS/outdoor programs, IDEO/Acumen certificates, summer programs, bootcamps, workshops. Plus `degree_level = 'certificate'` or `'coursework'`.
+2. Incubator/accelerator removed (belong in signals): Singularity University, Y Combinator school program, Techstars, 500 Startups, AngelPad, MassChallenge, Startup Chile.
+3. Degree allowlist: only entries with bachelor, master, MBA, PhD, JD, MD, associate, IB. Falls back to step-2 survivors if nothing passes.
+4. Dedupe by `school_name_raw + degree_raw`.
+5. Sort by `end_year DESC`.
+
+Same data-files architecture as tenure helpers — see `lib/education/data/*.ts`.
+
+---
+
+## Seniority Display (Drawer + Profile Page)
+
+Two separate lines in the classification metadata grid:
+- **"Seniority"** — current role's `seniority_normalized` (from `is_current=true` experience)
+- **"Highest seniority"** — `people.highest_seniority_reached` (only shown when different from current)
+
+A candidate can be an IC in their current role but have reached Lead IC at a previous company.

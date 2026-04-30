@@ -1,4 +1,56 @@
 // lib/tenure/helpers.ts
+
+import { CONSULTING_FIRMS } from './data/consulting-firms'
+import { SELF_EMPLOYED_COMPANIES } from './data/self-employed-companies'
+import { OSS_PROJECTS } from './data/oss-projects'
+import { OSS_ROLE_PATTERNS } from './data/oss-role-patterns'
+
+// ─── Lazy Set init (built on first access, never at module top level) ─────────
+//
+// Avoid `new Set([...])` at module top level — the import chain spans client
+// and server boundaries, and prior attempts to ship Sets at module top caused
+// Vercel SSR runtime "Cannot access X before initialization" errors that did
+// not reproduce locally. Lazy init via a closure-bound let defers construction
+// until the first call inside a function body, so module evaluation never
+// references the Set before it's fully built.
+
+let _consultingFirmsSet: Set<string> | null = null
+function getConsultingFirmsSet(): Set<string> {
+  if (_consultingFirmsSet === null) _consultingFirmsSet = new Set(CONSULTING_FIRMS)
+  return _consultingFirmsSet
+}
+
+let _selfEmployedSet: Set<string> | null = null
+function getSelfEmployedSet(): Set<string> {
+  if (_selfEmployedSet === null) _selfEmployedSet = new Set(SELF_EMPLOYED_COMPANIES)
+  return _selfEmployedSet
+}
+
+let _ossProjectsSet: Set<string> | null = null
+function getOssProjectsSet(): Set<string> {
+  if (_ossProjectsSet === null) _ossProjectsSet = new Set(OSS_PROJECTS)
+  return _ossProjectsSet
+}
+
+function isConsultingFirm(companyName: string | null | undefined): boolean {
+  if (!companyName) return false
+  return getConsultingFirmsSet().has(companyName.toLowerCase().trim())
+}
+
+function isSelfEmployedCompany(companyName: string | null | undefined): boolean {
+  if (!companyName) return false
+  return getSelfEmployedSet().has(companyName.toLowerCase().trim())
+}
+
+function isOssProject(companyName: string | null | undefined): boolean {
+  if (!companyName) return false
+  return getOssProjectsSet().has(companyName.toLowerCase().trim())
+}
+
+function matchesOssRolePattern(title: string): boolean {
+  return OSS_ROLE_PATTERNS.some(r => r.test(title))
+}
+
 //
 // Unified full-time classification and company-stretch tenure logic.
 //
@@ -17,6 +69,7 @@
 
 export interface FtExperience {
   company_id: string | null
+  company_name?: string | null  // for consulting-firm + self-employed + OSS detection
   title_raw: string | null
   start_date: string | null
   end_date: string | null
@@ -38,14 +91,17 @@ export type FtMode = 'yoe' | 'tenure'
 
 // "Soft" non-FT patterns — excluded only when overlapping a longer concurrent
 // company span. Standalone post-grad consulting/advisory roles count.
+// Note: \bconsultant\b is handled separately with a consulting-firms allowlist.
 const SOFT_NON_FT_TITLE_PATTERNS = [
   /\badvisor\b/i,
   /\badvisory\b(?!\s+(services|group))/i,
   /\bboard\s+(member|director|observer|of\s+directors)\b/i,
-  /^(independent\s+)?consultant$/i,
   /\bcontractor\b/i,
   /\bfreelance[r]?\b/i,
 ]
+
+// "Consultant" titles are soft-non-FT UNLESS at a known consulting firm.
+const CONSULTANT_TITLE_PATTERN = /\bconsultant\b/i
 
 // "Hard" non-FT patterns — always excluded regardless of concurrency.
 const HARD_NON_FT_TITLE_PATTERNS = [
@@ -72,20 +128,29 @@ const ASSISTANTSHIP_PATTERNS = [
   /\bgrad assistant\b/i,
 ]
 
-/** True if the title matches a soft non-FT pattern. */
-export function isSoftNonFtTitle(title: string): boolean {
-  return SOFT_NON_FT_TITLE_PATTERNS.some(r => r.test(title))
+/**
+ * True if the title matches a soft non-FT pattern.
+ * For "consultant" titles, also checks company against the consulting-firm allowlist.
+ * For OSS role patterns (Core Developer, Maintainer, etc.), checks if company is an OSS project.
+ */
+export function isSoftNonFtTitle(title: string, companyName?: string | null): boolean {
+  if (SOFT_NON_FT_TITLE_PATTERNS.some(r => r.test(title))) return true
+  if (CONSULTANT_TITLE_PATTERN.test(title) && !isConsultingFirm(companyName ?? null)) return true
+  if (matchesOssRolePattern(title) && isOssProject(companyName ?? null)) return true
+  return false
 }
 
 // ─── Graduation year logic ──────────────────────────────────────────────────
 
-const BACHELOR_PLUS_LEVELS = new Set([
+// Plain array — lookup is array.includes() not Set.has() to keep module-top
+// initialization Set-free. Array of 7 short strings is fast enough.
+const BACHELOR_PLUS_LEVELS: string[] = [
   'bachelor', 'master', 'mba', 'phd', 'doctorate', 'jd', 'md',
-])
+]
 
 function isBachelorOrHigher(edu: FtEducation): boolean {
   const lvl = (edu.degree_level || '').toLowerCase()
-  if (BACHELOR_PLUS_LEVELS.has(lvl)) return true
+  if (BACHELOR_PLUS_LEVELS.includes(lvl)) return true
   const name = (edu.degree_raw || '').toLowerCase()
   return /\b(bachelor|b\.?s\.?|b\.?a\.?|b\.?eng|master|m\.?s\.?|m\.?a\.?|m\.?eng|mba|phd|ph\.?d|doctorate|doctoral|md|jd)\b/.test(name)
 }
@@ -271,10 +336,14 @@ function buildCompanySpans(experiences: FtExperience[]): CompanySpan[] {
     const overallEnd = merged[merged.length - 1].end.getTime()
     const isCurrent = merged.some(m => m.isCurrent)
 
-    // Check if ALL roles at this company have soft non-FT titles
-    const allSoftNonFt = roles.every(r => {
+    // Soft-non-FT company span if EITHER:
+    //   1. Company is a known self-employed name (Freelance, Independent, etc.)
+    //   2. Company is a known OSS project (CPython, Apache, Linux Foundation, etc.)
+    //   3. ALL roles at this company match a soft non-FT title pattern
+    const companyName = roles[0]?.company_name ?? null
+    const allSoftNonFt = isSelfEmployedCompany(companyName) || isOssProject(companyName) || roles.every(r => {
       const t = r.title_raw?.trim() || ''
-      return t.length > 0 && isSoftNonFtTitle(t)
+      return t.length > 0 && isSoftNonFtTitle(t, companyName)
     })
 
     spans.push({
