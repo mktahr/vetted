@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react'
 import AutocompleteSelect from './components/AutocompleteSelect'
 import RangeInput from './components/RangeInput'
 import CompanyMultiSelect from './components/CompanyMultiSelect'
+import InfoTooltip from './components/InfoTooltip'
 import {
   EMPTY_FILTERS,
   HEADCOUNT_RANGES,
@@ -250,9 +251,68 @@ export default function CrustImportPage() {
         borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)',
         overflowY: 'auto', maxHeight: '100vh',
       }}>
-        <h1 style={{ fontSize: 'var(--fs-15)', marginBottom: 16, fontWeight: 'var(--fw-semibold)' as any }}>
-          Crust Import V1
-        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <h1 style={{ fontSize: 'var(--fs-15)', fontWeight: 'var(--fw-semibold)' as any }}>
+            Crust Import V1
+          </h1>
+          <button
+            onClick={() => setUi(EMPTY_FILTERS)}
+            style={{
+              padding: '4px 10px',
+              background: 'transparent', border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--r-button)', cursor: 'pointer',
+              fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)',
+            }}
+          >Clear all</button>
+        </div>
+
+        <Section title="Where they work">
+          <CompanyMultiSelect
+            value={ui.companies}
+            onChange={v => update('companies', v)}
+          />
+          <RangeInput
+            label="Years at current company" unit="yrs" step={1}
+            min={ui.years_at_current_min} max={ui.years_at_current_max}
+            onMinChange={v => update('years_at_current_min', v)}
+            onMaxChange={v => update('years_at_current_max', v)}
+            hint="experience.employment_details.current.years_at_company_raw"
+          />
+          <div style={{ marginBottom: 12 }}>
+            <label
+              title="experience.employment_details.current.company_headcount_range"
+              style={{ ...lblStyle, display: 'block', marginBottom: 4 }}
+            >
+              Company headcount
+            </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {HEADCOUNT_RANGES.map(r => {
+                const active = ui.headcount_ranges.includes(r)
+                return (
+                  <button
+                    key={r}
+                    onClick={() => update('headcount_ranges', active
+                      ? ui.headcount_ranges.filter(x => x !== r)
+                      : [...ui.headcount_ranges, r])}
+                    style={{
+                      padding: '3px 8px', fontSize: 'var(--fs-11)', fontFamily: 'var(--font-sans)',
+                      border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-chip)',
+                      background: active ? 'var(--accent-950)' : 'transparent',
+                      color: active ? 'var(--accent-400)' : 'var(--fg-tertiary)',
+                      cursor: 'pointer',
+                    }}
+                  >{r}</button>
+                )
+              })}
+            </div>
+          </div>
+          <AutocompleteSelect
+            fieldKey="industry" label="Company industries" multi={true}
+            value={ui.industries}
+            onChange={v => update('industries', v as string[])}
+            hint="experience.employment_details.current.company_industries"
+          />
+        </Section>
 
         <Section title="Who they are">
           <AutocompleteSelect
@@ -262,8 +322,32 @@ export default function CrustImportPage() {
             onChange={v => update('function_category', v as string)}
             hint="experience.employment_details.current.function_category"
             placeholder="Engineering, Sales, Marketing, …"
-            helperText="Crust uses broad function categories (e.g., Engineering, Sales, Operations). To narrow within a function — say, software engineers vs hardware engineers — pick the function here and add keywords in the Title field below."
+            helperText="Crust uses broad function categories (e.g., Engineering, Sales, Operations). To narrow within a function — say, software engineers vs hardware engineers — pick the function here and add keywords in the Title field."
           />
+          <AutocompleteSelect
+            fieldKey="skill" label="Skills" multi={true}
+            value={ui.skills}
+            onChange={v => update('skills', v as string[])}
+            hint="skills.professional_network_skills"
+            helperText="LinkedIn skill tags. Use specific tools to infer specialty (e.g., Cadence/Synopsys → chip, ROS → robotics, Simulink → controls)."
+          />
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
+              <label
+                title="experience.employment_details.current.title"
+                style={lblStyle}
+              >
+                Title
+              </label>
+              <InfoTooltip text="Comma-separated keywords. Profiles whose current title matches any term are returned. Single term = single match." />
+            </div>
+            <input
+              type="text" value={ui.title}
+              onChange={e => update('title', e.target.value)}
+              placeholder="embedded, firmware, RTOS"
+              style={inputStyle}
+            />
+          </div>
           <AutocompleteSelect
             fieldKey="seniority_level"
             label="Seniority level" multi={true}
@@ -279,32 +363,15 @@ export default function CrustImportPage() {
             onMaxChange={v => update('years_experience_max', v)}
             hint="years_of_experience_raw"
           />
-          <div style={{ marginBottom: 12 }}>
-            <label
-              title="experience.employment_details.current.title"
-              style={{ ...lblStyle, display: 'block', marginBottom: 4 }}
-            >
-              Title
-            </label>
-            <input
-              type="text" value={ui.title}
-              onChange={e => update('title', e.target.value)}
-              placeholder="embedded, firmware, RTOS"
-              style={inputStyle}
-            />
-            <div style={{
-              marginTop: 4, fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)',
-              lineHeight: 1.4,
-            }}>
-              Comma-separated keywords. Profiles whose current title matches <strong style={{ color: 'var(--fg-secondary)' }}>any</strong> term are returned. Single term = single match.
-            </div>
-          </div>
         </Section>
 
         <Section title="Where they are">
           <div style={{ marginBottom: 8 }}>
-            <label style={lblStyle}>Geo mode</label>
-            <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
+              <label style={lblStyle}>Geo mode</label>
+              <InfoTooltip text="region/state covers US states and international regions. For city-level search, use radius." />
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
               {(['none', 'country', 'region', 'radius'] as const).map(mode => (
                 <button
                   key={mode}
@@ -318,11 +385,6 @@ export default function CrustImportPage() {
                   }}
                 >{mode === 'region' ? 'region/state' : mode}</button>
               ))}
-            </div>
-            <div style={{
-              marginTop: 6, fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', lineHeight: 1.4,
-            }}>
-              <strong style={{ color: 'var(--fg-secondary)' }}>region/state</strong> covers US states and international regions. For city-level search, use <strong style={{ color: 'var(--fg-secondary)' }}>radius</strong>.
             </div>
           </div>
           {ui.geo_mode === 'country' && (
@@ -362,54 +424,6 @@ export default function CrustImportPage() {
           )}
         </Section>
 
-        <Section title="Where they work">
-          <CompanyMultiSelect
-            value={ui.companies}
-            onChange={v => update('companies', v)}
-          />
-          <AutocompleteSelect
-            fieldKey="industry" label="Company industries" multi={true}
-            value={ui.industries}
-            onChange={v => update('industries', v as string[])}
-            hint="experience.employment_details.current.company_industries"
-          />
-          <div style={{ marginBottom: 12 }}>
-            <label
-              title="experience.employment_details.current.company_headcount_range"
-              style={{ ...lblStyle, display: 'block', marginBottom: 4 }}
-            >
-              Company headcount
-            </label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {HEADCOUNT_RANGES.map(r => {
-                const active = ui.headcount_ranges.includes(r)
-                return (
-                  <button
-                    key={r}
-                    onClick={() => update('headcount_ranges', active
-                      ? ui.headcount_ranges.filter(x => x !== r)
-                      : [...ui.headcount_ranges, r])}
-                    style={{
-                      padding: '3px 8px', fontSize: 'var(--fs-11)', fontFamily: 'var(--font-sans)',
-                      border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-chip)',
-                      background: active ? 'var(--accent-950)' : 'transparent',
-                      color: active ? 'var(--accent-400)' : 'var(--fg-tertiary)',
-                      cursor: 'pointer',
-                    }}
-                  >{r}</button>
-                )
-              })}
-            </div>
-          </div>
-          <RangeInput
-            label="Years at current company" unit="yrs" step={1}
-            min={ui.years_at_current_min} max={ui.years_at_current_max}
-            onMinChange={v => update('years_at_current_min', v)}
-            onMaxChange={v => update('years_at_current_max', v)}
-            hint="experience.employment_details.current.years_at_company_raw"
-          />
-        </Section>
-
         <Section title="Education" defaultOpen={false}>
           <AutocompleteSelect
             fieldKey="school" label="School" multi={true}
@@ -431,16 +445,6 @@ export default function CrustImportPage() {
           />
         </Section>
 
-        <Section title="Skills" defaultOpen={false}>
-          <AutocompleteSelect
-            fieldKey="skill" label="Skills" multi={true}
-            value={ui.skills}
-            onChange={v => update('skills', v as string[])}
-            hint="skills.professional_network_skills"
-            helperText="LinkedIn skill tags. Use specific tools to infer specialty (e.g., Cadence/Synopsys → chip, ROS → robotics, Simulink → controls)."
-          />
-        </Section>
-
         <Section title="Signals" defaultOpen={false}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-13)', cursor: 'pointer' }} title="recently_changed_jobs">
             <input
@@ -451,16 +455,6 @@ export default function CrustImportPage() {
             <span>Recently changed jobs</span>
           </label>
         </Section>
-
-        <button
-          onClick={() => setUi(EMPTY_FILTERS)}
-          style={{
-            marginTop: 16, padding: '6px 12px', width: '100%',
-            background: 'transparent', border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--r-button)', cursor: 'pointer',
-            fontSize: 'var(--fs-12)', color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)',
-          }}
-        >Clear all filters</button>
       </aside>
 
       <main style={{ flex: 1, padding: 24, overflowY: 'auto', maxHeight: '100vh' }}>
@@ -594,7 +588,11 @@ export default function CrustImportPage() {
                 </thead>
                 <tbody>
                   {previewProfiles.map((p: any, i) => {
-                    const cur = p.experience?.employment_details?.current?.[0]
+                    // Prefer is_default=true (the candidate's actual primary current
+                    // role, per Crust). Falls back to current[0] when no flag is set.
+                    // Mirrors the canonical mapper's selection at lib/ingest/mappers/crust-v2.ts:149
+                    const currents = p.experience?.employment_details?.current ?? []
+                    const cur = currents.find((c: any) => c?.is_default === true) ?? currents[0]
                     const yoe = computeYOE(p)
                     const tenure = computeTenure(p)
                     const linkedinUrl = p.social_handles?.professional_network_identifier?.profile_url

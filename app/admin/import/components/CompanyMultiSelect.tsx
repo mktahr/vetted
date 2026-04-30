@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { CompanyEntry, CompanyScope } from '@/lib/crust/types'
+import InfoTooltip from './InfoTooltip'
 
 interface Props {
   value: CompanyEntry[]
@@ -73,17 +74,19 @@ export default function CompanyMultiSelect(props: Props) {
 
   return (
     <div ref={containerRef} style={{ marginBottom: 12 }}>
-      <label
-        title="experience.employment_details.{current,past}.name"
-        style={{
-          display: 'block', marginBottom: 4,
-          fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)' as any,
-          color: 'var(--fg-tertiary)', textTransform: 'uppercase',
-          letterSpacing: 'var(--tr-eyebrow)', fontFamily: 'var(--font-sans)',
-        }}
-      >
-        Companies
-      </label>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
+        <label
+          title="experience.employment_details.{current,past}.name"
+          style={{
+            fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)' as any,
+            color: 'var(--fg-tertiary)', textTransform: 'uppercase',
+            letterSpacing: 'var(--tr-eyebrow)', fontFamily: 'var(--font-sans)',
+          }}
+        >
+          Companies
+        </label>
+        <InfoTooltip text="Add companies, then use the per-row dropdown to set scope: current (currently working there), past (previously), or ever (current OR past)." />
+      </div>
 
       {props.value.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 4 }}>
@@ -164,15 +167,6 @@ export default function CompanyMultiSelect(props: Props) {
             })}
           </div>
         )}
-      </div>
-      <div style={{
-        marginTop: 4, fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)',
-        lineHeight: 1.4, fontFamily: 'var(--font-sans)',
-      }}>
-        Add companies, then use the per-row dropdown to set scope:
-        <strong style={{ color: 'var(--fg-secondary)' }}> current</strong> (currently working there),
-        <strong style={{ color: 'var(--fg-secondary)' }}> past</strong> (previously),
-        or <strong style={{ color: 'var(--fg-secondary)' }}> ever</strong> (current OR past).
       </div>
     </div>
   )

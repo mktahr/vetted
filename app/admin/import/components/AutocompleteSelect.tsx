@@ -12,6 +12,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { AutocompleteFieldKey } from '@/lib/crust/types'
+import InfoTooltip from './InfoTooltip'
 
 interface Props {
   fieldKey: AutocompleteFieldKey
@@ -117,17 +118,22 @@ export default function AutocompleteSelect(props: Props) {
 
   return (
     <div ref={containerRef} style={{ marginBottom: 12 }}>
-      <label
-        title={props.hint /* Crust field name shown on hover only */}
-        style={{
-          display: 'block', marginBottom: 4,
-          fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)' as any,
-          color: 'var(--fg-tertiary)', textTransform: 'uppercase',
-          letterSpacing: 'var(--tr-eyebrow)', fontFamily: 'var(--font-sans)',
-        }}
-      >
-        {props.label}{props.required ? ' *' : ''}
-      </label>
+      <div style={{
+        display: 'flex', alignItems: 'center',
+        marginBottom: 4,
+      }}>
+        <label
+          title={props.hint /* Crust field name shown on hover only */}
+          style={{
+            fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)' as any,
+            color: 'var(--fg-tertiary)', textTransform: 'uppercase',
+            letterSpacing: 'var(--tr-eyebrow)', fontFamily: 'var(--font-sans)',
+          }}
+        >
+          {props.label}{props.required ? ' *' : ''}
+        </label>
+        {props.helperText && <InfoTooltip text={props.helperText} />}
+      </div>
 
       {/* Selected chips (multi) or selected value (single) */}
       {selected.length > 0 && (
@@ -197,14 +203,6 @@ export default function AutocompleteSelect(props: Props) {
               ))}
             </div>
           )}
-        </div>
-      )}
-      {props.helperText && (
-        <div style={{
-          marginTop: 4, fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)',
-          lineHeight: 1.4, fontFamily: 'var(--font-sans)',
-        }}>
-          {props.helperText}
         </div>
       )}
     </div>

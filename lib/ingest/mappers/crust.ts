@@ -40,6 +40,12 @@ export interface RawExperience {
   start_date?: string        // YYYY-MM-DD (stripped of time)
   end_date?: string
   is_current?: boolean
+  // Crust v2 only: this is the role the candidate marked as their primary
+  // current (`is_default=true` in the Crust response). Used by the ingest
+  // "derive current" step to disambiguate when a candidate has multiple
+  // is_current=true roles. Optional — chrome extension + v1 mapper don't
+  // produce it, ingest handles missing values gracefully.
+  is_primary_current?: boolean
   duration_months?: number
   description?: string
   employment_type?: string
