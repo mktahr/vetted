@@ -13,6 +13,7 @@ import CompanyMultiSelect from './components/CompanyMultiSelect'
 import InfoTooltip from './components/InfoTooltip'
 import {
   EMPTY_FILTERS,
+  INITIAL_FILTERS,
   HEADCOUNT_RANGES,
   HARD_VOLUME_CAP,
   SOFT_VOLUME_WARNING,
@@ -126,7 +127,10 @@ const USD_PER_CREDIT = parseFloat(process.env.NEXT_PUBLIC_CRUST_USD_PER_CREDIT |
 const DOLLAR_ESTIMATE_AVAILABLE = USD_PER_CREDIT > 0
 
 export default function CrustImportPage() {
-  const [ui, setUi] = useState<UIFilterState>(EMPTY_FILTERS)
+  // INITIAL_FILTERS pre-selects country = US (both Crust variants) for the
+  // common case. Clear-all below resets to EMPTY_FILTERS (truly empty) so
+  // users can start from zero. See lib/crust/types.ts for the difference.
+  const [ui, setUi] = useState<UIFilterState>(INITIAL_FILTERS)
   const [volume, setVolume] = useState<number>(100)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)

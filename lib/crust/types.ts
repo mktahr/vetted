@@ -103,6 +103,24 @@ export const EMPTY_FILTERS: UIFilterState = {
   recently_changed_jobs: false,
 }
 
+/**
+ * INITIAL_FILTERS is what the import page loads with on first visit
+ * (state-less, no URL params yet). Distinct from EMPTY_FILTERS — the
+ * "Clear all" button resets to EMPTY_FILTERS (truly empty) so users can
+ * start from zero, while INITIAL_FILTERS pre-selects sensible defaults.
+ *
+ * Defaults pre-select "country" mode with both common US variants. Crust
+ * stores "United States of America" and "United States" as separate
+ * indexed values (verified via autocomplete on 2026-04-30) — selecting
+ * both via the multi-select `in` operator captures both populations.
+ * User can deselect either to narrow.
+ */
+export const INITIAL_FILTERS: UIFilterState = {
+  ...EMPTY_FILTERS,
+  geo_mode: 'country',
+  countries: ['United States of America', 'United States'],
+}
+
 // ─── Hardcoded headcount buckets (Crust enum, not autocomplete-able) ─────
 
 export const HEADCOUNT_RANGES: string[] = [
@@ -113,17 +131,26 @@ export const HEADCOUNT_RANGES: string[] = [
 // ─── Autocomplete-able field map ─────────────────────────────────────────
 // Maps a UI filter key to the Crust API field path used for autocomplete.
 
+// Crust's /person/search/autocomplete uses a DIFFERENT valid-field list
+// than /person/search filter does. Same field name in the filter API may be
+// rejected at autocomplete and vice-versa. The mapping below is the
+// autocomplete-side allowlist — verified by direct calls against
+// api.crustdata.com on 2026-04-30. Filter-side paths live in lib/crust/build-filter.ts
+// and stay on the qualified path scheme (e.g. basic_profile.location.country).
+//
+// If Crust returns "Field 'X' is not supported on scope 'person'", the error
+// body includes the canonical valid-field list — re-verify against that.
 export const AUTOCOMPLETE_FIELDS = {
-  function_category: 'experience.employment_details.current.function_category',
-  seniority_level: 'experience.employment_details.current.seniority_level',
+  function_category: 'function_category',
+  seniority_level: 'seniority_level',
   company: 'experience.employment_details.current.name',
   company_past: 'experience.employment_details.past.name',
-  industry: 'experience.employment_details.current.company_industries',
-  country: 'basic_profile.location.country',
-  region: 'basic_profile.location.state',
-  city: 'basic_profile.location.city',
-  school: 'education.schools.school',
-  degree: 'education.schools.degree',
+  industry: 'experience.employment_details.current.industries',
+  country: 'basic_profile.country',
+  region: 'basic_profile.state',
+  city: 'basic_profile.city',
+  school: 'education.schools.institute_name',
+  degree: 'education.schools.degree_name',
   field_of_study: 'education.schools.field_of_study',
   skill: 'skills.professional_network_skills',
 } as const
