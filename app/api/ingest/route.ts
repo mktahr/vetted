@@ -56,6 +56,7 @@ interface CanonicalProfile {
   headline_raw?: string | null;
   summary_raw?: string | null;
   current_company?: string | null;
+  current_company_linkedin_url?: string | null;
   current_title?: string | null;
   years_experience?: number | null;
   years_at_current_company?: number | null;
@@ -70,6 +71,11 @@ interface CanonicalProfile {
 
 interface RawExperience {
   company_name?: string;
+  // Canonical company LinkedIn URL — populated by crust-v2 mapper (>=1.1.0).
+  // When present, upsertCompany() uses it as the canonical match key,
+  // backfilling companies.linkedin_url on existing rows that lack it.
+  // Chrome extension + legacy v1 mapper leave this undefined.
+  company_linkedin_url?: string;
   title?: string;
   start_date?: string;
   end_date?: string;
@@ -93,30 +99,76 @@ interface RawEducation {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+interface UpsertCompanyInput {
+  name: string | null | undefined;
+  linkedin_url?: string | null;
+}
+
 /**
  * Look up or create a company record.
- * Returns company_id.
+ *
+ * Match priority:
+ *   1. companies.linkedin_url exact match (canonical identity, when available)
+ *   2. companies.company_name case-insensitive ILIKE (legacy fallback)
+ *
+ * On match, this performs a *real* upsert: any null/empty columns we have new
+ * data for get backfilled; non-null columns are NEVER overwritten so admin-
+ * curated values win. Today the only enrichable field is linkedin_url; the
+ * structure is forward-compatible with website_url / industry / founding_year
+ * once the company-enrichment task lands.
+ *
+ * Auto-created rows always land as focus='unreviewed' / manual_review_status=
+ * 'unreviewed' — preserving the existing tier-tagging convention so admin
+ * triage queues still work.
  */
-async function upsertCompany(supabase: SupabaseClient, companyName: string | null | undefined): Promise<string | null> {
-  if (!companyName) return null;
+async function upsertCompany(
+  supabase: SupabaseClient,
+  input: UpsertCompanyInput,
+): Promise<string | null> {
+  const name = input.name?.trim();
+  if (!name) return null;
+  const linkedinUrl = input.linkedin_url?.trim() || null;
 
-  const name = companyName.trim();
+  // 1. Match by linkedin_url first when available — most reliable identity.
+  if (linkedinUrl) {
+    const { data: byUrl } = await supabase
+      .from('companies')
+      .select('company_id')
+      .eq('linkedin_url', linkedinUrl)
+      .maybeSingle();
+    if (byUrl) return byUrl.company_id;
+  }
 
-  // Try to find existing
-  const { data: existing } = await supabase
+  // 2. Fall back to case-insensitive name match.
+  const { data: byName } = await supabase
     .from('companies')
-    .select('company_id')
+    .select('company_id, linkedin_url')
     .ilike('company_name', name)
-    .single();
+    .maybeSingle();
 
-  if (existing) return existing.company_id;
+  if (byName) {
+    // Backfill linkedin_url only if the existing row is missing it. The
+    // .is('linkedin_url', null) guard makes the update atomic — if a
+    // concurrent ingest just filled it, we don't overwrite.
+    if (linkedinUrl && !byName.linkedin_url) {
+      const { error: updateError } = await supabase
+        .from('companies')
+        .update({ linkedin_url: linkedinUrl, updated_at: new Date().toISOString() })
+        .eq('company_id', byName.company_id)
+        .is('linkedin_url', null);
+      if (updateError) {
+        console.error('[ingest] Failed to backfill linkedin_url:', name, updateError);
+      }
+    }
+    return byName.company_id;
+  }
 
-  // Create new (minimal record — to be enriched later).
-  // focus='unreviewed' so Matt's admin triage queue picks it up.
+  // 3. Insert new stub. focus='unreviewed' so admin triage picks it up.
   const { data: created, error } = await supabase
     .from('companies')
     .insert({
       company_name: name,
+      linkedin_url: linkedinUrl,
       company_score_mode: 'manual',
       manual_review_status: 'unreviewed',
       current_status: 'active',
@@ -126,6 +178,24 @@ async function upsertCompany(supabase: SupabaseClient, companyName: string | nul
     .single();
 
   if (error) {
+    // Race: a concurrent ingest just inserted the same row, tripping the
+    // linkedin_url UNIQUE constraint. Re-resolve by URL or name and return.
+    if ((error as { code?: string }).code === '23505') {
+      if (linkedinUrl) {
+        const { data: rematched } = await supabase
+          .from('companies')
+          .select('company_id')
+          .eq('linkedin_url', linkedinUrl)
+          .maybeSingle();
+        if (rematched) return rematched.company_id;
+      }
+      const { data: rematchedByName } = await supabase
+        .from('companies')
+        .select('company_id')
+        .ilike('company_name', name)
+        .maybeSingle();
+      if (rematchedByName) return rematchedByName.company_id;
+    }
     console.error('[ingest] Failed to create company:', name, error);
     return null;
   }
@@ -312,7 +382,10 @@ export async function POST(req: NextRequest) {
   try {
 
   // ── Step 2: Normalize company ────────────────────────────────────────────
-  const currentCompanyId = await upsertCompany(supabase, canonical.current_company);
+  const currentCompanyId = await upsertCompany(supabase, {
+    name: canonical.current_company,
+    linkedin_url: canonical.current_company_linkedin_url,
+  });
 
   // ── Step 3: Normalize current title ─────────────────────────────────────
   const titleData = await normalizeTitle(supabase, canonical.current_title);
@@ -400,7 +473,10 @@ export async function POST(req: NextRequest) {
   for (const exp of experiences) {
     if (!exp.company_name && !exp.title) continue;
 
-    const expCompanyId = await upsertCompany(supabase, exp.company_name);
+    const expCompanyId = await upsertCompany(supabase, {
+      name: exp.company_name,
+      linkedin_url: exp.company_linkedin_url,
+    });
     const expTitleData = await normalizeTitle(supabase, exp.title);
 
     // Resolve employment type: title dictionary hint > raw type lookup > unknown

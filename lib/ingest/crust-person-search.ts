@@ -105,9 +105,11 @@ export interface PersonSearchEmployer {
   start_date?: string | null      // "2025-11-01T00:00:00"
   end_date?: string | null        // null on current roles
   is_default?: boolean            // marks the primary current role
-  professional_network_id?: string
-  crustdata_company_id?: number
-  company_professional_network_profile_url?: string
+  professional_network_id?: string                  // LinkedIn company numeric ID (string)
+  crustdata_company_id?: number                     // Crust's internal company ID
+  company_professional_network_profile_url?: string // company LinkedIn URL — used as canonical company-identity key by ingest upsert
+  company_profile_picture_permalink?: string | null
+  employment_type?: string
   [key: string]: unknown
 }
 

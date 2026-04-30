@@ -36,6 +36,11 @@ export const MAPPER_VERSION = '1.0.0'
 
 export interface RawExperience {
   company_name?: string
+  // Canonical LinkedIn URL of the company (e.g. https://www.linkedin.com/company/anduril).
+  // When present, the ingest path uses this as the canonical identity for company
+  // matching/upsert instead of the case-insensitive name match. Chrome extension
+  // ingest doesn't produce this — it stays undefined and we fall back to name match.
+  company_linkedin_url?: string
   title?: string
   start_date?: string        // YYYY-MM-DD (stripped of time)
   end_date?: string
@@ -63,6 +68,9 @@ export interface CanonicalProfile {
   full_name?: string
   location_resolved?: string | null
   current_company?: string | null
+  // LinkedIn URL of the candidate's primary current employer. Lets the ingest
+  // path's upsertCompany() match by canonical URL rather than by name.
+  current_company_linkedin_url?: string | null
   current_title?: string | null
   years_experience?: number | null
   years_at_current_company?: number | null
