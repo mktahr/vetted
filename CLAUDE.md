@@ -15,7 +15,7 @@ The core insight: instead of asking AI to judge a candidate, we build our own di
 | Frontend / Hosting | Vercel (vetted-self.vercel.app) |
 | Database | Supabase (Postgres) |
 | Scraping | Chrome Extension (TypeScript) |
-| Bulk import | Crust Data `/screener/persondb/search` + streaming admin page |
+| Bulk import | Crust Data `/person/search` v2 + filter-builder admin UI at `/admin/import` |
 | Language | TypeScript / Next.js 14 (App Router) |
 
 ---
@@ -440,7 +440,28 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 
 ---
 
-## Database: Final Schema State (after migrations 001–005)
+## Database: Final Schema State (after migrations 001–030)
+
+**Migration ledger** (full per-migration descriptions live in `supabase/migrations/*.sql` headers):
+- 001 — Phase 1 normalized schema + enums
+- 002 — dictionary seeds (functions, specialties, titles, degrees, employment types)
+- 003 — bucket taxonomy + school_score + is_foreign
+- 004 — school_aliases + people derived columns + companies.founding_year
+- 005 — 6-value seniority enum + seniority_rules table (later expanded to 9 active in 006)
+- 006–015 — incremental signal/specialty/seniority/title-level work (see migration headers)
+- 016 — `company_focus_type` enum + `companies.focus` + clearance_level on people
+- 017 — role_dictionary (26) + role_specialty_map + ~165 new specialties
+- 018 — RLS policies on role tables
+- 019 — `companies.funding_stage` + `companies.headcount_range` (text columns, currently un-used)
+- 020–021 — specialty signal columns + 130k-row signal seeds
+- 022–025 — signals_schema, signal_dictionary tier/group/competition + seeds
+- 026 — education text fields on `person_education`
+- 027 — school_groups + company_groups + 14 top law firms
+- 028 — `raw_ingest_events` archive (see "Raw Ingest Archive" section)
+- 029 — `crust_import_log` audit table (see "Crust Import Audit Log" section)
+- 030 — `person_experiences.is_primary_current` + partial index (see "Primary-Current Disambiguation" section)
+
+The "Normalized tables" / "Dictionary tables" lists below describe the post-migration state. They name the most-used columns; consult the actual schema for exhaustive column lists.
 
 ### Enums
 - `seniority_level` (6): `unknown`, `student`, `individual_contributor`, `lead`, `manager`, `executive`
@@ -485,12 +506,8 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 ```
 /
 ├── CLAUDE.md                                    ← this file, always read first
-├── supabase/migrations/
-│   ├── 001_vetted_normalized_schema.sql         ← all Phase 1 tables + enums
-│   ├── 002_vetted_seed_data.sql                 ← dictionaries (functions, specialties, titles, degrees, employment types)
-│   ├── 003_bucket_taxonomy_and_schools.sql      ← bucket enum swap + school_score + is_foreign
-│   ├── 004_aliases_derived_fields.sql           ← school_aliases + people derived columns + companies.founding_year
-│   └── 005_seniority_taxonomy.sql               ← 6-value seniority enum + seniority_rules table
+├── docs/crust/                                  ← Crust company API specs (search, identify, enrich, autocomplete) + pricing/rate-limits
+├── supabase/migrations/                         ← see "Database: Final Schema State" for full migration set 001–030
 │
 ├── app/                                         ← Next.js 14 App Router
 │   ├── page.tsx                                 ← "/" renders ProfileTable
@@ -498,52 +515,65 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 │   ├── types.ts                                 ← Person, Experience, Education, Company, BucketAssignment, etc.
 │   ├── components/
 │   │   ├── ProfileTable.tsx                     ← main people table + faceted filters + search + bucket chips
-│   │   └── ProfileDrawer.tsx                    ← row-click side drawer with bucket + score reasoning
+│   │   ├── ProfileDrawer.tsx                    ← row-click side drawer with bucket + score reasoning
+│   │   ├── FilterSidebar.tsx                    ← sidebar filter pane shared with /search-builder
+│   │   ├── CompanyLogo.tsx                      ← logo.dev badge or initial-letter placeholder
+│   │   └── condition-rows/                      ← compound where-they-worked / where-they-studied filter UI
 │   ├── profile/[id]/page.tsx                    ← "/profile/[id]" detail page
+│   ├── search-builder/page.tsx                  ← "/search-builder" — full-page filter UI sharing FilterSidebar
 │   ├── admin/
 │   │   ├── companies/
-│   │   │   ├── page.tsx                         ← "/admin/companies" list + filters + sort
-│   │   │   ├── [id]/page.tsx                    ← edit company + year scores
+│   │   │   ├── page.tsx                         ← "/admin/companies" list + filters + sort + bulk-edit focus
+│   │   │   ├── [id]/page.tsx                    ← edit company + per-year scores + per-function scores
 │   │   │   └── new/page.tsx                     ← create company form
-│   │   ├── import/page.tsx                      ← "/admin/import" — Crust bulk import UI with live NDJSON progress
+│   │   ├── import/                              ← "/admin/import" — Crust v2 filter-builder UI
+│   │   │   ├── page.tsx                         ← sidebar filter builder + preview-then-confirm + NDJSON progress
+│   │   │   └── components/
+│   │   │       ├── AutocompleteSelect.tsx       ← server-side typeahead dropdown (calls /autocomplete)
+│   │   │       ├── CompanyMultiSelect.tsx       ← chips with per-row scope (current/past/ever)
+│   │   │       ├── RangeInput.tsx               ← min/max number-pair input
+│   │   │       └── InfoTooltip.tsx              ← portal-rendered hover tooltip with collision detection
 │   │   └── seed/page.tsx                        ← "/admin/seed" — 3 hardcoded test payloads for smoke tests
 │   └── api/
-│       ├── ingest/route.ts                      ← POST /api/ingest (Chrome ext + admin/import target)
+│       ├── ingest/route.ts                      ← POST /api/ingest (Chrome ext + admin/import target; raw archive + upsert + score)
+│       ├── people/[id]/{route.ts,narrative/route.ts}  ← person detail + AI narrative (Claude Haiku)
 │       └── admin/
-│           ├── import/route.ts                  ← POST /api/admin/import (streaming full import via /person/search v2)
-│           └── import/preview/route.ts          ← POST /api/admin/import/preview (sample + total_count for confirm dialog)
+│           ├── crust-import/                    ← Crust v2 import endpoints
+│           │   ├── preview/route.ts             ← POST /api/admin/crust-import/preview (sample + total_count, JSON)
+│           │   ├── run/route.ts                 ← POST /api/admin/crust-import/run (streaming NDJSON full import)
+│           │   └── autocomplete/route.ts        ← POST /api/admin/crust-import/autocomplete (free Crust autocomplete proxy)
+│           └── rescore-all/route.ts             ← admin-only batch re-score endpoint
 │
 ├── lib/
-│   ├── supabase.ts                              ← browser Supabase client (anon key)
-│   ├── normalize/
-│   │   ├── index.ts                             ← barrel
-│   │   ├── titles.ts                            ← normalizeTitle() → title_dictionary lookup with prefix/suffix strip
-│   │   ├── degrees.ts                           ← normalizeDegree() + normalizeFieldOfStudy()
-│   │   ├── employment.ts                        ← normalizeEmploymentType()
-│   │   └── seniority.ts                         ← resolveSeniority() + graduationDateFromEducation() — the ONLY source of seniority
-│   ├── scoring/
-│   │   ├── index.ts                             ← barrel
-│   │   ├── score-candidate.ts                   ← scoreCandidate() + writeBucketAssignment()
-│   │   └── compute-derived.ts                   ← computeAndWriteDerivedFields()
+│   ├── supabase.ts                              ← browser Supabase client (anon key) + fetchAllRows() pagination helper
+│   ├── normalize/                               ← title / degree / employment / seniority / specialty resolvers
+│   ├── scoring/                                 ← scoreCandidate(), writeBucketAssignment(), computeAndWriteDerivedFields()
+│   ├── tenure/                                  ← FT classification + company-stretch tenure (see "Tenure Helper" below)
+│   ├── education/                               ← display-only education filter (see "Education Display Filter" below)
+│   ├── signals/                                 ← processCandidateSignals() (publications, fellowships, etc. — empty data, weights wired)
+│   ├── ai/
+│   │   └── narrative.ts                         ← Claude Haiku 4.5 narrative summary (direct fetch, ANTHROPIC_API_KEY)
+│   ├── crust/                                   ← Crust v2 API client + filter builder + audit log
+│   │   ├── types.ts                             ← UIFilterState + AUTOCOMPLETE_FIELDS map + EMPTY/INITIAL_FILTERS + HARD_VOLUME_CAP
+│   │   ├── api.ts                               ← v2 API client (fetchPersonSearch, fetchAutocomplete) + Bearer auth
+│   │   ├── build-filter.ts                      ← UIFilterState → Crust filter body translator + summarizeFilters()
+│   │   └── log.ts                               ← writeCrustLog() to crust_import_log (migration 029) + estimateCredits()
+│   ├── locations/                               ← static US states + top-50 cities for location typeahead
 │   └── ingest/
 │       ├── index.ts                             ← barrel
-│       ├── crust-person-search.ts               ← buildPersonSearchBody() + fetchPersonSearchPage() for v2 /person/search
-│       ├── crust-api.ts                         ← legacy — old /screener/persondb/search network layer + postIngest()
+│       ├── crust-person-search.ts               ← legacy v1-style typed wrapper (kept for v2 type-shape compatibility)
+│       ├── crust-api.ts                         ← legacy /screener/persondb/search network layer + postIngest()
 │       └── mappers/
-│           ├── crust-v2.ts                      ← mapPersonSearchToCanonical() for /person/search v2 responses (live)
+│           ├── crust-v2.ts                      ← mapPersonSearchToCanonical() — LIVE path (v1.1.0; threads company_linkedin_url)
 │           ├── crust.ts                         ← legacy — mapCrustToCanonical() for old /screener/persondb/search
 │           └── generic.ts                       ← mapGenericToCanonical() — best-effort aliasing for unknown JSON
 │
 └── scripts/                                     ← one-shot + backfill scripts (all .mjs, run with node)
     ├── reseed-companies.mjs                     ← clears + re-seeds companies + company_year_scores from CSV
-    ├── seed-company-scores.mjs                  ← original seed (non-destructive upsert version)
-    ├── seed-founding-years.mjs                  ← hardcoded founding_year for 20 scored companies
-    ├── seed-universities.mjs                    ← seeds schools from CSV (66 rows)
-    ├── seed-school-aliases.mjs                  ← 93 aliases across 32 schools
-    ├── seed-recruiting-titles.mjs               ← 16 recruiting titles → title_dictionary
-    ├── seed-seniority-rules.mjs                 ← 73 rules into seniority_rules (idempotent: delete + re-insert)
+    ├── seed-*.mjs                               ← seed dictionaries / school aliases / founding years / recruiting titles / etc.
     ├── compute-derived-fields.mjs               ← batch version of computeAndWriteDerivedFields for all people
     ├── backfill-seniority.mjs                   ← re-evaluates seniority for every experience + recomputes years_experience_estimate + career_stage
+    ├── backfill-company-linkedin-urls.mjs       ← mines raw_ingest_events to fill companies.linkedin_url where NULL (3.6% → 9.8% on prod)
     ├── score-all.mjs                            ← recompute derived fields + score every person; use --unscored-only to skip already-scored
     ├── score-test-profiles.mjs                  ← runs scorer against Priya/Marcus/Jennifer test profiles w/ breakdown
     └── verify-company-scores.mjs                ← read-only — print score distribution across companies
@@ -587,49 +617,112 @@ Returns `{ success, person_id, legacy_ok, bucket, total_score, message }`.
 
 ---
 
-## Admin Import (Crust Data — Person Search API v2)
+## Admin Import — Crust Import V1 (Person Search v2)
 
-Uses Crust's **`POST https://api.crustdata.com/person/search`** API with Bearer auth and `x-api-version: 2025-11-01`. Two-step sample-first workflow:
+Filter-builder UI at `/admin/import` for bulk ingesting candidates via Crust v2. Three routes back the page:
+- `POST /api/admin/crust-import/autocomplete` — proxies Crust's free autocomplete, used by every typeahead picker in the sidebar
+- `POST /api/admin/crust-import/preview` — non-streaming JSON sample + total_count
+- `POST /api/admin/crust-import/run` — streaming NDJSON full import
 
-**Step 1 — `POST /api/admin/import/preview`** (non-streaming JSON)
+Crust auth: `Authorization: Bearer <CRUSTDATA_API_KEY>` + `x-api-version: 2025-11-01`. Default rate limit: 15 req/min (429 on breach). Person-search cost: 0.03 credits per result. Autocomplete: free.
 
-```ts
-{ company_name?, location?, seniority_level?, function_category? }
-```
+### Sidebar filter shape
 
-Calls Crust with `limit: 50` and returns a sample plus `total_count`. (`preview: true` is supported by the API but not enabled on our current plan — the fallback still returns a real sample of 50.) Response: `{ total_count, sample_count, samples[], filters }`. UI renders a confirmation table before the full pull.
+State lives as a single `UIFilterState` object (`lib/crust/types.ts`). Five collapsible sections:
 
-**Step 2 — `POST /api/admin/import`** (streaming NDJSON)
-
-Same filter body plus optional `total_count` (for progress denominator). Flow:
-1. Queries `people.linkedin_url` → passes as `post_processing.exclude_profiles` so Crust skips already-ingested profiles server-side.
-2. Paginates via `next_cursor` at 100/page until exhausted.
-3. Each record → `mapPersonSearchToCanonical` (`lib/ingest/mappers/crust-v2.ts`) → `postIngest` to `/api/ingest`.
-
-Events: `start` (with `estimated_total` and `excluded_count`), `progress`, `info`, `error`, `complete`.
-
-**Filter syntax** — leaf `{ field, type: '(.)', value }`; composite `{ op: 'and', conditions: [...] }`. The four user-facing filters map to:
-
-| Input | Crust field |
+| Section | Filters |
 |---|---|
-| company_name | `experience.employment_details.current.company_name` |
-| location | `basic_profile.location.full_location` (broader than city/state/country) |
-| seniority_level | `experience.employment_details.current.seniority_level` |
-| function_category | `experience.employment_details.current.function_category` |
+| **Where they work** | `companies[]` (multi-select with per-row scope: current/past/ever), `years_at_current_min/max`, `headcount_ranges[]` (1-10, 11-50, … 10000+), `industries[]` |
+| **Who they are** | `function_category` (single, **REQUIRED** — gate for preview/run), `skills[]`, `title` (free-text comma-list), `seniority_levels[]`, `years_experience_min/max` |
+| **Where they are** | `geo_mode` (none / country / region / radius). Country mode: multi-select countries. Region: multi-select states/regions. Radius: single city + miles slider. **Initial page load** pre-selects `country` + both Crust US variants (`'United States of America'` and `'United States'`) — Crust indexes them separately, so multi-select `in` operator captures both populations. "Clear all" resets to truly empty (`EMPTY_FILTERS`). |
+| **Education** (collapsed by default) | `schools[]`, `degrees[]`, `fields_of_study[]` |
+| **Signals** (collapsed by default) | `recently_changed_jobs` boolean |
 
-Note: `seniority_level` and `function_category` are filter-only — they are not returned in responses, so the preview table shows `—` for Seniority.
+`HARD_VOLUME_CAP = 5000`, `SOFT_VOLUME_WARNING = 1000` (UI shows a "large import" caution chip).
 
-**Key mapping rules in `lib/ingest/mappers/crust-v2.ts`:**
+### Filter translation: `lib/crust/build-filter.ts`
+
+`UIFilterState` → Crust filter body. Leaf: `{ field, type, value }`. Composite: `{ op: 'and', conditions: [...] }`. Operators include `=`, `!=`, `<`, `=<`, `>`, `=>`, `in`, `not_in`, `contains`, `(.)`, `geo_distance` (Crust uses `=<` for ≤ and `=>` for ≥, **not** `<=` / `>=`).
+
+**Field-path quirks:** the filter API and the autocomplete API have OVERLAPPING but NOT IDENTICAL valid-field allowlists. `lib/crust/build-filter.ts` uses qualified paths (e.g. `basic_profile.location.country`); `lib/crust/types.ts::AUTOCOMPLETE_FIELDS` uses the autocomplete-side allowlist (top-level shorthand like `country`, `region`, `function_category`). **Don't unify them** — Crust will reject otherwise-valid fields when applied to the wrong API. Re-verify against api.crustdata.com on changes.
+
+### Preview workflow (`/preview` route)
+
+`{ filters, limit?: number, cursor?: string }` →  
+1. Validates `function_category` set; else 400.
+2. Builds Crust filter body via `buildCrustFilter(ui)`.
+3. Pulls all existing `people.linkedin_url` via `fetchAllRows()` and passes as `post_processing.exclude_profiles` so Crust skips already-ingested profiles server-side.
+4. Calls `POST /person/search` with `limit` (default 50, cap 100).
+5. Response: `{ total_count, sample_count, profiles[], excluded_count, next_cursor }`. The "Load 50 more (free per Crust pricing)" button paginates via cursor, capping the local sample at 100.
+6. Writes a row to `crust_import_log` (request_kind=`preview`).
+
+### Run workflow (`/run` route)
+
+`{ filters, volume }` → streaming NDJSON.
+1. Same dedup/exclude_profiles pass.
+2. Paginates `/person/search` at 100/page until either `volume` ingested or cursor exhausted.
+3. Each record → `mapPersonSearchToCanonical` (`lib/ingest/mappers/crust-v2.ts`) → `postIngest()` → `/api/ingest`.
+4. Emits NDJSON events: `start` (with `estimated_total` + `excluded_count`), `progress` (per profile, with status: success/skipped/failed), `info`, `error`, `complete` (with success/skipped/failed counts).
+5. Writes `crust_import_log` row at completion.
+
+### Mapper notes (`lib/ingest/mappers/crust-v2.ts` — version 1.1.0)
+
 - `linkedin_url` ← `social_handles.professional_network_identifier.profile_url`
 - `full_name` ← `basic_profile.name`
-- `location_resolved` ← `basic_profile.location.raw` (fallback to city/state/country — structured fields can be unreliable)
-- Current company/title = `employment_details.current[is_default=true]` → `current[0]` fallback
-- `experiences[]` = `employment_details.current[]` (marked `is_current=true`) + `.past[]` (`is_current=false`)
-- `education[]` ← `education.schools[]` with fields `{ school, degree, start_year, end_year }` — note `school` not `school_name`, and `start_year`/`end_year` are direct integers, not parsed from ISO dates
-- Dates: strip ISO time ("2022-05-01T00:00:00" → "2022-05-01")
-- `years_experience` = post-graduation, non-internship span (Crust's `years_of_experience_raw` is NOT used — it counts student jobs)
+- `location_resolved` ← `basic_profile.location.raw` (structured fields are unreliable — observed "Emilia-Romagna, Italy" for someone in "Greater Seattle Area")
+- **Current role disambiguation**: prefer `is_default=true` (Crust's flag) → first `current[]` entry as fallback. Threaded through to `person_experiences.is_primary_current` (migration 030).
+- `experiences[]` = `employment_details.current[]` (`is_current=true`) + `.past[]` (`is_current=false`). Per-experience dedup by `(company|title|start|end)` lower-cased key.
+- `education[]` ← `education.schools[]` with `{ school, degree, start_year, end_year }` — note `school` not `school_name`, and years are direct integers, not parsed from ISO.
+- **`company_linkedin_url`** is now captured from `experience.employment_details.{current,past}[].company_professional_network_profile_url` and threaded to ingest's `upsertCompany` (see "Company Metadata Capture" section below).
+- `current_company_linkedin_url` populated from primary current employer.
+- Dates: strip ISO time (`"2022-05-01T00:00:00"` → `"2022-05-01"`).
+- `years_experience` = post-graduation, non-internship span. Crust's `years_of_experience_raw` is NOT used (counts pre-graduation student jobs).
 
-**Legacy old-API integration** — `lib/ingest/mappers/crust.ts` and `lib/ingest/crust-api.ts` still exist for the old `/screener/persondb/search` endpoint. Not used by the live import flow.
+### Filter-only fields
+
+`seniority_level` and `function_category` are filter-only on Crust — they are NOT returned in responses. Preview table shows `—` for Seniority and Function. Mitigation post-merge: `is_primary_current` (Crust's `is_default`) wins when picking the candidate's primary current role even with multiple `is_current=true` entries.
+
+### Legacy old-API integration
+
+`lib/ingest/mappers/crust.ts` and `lib/ingest/crust-api.ts` still exist for the legacy `/screener/persondb/search` endpoint. Not used by the live flow. Kept for reference only.
+
+---
+
+## Company Metadata Capture on Ingest (post-`company-mapper-enrich-minimal`, 2026-04-30)
+
+When a candidate is ingested via Crust v2, the mapper now captures the company's canonical LinkedIn URL from the embedded `experience.employment_details.{current,past}[].company_professional_network_profile_url` field. This populates `companies.linkedin_url` on every auto-created stub.
+
+### `upsertCompany` behavior (`app/api/ingest/route.ts`)
+
+Real upsert pattern, not lookup-then-stub:
+
+1. **linkedin_url exact match** (canonical identity, when URL provided)
+2. **company_name ILIKE fallback** (legacy, case-insensitive)
+3. **INSERT new stub** if neither matches
+
+On a name-match hit where the existing row has `linkedin_url IS NULL` and the ingest brings a URL, an **atomic update fills the column** (`.is('linkedin_url', null)` guard makes it race-safe). Admin-curated values (non-null) are NEVER overwritten.
+
+Concurrent-insert race on the `linkedin_url UNIQUE` constraint is handled by re-resolving via URL or name on 23505 error. (Race on the name-match path without a LinkedIn URL is still possible — see backlog.)
+
+**Tier-tagging unchanged:** auto-created rows still land as `focus='unreviewed' / manual_review_status='unreviewed'`. Admin triage workflow is not affected.
+
+### What's captured vs not
+
+The Crust v2 person-endpoint sub-object embeds ONLY: `name`, `title`, `start_date`, `end_date`, `employment_type`, `is_default`, `crustdata_company_id`, `professional_network_id` (LinkedIn numeric ID), `company_professional_network_profile_url`, and `company_profile_picture_permalink`.
+
+It does NOT embed: website_url, primary_industry_tag, founding_year, headcount_range, description, funding info. Those live on the separate Crust company-side endpoints (`/company/search`, `/company/identify`, `/company/enrich`) — not used at ingest time. See `docs/crust/` for the full company-API specs.
+
+The `crustdata_company_id` and `professional_network_id` (LinkedIn numeric ID) are returned by Crust but are **not yet captured** because no schema columns exist for them. Will be added when company-enrichment work scopes the right columns.
+
+### Backfill: `scripts/backfill-company-linkedin-urls.mjs`
+
+Mines `raw_ingest_events.payload` (Crust v2 source, `processing_status='mapped'`) to extract company LinkedIn URLs and atomically fills `companies.linkedin_url` where NULL. Default dry-run with anomaly report (multi-URL conflicts per company name, malformed URLs); `--apply` to commit.
+
+Production run on 2026-04-30 lifted fill from **3.6% → 9.8%** (95 rows backfilled, 0 anomalies). Limit: only Crust v2 ingests after migration 028 are recoverable via this path; older companies fill progressively as new candidates land at them.
+
+### Mapper version
+
+`lib/ingest/mappers/crust-v2.ts` bumped 1.0.0 → 1.1.0. Version is recorded as `people.last_mapper_version` so future re-mappings can target a specific output shape.
 
 ---
 
@@ -802,6 +895,51 @@ Every ingest writes the verbatim payload to `raw_ingest_events` BEFORE normaliza
 Each mapper in `lib/ingest/mappers/` exports `MAPPER_VERSION = '1.0.0'`. Bump per semver when output shape or field extraction changes.
 
 Provenance columns on `people`, `person_experiences`, `person_education`: `last_ingest_source`, `last_ingest_at`. `people` also has `last_mapper_version`.
+
+---
+
+## Crust Import Audit Log (Post-Migration 029)
+
+`crust_import_log` records every Crust v2 API call from the admin import flow — preview, run, and autocomplete requests. Used for cost tracking, debugging filter behavior, and verifying volume against credit cap.
+
+### Table: `crust_import_log`
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | UUID PK | |
+| `created_at` | TIMESTAMPTZ | Default `now()` |
+| `request_kind` | TEXT NOT NULL | `'preview'` / `'run'` / `'autocomplete'` |
+| `filter_body` | JSONB | The Crust filter body sent (after `buildCrustFilter`) |
+| `results_count` | INTEGER | Profiles returned in this call |
+| `credits_used` | INTEGER | Estimate via `estimateCredits()` (0.03/profile rounded up; 0 for autocomplete) |
+| `error_message` | TEXT | Crust error body when applicable |
+| `user_id` | TEXT | `'admin'` placeholder — auth not user-attributed today |
+
+Helper: `lib/crust/log.ts::writeCrustLog()`. Fire-and-forget — never blocks the request path. All three Crust import routes call it after their Crust call completes.
+
+---
+
+## Primary-Current Disambiguation (Post-Migration 030)
+
+`person_experiences.is_primary_current` BOOLEAN NOT NULL DEFAULT FALSE. Marks the candidate's primary current role.
+
+### Why this column exists
+
+Crust v2 sometimes returns multiple `is_current=true` experiences per candidate when employment overlaps (still-listed internships, advisory roles, side projects, board seats). Crust flags ONE with `is_default=true` to indicate the candidate's primary role — that flag is preserved via this column.
+
+### Index
+
+`idx_person_exp_primary_current ON person_experiences (person_id) WHERE is_primary_current = TRUE` (partial index — only the ~1 primary row per person).
+
+### Used by
+
+The "derive current role" step in `app/api/ingest/route.ts` checks in priority order:
+1. `is_primary_current = true`
+2. First non-student-titled current role
+3. Any current role with a title
+4. `currentExps[0]`
+
+Mitigates the `isStudentTitle` regex limitation (see backlog): if Crust returns a still-listed internship as one of multiple `is_current=true` rows, `is_primary_current=true` on the real current job wins.
 
 ---
 
