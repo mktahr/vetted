@@ -1,13 +1,30 @@
 # /person/professional_network/enrich/live — Crust Person Live Enrich
 
-> Source URL: https://docs.crustdata.com/person-docs/enrichment/live-enrich
-> ⚠️ **Partial doc — Mintlify SPA rendering blocked WebFetch from scraping the full reference page on 2026-05-01.** What's captured here came from the openapi-specs introduction (which lists this endpoint) and the person enrichment introduction page (which references it). Re-pull this doc after Crust's docs site improves SSR, OR fetch it manually in browser.
+> Source: openapi-specs introduction + the `/person/enrich` OpenAPI YAML (verified 2026-05-01).
+> **The dedicated `/person-docs/enrichment/live-enrich` page does NOT exist on Crust's docs site** — confirmed by Matt 2026-05-01. The endpoint is documented through the shared request-body contract on `/person/enrich`.
 
 ## What we know
 
 **Endpoint:** `POST https://api.crustdata.com/person/professional_network/enrich/live`
 
-(NOT a parameter on `/person/enrich`. **Live is a SEPARATE endpoint** — confirmed by the openapi-specs introduction page on 2026-05-01.)
+(NOT a parameter on `/person/enrich`. **Live is a SEPARATE endpoint** with the SAME request-body schema as `/person/enrich`.)
+
+## Request body — SHARED with `/person/enrich`
+
+The `PersonEnrichRequest` schema applies to BOTH `/person/enrich` and `/person/professional_network/enrich/live`. From the OpenAPI YAML:
+
+> "Request body for /person/enrich and /person/professional_network/enrich/live. Submit exactly one identifier type per request — professional_network_profile_urls or business_emails."
+
+So the inputs are:
+- `professional_network_profile_urls: [string]` (max 25) — e.g. LinkedIn URLs
+- `business_emails: [string]`
+- `fields: [string]` (optional — same field group allowlist as `/person/enrich`)
+- `min_similarity_score: number` (0-1)
+- `preview: boolean` ⚠️ **see note below**
+
+See [07-person-enrich.md](07-person-enrich.md) for the full schema details.
+
+⚠️ **`preview: true` charges 0 credits on `/person/enrich`** (per the YAML description "Cannot be combined with enrich_realtime"). It's unclear whether `preview: true` works on the Live endpoint — likely not (the whole point of Live is fresh fetch, which contradicts cached preview). To verify before relying on it.
 
 **Cost (per Matt's contract CSV):** **5 credits per record.**
 > Pricing CSV row: "Live Person enrichment (pulled from source delivered to customer in seconds), 5"
