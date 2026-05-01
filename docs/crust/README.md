@@ -11,9 +11,9 @@ All sourced from https://docs.crustdata.com (verified 2026-05-01).
 | [04-company-autocomplete.md](04-company-autocomplete.md) | `POST /company/search/autocomplete` | **FREE** | Filter-picker typeahead. |
 | [05-pricing-and-rate-limits.md](05-pricing-and-rate-limits.md) | — | — | Credit costs, rate limits, **7 OPEN reconciliation questions** for Crust rep. **Read this before sizing any backfill.** |
 | [06-person-search.md](06-person-search.md) | `POST /person/search` | 0.03/result (docs) **or** 1/record (CSV) ⚠️ | Used live by `/admin/import`. See pricing Q2. |
-| [07-person-enrich.md](07-person-enrich.md) | `POST /person/enrich` | 1 base + add-ons up to 7 (docs) **or** 3/record IN-DB (CSV) ⚠️ | Cached. See pricing Q1. |
+| [07-person-enrich.md](07-person-enrich.md) | `POST /person/enrich` | 1 base + add-ons up to 7 (docs) **or** 3/record IN-DB (CSV); **`preview: true` is FREE** ⚠️ | Cached. See pricing Q1. Includes full OpenAPI YAML. |
 | [08-person-autocomplete.md](08-person-autocomplete.md) | `POST /person/search/autocomplete` | **FREE** | Used live by `/admin/import` filter pickers. |
-| [09-person-live-enrich.md](09-person-live-enrich.md) | `POST /person/professional_network/enrich/live` | 5/record (CSV) | Real-time fresh-from-source. **Partial doc — Mintlify SPA blocked scraping; see file for what's missing.** |
+| [09-person-live-enrich.md](09-person-live-enrich.md) | `POST /person/professional_network/enrich/live` | 5/record (CSV) | Real-time fresh-from-source. **No dedicated doc page exists** — request body shape is documented as shared with `/person/enrich` (see file 07). |
 
 ## Pricing summary (per Matt's contract CSV — needs Crust rep confirmation)
 
@@ -39,7 +39,8 @@ See [05-pricing-and-rate-limits.md](05-pricing-and-rate-limits.md) "⚠️ Open 
 
 - 01-04 (company endpoints): direct `WebFetch` against docs.crustdata.com on 2026-04-30 / 2026-05-01.
 - 05 (pricing): from Matt's contract CSV (`/Users/matt/Downloads/.../Pricing - Customer Copy ...csv`) plus public `/general/pricing` page.
-- 06-08 (person search/enrich/autocomplete): direct `WebFetch` on 2026-05-01.
-- 09 (person live enrich): partial — Mintlify SPA blocked WebFetch from scraping the full reference page. Endpoint URL + cost captured from openapi-specs introduction; full reference content TBD.
+- 06, 08 (person search + autocomplete): direct `WebFetch` on 2026-05-01.
+- 07 (person enrich): formal OpenAPI YAML pasted directly by Matt 2026-05-01 (richest source).
+- 09 (person live enrich): documented through the shared request-body contract on `/person/enrich`. No dedicated doc page exists on Crust's site (verified by Matt). Cost from CSV.
 
 To refresh any doc, re-run `WebFetch` against the source URL listed in each file's header.
