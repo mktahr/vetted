@@ -506,7 +506,16 @@ The "Normalized tables" / "Dictionary tables" lists below describe the post-migr
 ```
 /
 ├── CLAUDE.md                                    ← this file, always read first
-├── docs/crust/                                  ← Crust company API specs (search, identify, enrich, autocomplete) + pricing/rate-limits
+├── docs/crust/                                  ← Crust API specs (source of truth for endpoint shapes / pricing)
+│   ├── 01-company-search.md                     ← /company/search (filter-based)
+│   ├── 02-company-identify.md                   ← /company/identify (entity resolution, FREE)
+│   ├── 03-company-enrich.md                     ← /company/enrich (cached / IN-DB)
+│   ├── 04-company-autocomplete.md               ← /company/search/autocomplete (FREE)
+│   ├── 05-pricing-and-rate-limits.md            ← credit costs, rate limits, OPEN reconciliation Qs (CSV vs docs)
+│   ├── 06-person-search.md                      ← /person/search (used by live import flow)
+│   ├── 07-person-enrich.md                      ← /person/enrich (cached / IN-DB) + add-on cost model
+│   ├── 08-person-autocomplete.md                ← /person/search/autocomplete (FREE)
+│   └── 09-person-live-enrich.md                 ← /person/professional_network/enrich/live (5 credits, real-time scrape)
 ├── supabase/migrations/                         ← see "Database: Final Schema State" for full migration set 001–030
 │
 ├── app/                                         ← Next.js 14 App Router
