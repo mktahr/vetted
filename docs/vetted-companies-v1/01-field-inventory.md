@@ -1,8 +1,8 @@
 # Vetted Companies V1 — Field-to-UI Mapping Inventory
 
-**Status:** PROPOSED. Lock this document before phase 1 build.
+**Status:** **LOCKED 2026-05-01.** All 8 open issues resolved. This is the contract for phase 1 build.
 **Author:** Claude Code
-**Date:** 2026-05-01
+**Date:** 2026-05-01 (drafted), 2026-05-01 (locked with Matt's resolutions)
 
 This document is the **contract** between:
 - The schema migration (what columns exist, what constraints they have)
@@ -60,19 +60,19 @@ If any of these three diverge from this document during implementation, this doc
 | **Tagging input** | no |
 | **Admin UI** | Edit page (text input, editable, validated as URL); list page (clickable LinkedIn icon); import preview table (clickable icon) |
 | **Recruiter UI** | none directly (CompanyLogo derives domain from `website_url`, not `linkedin_url`) |
-| **Notes** | Canonical company identity. UNIQUE constraint already exists. `upsertCompany` matches by this first, name fallback. |
+| **Notes** | Canonical LinkedIn identity. UNIQUE constraint already exists. Per resolved issue #8: `upsertCompany` matches by `crustdata_company_id` first (when present), then `linkedin_url`, then case-insensitive name. The bare-name fallback is now last-resort because Crust returns multiple distinct entities for the same short name (e.g. "Anduril" returns 4 different companies, none of them Anduril Industries). |
 
 ### `crustdata_company_id` (NEW in V1)
 | | |
 |---|---|
-| **Type** | BIGINT |
+| **Type** | BIGINT, UNIQUE |
 | **Default** | NULL |
-| **V1 status** | NEW column, indexed |
-| **Crust source** | `crustdata_company_id` (top-level) on search, enrich, identify responses. Also embedded as `crustdata_company_id` on every person experience entry (currently dropped by our mapper). |
+| **V1 status** | NEW column, indexed, UNIQUE constraint |
+| **Crust source** | `crustdata_company_id` (top-level) on search, enrich, identify responses. Also embedded as `crustdata_company_id` on every person experience entry — **currently dropped by our mapper; V1 phase 1 must update `lib/ingest/mappers/crust-v2.ts` to capture and thread it through to `upsertCompany`.** |
 | **Tagging input** | no |
 | **Admin UI** | Edit page (read-only display, copyable for debugging); not editable; not on list/new |
 | **Recruiter UI** | none |
-| **Notes** | Required for chaining identify → enrich without redundant lookups. Once populated, `upsertCompany` should prefer this over `linkedin_url` for matching (it's an integer, faster, and Crust's canonical key). Add `INDEX idx_companies_crustdata_id`. |
+| **Notes** | Per resolved issue #8 (entity disambiguation): `upsertCompany` matching priority becomes (1) `crustdata_company_id` exact match, (2) `linkedin_url` exact match, (3) `company_name` ILIKE fallback. The integer ID is Crust's canonical key — when present in the person sub-object, it disambiguates "Anduril Industries" (id 639939) from "Anduril Retail" (27679), "Anduril SA" (22024175), "Alanduril" (28759788), etc. that all surface for the bare name "Anduril". |
 
 ### `professional_network_id` (NEW in V1)
 | | |
@@ -100,7 +100,7 @@ If any of these three diverge from this document during implementation, this doc
 | **Crust source** | derived by tagger; never directly from a Crust field. Defaults to `'unreviewed'` on auto-creation. |
 | **Tagging input** | OUTPUT (the tagger writes this) |
 | **Admin UI** | List page filter (dropdown: all / hardware / non_hardware / unreviewed); list page bulk-edit; edit page (single-select dropdown); new-company form; triage queue (defaults filter to `unreviewed`) |
-| **Recruiter UI** | ProfileTable filter (replaces `focusScope`); search-builder filter; FilterSidebar; **V1 default: hide `non_hardware` from recruiter UIs** (only `hardware` surfaces; `unreviewed` admin-only) |
+| **Recruiter UI** | ProfileTable + search-builder filter candidate results to **only show candidates whose company has `category='hardware'`** (per resolved issue #6). Candidates whose primary current company is `non_hardware` OR `unreviewed` are HIDDEN from candidate result rows in those views. Filter chip labelled "Scope" replaces the old "focusScope". `/admin/companies` list and `/admin/companies/triage` queue stay UNFILTERED — admin sees everything. |
 | **Notes** | Migration also renames the enum type itself: `company_focus_type` → `company_category_type`. Saved-filter URL alias for backward compat: `focusScope='hard_tech'` → `categoryScope='hardware'`. |
 
 ### `industry` (NEW in V1)
@@ -138,13 +138,14 @@ If any of these three diverge from this document during implementation, this doc
 |---|---|
 | **Type** | TEXT |
 | **Default** | NULL |
-| **V1 status** | NEW column |
-| **Constraint** | `CHECK (company_type IS NULL OR company_type IN ('private', 'public', 'subsidiary', 'partnership', 'nonprofit', 'government'))` ← **need to verify Crust's full enum, see open question** |
-| **Crust source** | `basic_info.company_type`. Observed values: `"Privately Held"` (Anduril, Stripe), `"Public Company"` (HubSpot), `"Partnership"` (OpenAI). **Need to enumerate the full Crust value set during investigation 2 / dictionary build.** |
-| **Tagging input** | yes (Claude tier-2 sees this for context) |
+| **V1 status** | NEW column. Per resolved issue #1: normalize Crust's title-case strings to lowercase enum at write time. |
+| **Constraint** | `CHECK (company_type IS NULL OR company_type IN (<enumerated set>))` — **set finalized after Investigation 2** enumerates every Crust `basic_info.company_type` value seen across the 10 test companies + other common patterns. **Starter set: `private`, `public`, `subsidiary`.** Investigation 2 will add `partnership` (already observed for OpenAI), `nonprofit`, `government`, `educational`, etc. as needed. |
+| **Crust source** | `basic_info.company_type`. Confirmed observations: `"Privately Held"` (Anduril, Stripe → `private`), `"Public Company"` (HubSpot → `public`), `"Partnership"` (OpenAI → `partnership`). |
+| **Normalization rule** | Lowercase, strip "Held"/"Company" suffix, condense to one word. e.g. `"Privately Held"` → `private`; `"Public Company"` → `public`; `"Subsidiary"` → `subsidiary`; `"Partnership"` → `partnership`; `"Nonprofit"` → `nonprofit`; `"Government Agency"` → `government`. UI label rendering via TS map at `lib/companies/taxonomy.ts`. |
+| **Tagging input** | yes (Claude tier-2 sees the normalized form for context) |
 | **Admin UI** | Edit page (single-select dropdown); list page column display; import preview table |
 | **Recruiter UI** | profile/[id] header (text); search-builder filter (deferred — not in V1) |
-| **Notes** | Crust returns a string with title casing; we should normalize at write time (e.g. `"Privately Held"` → `'private'`). The CHECK constraint enforces our normalized form. **Open question: does our normalized vocabulary match what Matt wants displayed?** Recommend: store normalized lowercase enum, render UI label via TS map. |
+| **Notes** | The CHECK enum is finalized only after Investigation 2 reports. Phase 1 migration may add the column with no CHECK initially, then add CHECK in a follow-up after Investigation 2 confirms the value set. |
 
 ### `founding_year`
 | | |
@@ -177,12 +178,35 @@ If any of these three diverge from this document during implementation, this doc
 | **Type** | TEXT |
 | **Default** | NULL |
 | **V1 status** | Existing column (migration 019), 0% filled. V1 wires it up. |
-| **Constraint** | none today; recommend `CHECK` against Crust's banded set: `'1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5001-10000', '10000+'` |
+| **Constraint** | `CHECK (headcount_range IS NULL OR headcount_range IN ('1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5001-10000', '10000+'))` |
 | **Crust source** | `basic_info.employee_count_range` |
 | **Tagging input** | yes (informs hardware vs non-hardware sometimes — small companies harder to classify) |
-| **Admin UI** | Edit page (single-select dropdown using the 8 banded values); list page column; list page filter; import preview |
+| **Admin UI** | Edit page (single-select dropdown); list page column + filter; import preview |
 | **Recruiter UI** | profile/[id]; search-builder filter (compound where-they-worked uses headcount band) |
-| **Notes** | The exact-headcount integer is also available via `headcount.total` on enrich (e.g. `7218` for Anduril); we may want a separate `headcount_total` column for that — **decision needed in (e) below**. For V1 keep the banded string only. |
+| **Notes** | The banded form is sticky over time — useful for filtering when precise counts drift. Pair with `headcount_latest` (next field) for the precise integer. |
+
+### `headcount_latest` (NEW in V1, per resolved issue #2)
+| | |
+|---|---|
+| **Type** | INTEGER |
+| **Default** | NULL |
+| **V1 status** | NEW column. Populated by enrich. |
+| **Crust source** | `headcount.total` (enrich; also returned by search). e.g. Anduril = 7218, Stripe = 14728, OpenAI = 7829. |
+| **Tagging input** | yes (sometimes helps disambiguate; e.g. distinguishing a stage from a startup) |
+| **Admin UI** | Edit page (read-only display, formatted with thousands separator); list page column (sortable); list page filter (>N range slider) |
+| **Recruiter UI** | profile/[id] (display); search-builder (sortable, filterable as numeric range) |
+| **Notes** | Pair with `headcount_latest_at` for staleness tracking. Re-fetched on every enrich call for vetted-tier; never re-fetched for reference-tier (so reference companies have NULL). |
+
+### `headcount_latest_at` (NEW in V1, per resolved issue #2)
+| | |
+|---|---|
+| **Type** | TIMESTAMPTZ |
+| **Default** | NULL |
+| **V1 status** | NEW column. Set when `headcount_latest` is written. |
+| **Crust source** | none — set to `NOW()` at write time, OR can be derived from enrich's `metadata.growth_calculation_date` for fresher truth (enrich tells us when Crust last computed the headcount stat). Recommend: store the enrich `metadata.growth_calculation_date` when present, fall back to `NOW()`. |
+| **Admin UI** | Edit page tooltip on the headcount field ("As of: 2026-04-29"); list page column (sortable); UI shows "stale" badge if older than 90 days |
+| **Recruiter UI** | profile/[id] subtle "as of" annotation under headcount display |
+| **Notes** | Drives the freshness UI. Future: a "Re-fetch from Crust" admin button on the company detail page, gated by staleness, that triggers a fresh enrich call. Out of scope for V1 (live enrich is admin-button-only V2). |
 
 ### `hq_location_name`
 | | |
@@ -205,13 +229,16 @@ If any of these three diverge from this document during implementation, this doc
 |---|---|
 | **Type** | TEXT |
 | **Default** | NULL |
-| **V1 status** | Existing column (migration 019), 0% filled. V1 populates from enrich's `funding.last_round_type`. |
-| **Constraint** | none today; recommend `CHECK` against the Crust value set (TBD — observed: `series_a`, `series_b`, `series_unknown`, `secondary_market`, `grant`, `post_ipo_equity`). Need to enumerate the full set during investigation 2. |
-| **Crust source** | `funding.last_round_type` (enrich; also in search) |
+| **V1 status** | Existing column (migration 019), 0% filled. V1 populates via **derived logic** (per resolved issue #4). |
+| **Constraint** | `CHECK (funding_stage IS NULL OR funding_stage IN ('pre_seed', 'seed', 'series_a', 'series_b', 'series_c', 'series_d', 'series_e', 'series_f', 'series_g', 'series_h', 'series_i', 'series_j', 'series_k'))` — priced equity rounds only. |
+| **Crust source** | DERIVED from `funding.milestones[]` (enrich-only). Walk the array sorted newest-first; pick the first entry whose `round` field matches a priced equity round (Series A through Series Z, Seed, Pre-seed). |
+| **Skip rules — round types that DO NOT count for stage:** | `Grant`, `Secondary Market`, `Corporate Round`, `Venture Round` (used for undisclosed-stage participations), `Post-IPO Equity`, `Debt`, `Convertible Note`, `Unknown`. These are funding EVENTS but don't move the company's stage. |
+| **Reference-tier behavior** | NULL — reference-tier rows don't get enrich, so no milestones[]; correct fallback. |
 | **Tagging input** | minor |
-| **Admin UI** | Edit page (single-select); list page column; import preview |
+| **Admin UI** | Edit page (single-select dropdown of the 13 priced rounds); list page column; import preview |
 | **Recruiter UI** | profile/[id]; search-builder filter (compound where-they-worked uses stage) |
-| **Notes** | ⚠️ Crust's "last round" is the most recent funding EVENT, not the most recent priced equity round. Anduril's `last_round_type='grant'` for a $150K grant ≠ their actual stage (they're a megaround startup). **Display caveat needed** in admin UI. The `funding.milestones[]` array (enrich-only) gives the full round-by-round history if we want to derive a saner "stage" — recommend: future enhancement, not V1. For V1 store the raw `last_round_type` and accept the noise. |
+| **Notes** | **Anduril verification confirmed the severity of the issue:** `last_round_type='grant'` would store "grant" for a Series G company. Derived logic correctly identifies Anduril as `series_g` (their $2.5B round on 2025-06-05). Storage of the derived stage requires `funding.milestones[]` from enrich. Implementation: small derive function in `lib/companies/derive-funding-stage.ts`, runs at enrich time. |
+| **Round-name parsing** | Crust's milestones[].round comes as e.g. `"Series G - Anduril Industries"` — strip the suffix, lowercase, normalize `series g` → `series_g`. Handle case insensitivity, multiple spaces, "Pre-seed" / "PreSeed" / "Pre Seed" variants. |
 
 ---
 
@@ -428,9 +455,51 @@ claude_inference
 admin_manual
 ```
 
-### `company_type` (TBD — verify Crust enum)
+### `funding_stage` (priced equity rounds only)
 
-Proposed normalized values: `private`, `public`, `subsidiary`, `partnership`, `nonprofit`, `government`. **Investigation 2 must enumerate the full Crust `basic_info.company_type` value set across the 10 test companies before we lock this CHECK.**
+```
+pre_seed
+seed
+series_a
+series_b
+series_c
+series_d
+series_e
+series_f
+series_g
+series_h
+series_i
+series_j
+series_k
+```
+
+Skip-list (events that DON'T set stage): Grant, Secondary Market, Corporate Round, Venture Round (undisclosed), Post-IPO Equity, Debt, Convertible Note, Unknown.
+
+### `company_type` (locked starter set; finalized after Investigation 2)
+
+Starter set per resolved issue #1:
+```
+private
+public
+subsidiary
+```
+
+Investigation 2 enumerates additional Crust values. Already-observed values to add: `partnership` (OpenAI). Likely additions: `nonprofit`, `government`, `educational`. **Final CHECK constraint added in a follow-up migration after Investigation 2 reports the comprehensive set.**
+
+### `headcount_range` (banded)
+
+```
+1-10
+11-50
+51-200
+201-500
+501-1000
+1001-5000
+5001-10000
+10000+
+```
+
+Verbatim from Crust `basic_info.employee_count_range`.
 
 ---
 
@@ -491,6 +560,30 @@ ALTER TABLE companies
 ALTER TABLE companies
   ADD CONSTRAINT companies_tagging_confidence_check
   CHECK (tagging_confidence IS NULL OR (tagging_confidence >= 0 AND tagging_confidence <= 1));
+
+-- funding_stage (priced equity rounds only — derived from milestones[])
+ALTER TABLE companies
+  ADD CONSTRAINT companies_funding_stage_check
+  CHECK (funding_stage IS NULL OR funding_stage IN (
+    'pre_seed', 'seed',
+    'series_a', 'series_b', 'series_c', 'series_d', 'series_e',
+    'series_f', 'series_g', 'series_h', 'series_i', 'series_j', 'series_k'
+  ));
+
+-- headcount_range (Crust banded)
+ALTER TABLE companies
+  ADD CONSTRAINT companies_headcount_range_check
+  CHECK (headcount_range IS NULL OR headcount_range IN (
+    '1-10', '11-50', '51-200', '201-500',
+    '501-1000', '1001-5000', '5001-10000', '10000+'
+  ));
+
+-- crustdata_company_id UNIQUE constraint (per resolved issue #8)
+ALTER TABLE companies
+  ADD CONSTRAINT companies_crustdata_company_id_unique
+  UNIQUE (crustdata_company_id);
+
+-- company_type CHECK deferred to follow-up migration after Investigation 2 enumerates values
 ```
 
 Plus indexes:
@@ -500,6 +593,8 @@ CREATE INDEX idx_companies_industry ON companies (industry) WHERE industry IS NO
 CREATE INDEX idx_companies_domain_tags ON companies USING GIN (domain_tags);
 CREATE INDEX idx_companies_crustdata_id ON companies (crustdata_company_id) WHERE crustdata_company_id IS NOT NULL;
 CREATE INDEX idx_companies_tagging_confidence ON companies (tagging_confidence) WHERE tagging_confidence IS NOT NULL;
+CREATE INDEX idx_companies_headcount_latest ON companies (headcount_latest) WHERE headcount_latest IS NOT NULL;
+CREATE INDEX idx_companies_funding_stage ON companies (funding_stage) WHERE funding_stage IS NOT NULL;
 ```
 
 ---
@@ -546,6 +641,31 @@ export const TAGGING_METHODS = [
   'crust_dictionary', 'claude_inference', 'admin_manual',
 ] as const
 
+export const FUNDING_STAGES = [
+  'pre_seed', 'seed',
+  'series_a', 'series_b', 'series_c', 'series_d', 'series_e',
+  'series_f', 'series_g', 'series_h', 'series_i', 'series_j', 'series_k',
+] as const
+export type FundingStage = typeof FUNDING_STAGES[number]
+
+export const HEADCOUNT_RANGES = [
+  '1-10', '11-50', '51-200', '201-500',
+  '501-1000', '1001-5000', '5001-10000', '10000+',
+] as const
+export type HeadcountRange = typeof HEADCOUNT_RANGES[number]
+
+// Starter set per resolved issue #1 — extended after Investigation 2 reports
+export const COMPANY_TYPES = ['private', 'public', 'subsidiary'] as const
+export type CompanyType = typeof COMPANY_TYPES[number]
+
+// UI label maps (rendered as title case in dropdowns + chips)
+export const COMPANY_TYPE_LABELS: Record<CompanyType, string> = {
+  private: 'Private',
+  public: 'Public',
+  subsidiary: 'Subsidiary',
+}
+// Add: partnership, nonprofit, government, educational after Investigation 2.
+
 export function industriesFor(category: Category): readonly string[] {
   switch (category) {
     case 'hardware': return HARDWARE_INDUSTRIES
@@ -577,21 +697,21 @@ Used by:
 
 | Surface | Path | Renders | Filters/edits |
 |---|---|---|---|
-| Companies list | `/admin/companies` | name (sort), industry, category (chip), tagging_method (chip), tagging_confidence (sortable), website_url (icon), linkedin_url (icon), founding_year, headcount_range, current_status | Filter: category, industry, current_status, manual_review_status, tagging_method, tagging_confidence threshold. Bulk-edit: category (single-select), manual_review_status. **NO bulk-edit on industry or domain_tags in V1** (per-row gated dropdowns are too complex for bulk). |
+| Companies list | `/admin/companies` | name (sort), industry, category (chip), tagging_method (chip), tagging_confidence (sortable), website_url (icon), linkedin_url (icon), founding_year, headcount_range, headcount_latest (sortable), funding_stage, current_status | Filter: category, industry, current_status, manual_review_status, tagging_method, tagging_confidence threshold. **Bulk-edit: ONLY `category` (single-select) and `manual_review_status`** (per resolved issue #5). NO bulk-edit on industry, domain_tags, or any other field. UNFILTERED by category — admin sees everything. |
 | Companies detail | `/admin/companies/[id]` | every column | Edit: name, website_url, linkedin_url, founding_year, headcount_range, hq_location_name, current_status, is_stealth_company, manual_review_status, category, industry (gated), domain_tags (gated, multi), notes. Read-only: crustdata_company_id, professional_network_id, company_type, funding_stage, tagging_method, tagging_confidence, tagging_notes, legacy_*. Collapsed pane for legacy taxonomy. |
 | New company | `/admin/companies/new` | minimal form | Insert: name, website_url, linkedin_url, founding_year, current_status, category. Defaults: `manual_review_status='unreviewed'`, `tagging_method=NULL`. |
-| **Import (NEW)** | `/admin/companies/import` | Sidebar filter builder + preview-then-confirm + per-company workflow | Filters via `/company/search` autocomplete. **Single-company-at-a-time workflow primary** (Matt's incremental testing); bulk import as secondary mode. After import: preview shows tagger output (category/industry/domain_tags + confidence + reasoning) for admin to approve before write. |
-| **Triage (NEW)** | `/admin/companies/triage` | Queue of low-confidence + unreviewed rows | Filter: `category='unreviewed'` OR `tagging_confidence < 0.7`. Sort: candidate count desc, then confidence asc. Inline edit: category, industry, domain_tags. |
+| **Import (NEW)** | `/admin/companies/import` | Sidebar filter builder + preview-then-confirm + per-company workflow | Filters via `/company/search` autocomplete. **Single-company-at-a-time workflow primary** (per Matt's incremental testing pattern); bulk import as secondary mode. After import: preview shows tagger output (category/industry/domain_tags + confidence + reasoning) for admin to approve before write. **Per resolved issue #8:** company-name autocomplete returns ranked results from `/company/search/autocomplete` PLUS `/company/identify` (free) for canonical disambiguation. Each option in the dropdown displays: company name + primary_domain + LinkedIn URL + headcount band — admin picks the canonical entity manually. NO auto-pick of top match (which would have selected wrong "Anduril" entity in our test). |
+| **Triage (NEW)** | `/admin/companies/triage` | Queue of low-confidence + unreviewed rows | **Confirmed in V1 per resolved issue #7** — reference-tier auto-creates from candidate ingestion regularly populate `category='unreviewed'`; without a dedicated queue, the pile grows silently. Filter: `category='unreviewed'` OR `tagging_confidence < 0.7`. **Sort: candidate count desc** (companies affecting more search results reviewed first), then `tagging_confidence` asc. Inline edit: category, industry, domain_tags. UNFILTERED by category — admin can edit any row. |
 
 ### Recruiter-facing pages
 
 | Surface | File | Renders | V1 changes |
 |---|---|---|---|
-| ProfileTable | `app/components/ProfileTable.tsx` | company_name (chip), industry (sublabel) | Replace `focusScope` filter with `category` filter. Default-hide `non_hardware` and `unreviewed` from filter options (admin-only). Replace `primary_industry_tag` references with `industry`. |
-| ProfileDrawer | `app/components/ProfileDrawer.tsx` | company_name on each experience row | No filter changes; just renders whatever is linked. |
-| Profile detail | `app/profile/[id]/page.tsx` | company_name + logo on each experience row | No taxonomy changes here; renders whatever is linked. |
-| Search builder | `app/search-builder/page.tsx` | Company picker + per-condition company attributes | Replace `primary_industry_tag` with `industry`. New `domain_tags` filter (multi-select chips, gated to hardware-branch tags for V1). Replace `focus` filter with `category`. Same hide-non-hardware default. |
-| FilterSidebar | `app/components/FilterSidebar.tsx` | Search Scope dropdown | Rename "focusScope" → "categoryScope", values: all / hardware. Remove `non_hardware` and `unreviewed` from recruiter-facing options for V1. |
+| ProfileTable | `app/components/ProfileTable.tsx` | company_name (chip), industry (sublabel), domain_tags (badges) | Per resolved issue #6: **filter candidate result rows to only show candidates whose primary current company has `category='hardware'`**. Candidates at non_hardware/unreviewed companies are HIDDEN from the result rows — the JOIN against companies excludes them. The "Scope" filter chip lets admin override (toggle to show all). Replace `primary_industry_tag` references with `industry`. New domain_tags filter (multi-select). |
+| ProfileDrawer | `app/components/ProfileDrawer.tsx` | company_name on each experience row | Renders whatever the candidate's experiences link to — including non-hardware past employers (the experience history shouldn't be censored). Only the result-row inclusion is filtered by category, not the per-row experience display. |
+| Profile detail | `app/profile/[id]/page.tsx` | company_name + logo on each experience row, industry/domain_tags on current company header card | Same as drawer — past experiences render fully. Only the candidate's INCLUSION in result rows depends on their primary current company's category. |
+| Search builder | `app/search-builder/page.tsx` | Company picker + per-condition company attributes (industry, domain_tags, category, founded year, stage, headcount) | Replace `primary_industry_tag` with `industry`. New `domain_tags` filter (multi-select chips, gated to hardware-branch tags for V1 default; admin can toggle to non_hardware view). Replace `focus` filter with `category`. Same hide-non-hardware-and-unreviewed default. |
+| FilterSidebar | `app/components/FilterSidebar.tsx` | Search Scope dropdown | Rename "focusScope" → "categoryScope". Default value: `hardware`. Options: `hardware` / `all` (admin override that includes non_hardware AND unreviewed). The old `unreviewed` and `all_tech` recruiter options are removed. |
 
 ### Saved-filter URL backward compat
 
@@ -611,37 +731,72 @@ Apply at deserialize time. Forever, or for one quarter — Matt's call.
 
 ---
 
-## Open issues for review (please answer before phase 1 build)
+## Resolved issues (locked 2026-05-01)
 
-1. **`company_type` normalized vocabulary.** Crust returns title-case strings (`"Privately Held"`, `"Public Company"`, `"Partnership"`). Should we (a) normalize to lowercase enum (`private`, `public`, `partnership`) and render UI labels via TS map, or (b) store Crust's raw string and CHECK against a literal list? Recommend (a). **Need to enumerate the full Crust value set during investigation 2.**
+### Issue #1 — `company_type` normalized vocabulary — **RESOLVED**
+**Decision:** Normalize to lowercase enum (`private`, `public`, `subsidiary`) with UI label map. Investigation 2 enumerates every Crust `basic_info.company_type` value seen across the 10 test companies + other common patterns; the comprehensive enum is finalized in a follow-up migration after Investigation 2 reports.
 
-2. **`headcount_total` (precise integer) vs `headcount_range` (banded string).** Enrich returns both. We currently only have a column for the banded string. Worth adding `headcount_total INTEGER NULL` for precise filtering / display? Tradeoff: more data → more drift over time as headcount changes, vs the band which is sticky. Recommend: add it as `headcount_latest INTEGER NULL`, populated from enrich `headcount.total`, with a `headcount_latest_at TIMESTAMPTZ` for staleness.
+### Issue #2 — `headcount_total` precise vs banded — **RESOLVED**
+**Decision:** Add `headcount_latest INTEGER` + `headcount_latest_at TIMESTAMPTZ`. Standard practice — store the value plus when we got it for staleness tracking and freshness UI. Useful for hypergrowth detection AND letting users filter/sort by company size. See firmographics section.
 
-3. **`Biotech` ambiguity.** Listed in BOTH hardware and non-hardware industries. Tagger needs to disambiguate (hardware = medical device / wet lab / instrumentation; non-hardware = software / AI for biotech). Investigation 2 must verify the tagger can route correctly given Crust signals. Recommend: investigation 2 runs at least 2 Biotech-named test companies — one hardware-leaning, one software-leaning.
+### Issue #3 — `Biotech` ambiguity — **RESOLVED**
+**Decision:** Approved. Investigation 2 must include at least 2 Biotech-named test companies (one hardware/devices-leaning, one software/drug-discovery-leaning) to stress-test the dictionary. Tagger disambiguates from Crust signals (`taxonomy.categories[]`, `basic_info.description`, `basic_info.industries[]`).
 
-4. **`funding_stage` raw vs derived.** Crust's `last_round_type` is event-based (Anduril's "last" is a $150K grant ≠ their actual stage). Storing it raw misleads. Three options: (a) store raw and accept the noise; (b) derive a saner stage from `funding.milestones[]` history (enrich-only); (c) leave NULL and force admin-set. Recommend (a) for V1 with a UI caveat tooltip; (b) is a future enhancement. **Decision needed.**
+### Issue #4 — `funding_stage` raw vs derived — **RESOLVED**
+**Decision:** Option (b) — derived from `funding.milestones[]`. Walk the array backward, pick the most recent priced equity round (Series A-Z, Seed, Pre-seed). Skip grants, secondary markets, corporate rounds, undisclosed venture, debt, post-IPO equity, convertible notes, unknown. Vetted-tier (enrich data available) gets accurate stage. Reference-tier (identify-only, no milestones) stays NULL — correct behavior, no degradation.
 
-5. **Bulk edit on `industry` / `domain_tags`?** Industry is gated by category (per-row) so bulk edit is awkward — you'd need to filter to one category first, then bulk-set industry. Domain tags are arrays so semantics are unclear (replace? union? subtract?). Recommend: NO bulk edit on these in V1. Bulk edit only on category, manual_review_status. **Decision needed.**
+**Anduril verification (2026-05-01) confirmed the severity of the issue.** Anduril Industries (crustdata_company_id=639939) reports:
+- `last_round_type='grant'` (a $150K XPRIZE prize on 2026-01-29)
+- Actual most recent priced equity round: $2.5B Series G on 2025-06-05 (Founders Fund lead)
 
-6. **`unreviewed` companies in the recruiter ProfileTable filter.** Today, recruiter UI hides `focus='unreviewed'`. After rename to `category='unreviewed'`, do we still hide? The new V1 `unreviewed` includes auto-created reference-tier rows (which now ALSO get the free `/company/identify` call → tagger fires → most go to hardware/non_hardware). What stays at `unreviewed` after the identify+tagger pass is genuinely "tagger couldn't classify" — those probably DO belong hidden from recruiter UI. Recommend: keep recruiter hide-unreviewed default. **Decision needed.**
+Option (a) would store `funding_stage='grant'` for a Series G defense unicorn — actively misleading. Option (b) correctly derives `funding_stage='series_g'`. Implementation: ~30-line function in `lib/companies/derive-funding-stage.ts`.
 
-7. **Triage queue `/admin/companies/triage` — V1 or V2?** Investigation 3 includes it as a "potentially NEW route". Given the import UI's single-company workflow already lets admin review tagging during import, triage might be redundant in V1. Recommend: defer triage queue to V2 unless admin wants a separate "review backlog of low-confidence existing rows" view. **Decision needed.**
+### Issue #5 — Bulk-edit on industry / domain_tags — **RESOLVED**
+**Decision:** NO bulk-edit on `industry` or `domain_tags` in V1.
+- `industry` is category-gated → bulk-edit fails silently when selection spans categories
+- `domain_tags` is an array → unclear semantics on replace vs add vs subtract
+
+Bulk-edit allowed on `category` and `manual_review_status` only. Per-row edit for industry/domain_tags via the company detail page.
+
+### Issue #6 — Hide unreviewed/non_hardware from candidate search — **RESOLVED**
+**Decision:** YES hide. ProfileTable and search-builder (currently admin-only — no separate recruiter UI exists yet) **filter candidate result rows** to only show candidates whose primary current company has `category='hardware'`. Candidates whose primary company is `non_hardware` OR `unreviewed` don't surface in those views. The `/admin/companies` list and `/admin/companies/triage` queue stay UNFILTERED so admin can edit unreviewed entries directly.
+
+### Issue #7 — `/admin/companies/triage` in V1 or V2 — **RESOLVED**
+**Decision:** KEEP in V1. Reference-tier companies will auto-create at `category='unreviewed'` regularly from candidate ingestion. Without a dedicated triage queue, the pile grows silently. Queue shows `category='unreviewed'` OR `tagging_confidence < 0.7`, prioritized by candidate count (companies affecting more search results reviewed first), then by tagging_confidence ascending.
+
+### Issue #8 — Entity disambiguation for `/company/identify` name matches — **RESOLVED** (new, surfaced from Anduril verification)
+
+**Background:** Identify-by-name returns multiple distinct Crust entities for the same short name. Verified 2026-05-01: identify-by-name "Anduril" returns 4 matches — Anduril (anduril.fr consulting), Anduril Retail, Anduril SA, Alanduril — and **the canonical Anduril Industries (id 639939) is NOT in the top 4 by Crust's ranking**. Auto-picking the top match would silently link to the wrong entity.
+
+**Decision:**
+- **Reference-tier ingest path** (`upsertCompany` in `app/api/ingest/route.ts`): use `crustdata_company_id` from the person sub-object as PRIMARY disambiguator (currently dropped by mapper — must update `lib/ingest/mappers/crust-v2.ts` to capture). Fall back to embedded LinkedIn URL (`company_professional_network_profile_url`). Bare-name fallback ONLY as last resort. Matching priority: `crustdata_company_id` exact → `linkedin_url` exact → `company_name` ILIKE.
+- **Admin import UI** (`/admin/companies/import`): autocomplete returns ranked options from `/company/search/autocomplete` + `/company/identify` (free). Admin picks the canonical option from a dropdown that **displays domain + LinkedIn URL + headcount band as disambiguators**. NO auto-pick top match.
+
+This requires:
+1. `crustdata_company_id` UNIQUE constraint on `companies` (so the primary-key-style match is enforceable)
+2. Mapper update to capture `crustdata_company_id` from person sub-object
+3. `upsertCompany` matching priority change
+4. Import-UI autocomplete component spec for the disambiguator dropdown
 
 ---
 
-## Sign-off checklist
+## Sign-off checklist (LOCKED 2026-05-01)
 
-Before proceeding to investigations 1 and 2:
-- [ ] Open issue #1: `company_type` normalization approach confirmed
-- [ ] Open issue #2: `headcount_total` column added or deferred
-- [ ] Open issue #3: Biotech ambiguity acknowledged; investigation 2 will test it
-- [ ] Open issue #4: `funding_stage` raw-with-caveat vs derived vs NULL — decide
-- [ ] Open issue #5: bulk-edit policy on industry/domain_tags
-- [ ] Open issue #6: recruiter hide-unreviewed default
-- [ ] Open issue #7: triage queue in V1 or deferred
-- [ ] Controlled vocabulary lists (15/8 hardware, 11/16 non-hardware) re-confirmed
-- [ ] CHECK constraint SQL approved as the V1 enforcement mechanism
-- [ ] TS config at `lib/companies/taxonomy.ts` approved as UI source of truth
-- [ ] Saved-filter URL alias approach approved
-- [ ] Legacy column rename strategy (`legacy_*` prefix, no drops) approved
-- [ ] Deprecate-eligible columns (`company_bucket`, `founding_date`) approved to keep through V1
+- [x] Issue #1: `company_type` normalize to lowercase enum (`private`, `public`, `subsidiary` starter; finalized after Investigation 2)
+- [x] Issue #2: Add `headcount_latest INTEGER` + `headcount_latest_at TIMESTAMPTZ`
+- [x] Issue #3: Biotech ambiguity — Investigation 2 includes 2 Biotech-named test cases
+- [x] Issue #4: `funding_stage` derived from `milestones[]` (option b)
+- [x] Issue #5: NO bulk-edit on industry/domain_tags; bulk-edit only on `category` and `manual_review_status`
+- [x] Issue #6: Hide non_hardware AND unreviewed candidates from ProfileTable + search-builder result rows
+- [x] Issue #7: Triage queue `/admin/companies/triage` IN V1
+- [x] Issue #8: Entity disambiguation — `crustdata_company_id` UNIQUE constraint, mapper captures it from person sub-object, `upsertCompany` matches by it first, import UI requires admin pick (no auto-pick)
+- [x] Controlled vocabulary lists (15/8 hardware, 11/16 non-hardware) re-confirmed by Matt
+- [x] CHECK constraint SQL approved as the V1 enforcement mechanism (per pushback #5)
+- [x] TS config at `lib/companies/taxonomy.ts` approved as UI source of truth
+- [x] Saved-filter URL alias approach approved
+- [x] Legacy column rename strategy (`legacy_*` prefix, no drops) approved
+- [x] Deprecate-eligible columns (`company_bucket`, `founding_date`) approved to keep through V1
+- [x] Matching priority change in `upsertCompany`: `crustdata_company_id` → `linkedin_url` → name (per Issue #8)
+- [x] Mapper update: capture `crustdata_company_id` from person sub-object (currently dropped) — required by Issue #8
+
+**This document is now the contract for Phase 1 build. Any change to schema, controlled vocabulary, UI surface behavior, or matching logic during implementation requires updating this document FIRST.**
