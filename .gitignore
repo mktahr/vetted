@@ -38,3 +38,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+
+# investigation raw data dumps (regenerable from scripts/_inv*.mjs)
+docs/vetted-companies-v1/*-raw.json
