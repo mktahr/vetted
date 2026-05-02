@@ -1,14 +1,19 @@
 // lib/companies/tagger/dictionary.ts
 //
-// Deterministic Tier-1 tagger. Maps Crust signals → V1 (category, industry, domain_tags).
-// Returns category='unreviewed' (NOT a high-confidence guess) when signals are
-// ambiguous — the orchestrator (lib/companies/tagger/index.ts) escalates those
-// to Claude tier-2.
+// Deterministic dictionary tagger. Round-2 architecture (2026-05-02):
+// no longer tier-1 / primary — Claude is primary. Dictionary now serves as
+// a SANITY CHECK that runs in parallel with Claude. The orchestrator
+// (lib/companies/tagger/index.ts) compares both verdicts:
+//   - agree → tagging_method='claude_dict_agree', high confidence
+//   - disagree → tagging_method='claude_dict_disagree', flagged for triage
+//   - dict can't decide (returns null category) → tagging_method='claude'
 //
-// Design philosophy: high precision over high recall at this layer. Better to
-// abstain (return unreviewed) than mis-tag a candidate's company.
+// Design philosophy: high precision. Better to return null (couldn't decide)
+// than to wrongly agree/disagree with Claude. Dict's value is when it MATCHES
+// Claude — that's the highest-confidence signal.
 
-import type { Category, Industry, DomainTag } from '../taxonomy'
+import type { CategoryOrUnclassified, Industry, DomainTag } from '../taxonomy'
+import { dedupeDomainTagsAgainstIndustry } from '../taxonomy'
 import type { TaggerInput, TaggerOutput } from './types'
 
 // ---------- Category-leaning signals ----------
@@ -158,6 +163,11 @@ const NON_HARDWARE_INDUSTRY_RULES: Array<{
     reasoning: 'Services / consulting signal' },
   { industry: 'Consumer Tech', any: ['Mobile', 'Gaming', 'Social Media', 'Streaming', 'Marketplace', 'E-Commerce', 'Consumer'],
     reasoning: 'Consumer-facing tech signal' },
+  // Round-2 decision #12: Defense and Aerospace cross-listed for software/services cos
+  { industry: 'Defense', any: ['Defense Software', 'Government Software'],
+    reasoning: 'Software-for-defense signal (sells software/services to defense customers, no physical product)' },
+  { industry: 'Aerospace', any: ['Space Software', 'Space Domain Awareness', 'Aerospace Software'],
+    reasoning: 'Software-for-aerospace signal (sells software/services to aerospace industry, no physical product)' },
   // SaaS — fallback for non-hardware software cos
   { industry: 'SaaS', any: ['SaaS', 'Software', 'Developer Tools', 'Information Technology', 'Productivity', 'Collaboration', 'CRM'],
     reasoning: 'SaaS / B2B software signal' },
@@ -170,6 +180,12 @@ interface DomainTagRule {
   any: string[]
 }
 
+// Round-2 decision #11: AI is a domain_tag in BOTH branches now. Suppression
+// rule (industry='AI' → strip AI from tags) lives in the orchestrator, not here.
+const AI_SIGNALS = ['Foundational AI', 'Generative AI', 'AI Infrastructure', 'Agentic AI',
+                    'Artificial Intelligence', 'Artificial Intelligence (AI)', 'Machine Learning',
+                    'Natural Language Processing']
+
 const HARDWARE_DOMAIN_TAG_RULES: DomainTagRule[] = [
   { tag: 'Drones', any: ['Drones', 'Drone Management', 'UAV', 'Unmanned Aerial'] },
   { tag: 'Rockets', any: ['Space Travel', 'Launch Vehicles', 'Rockets'] },
@@ -179,6 +195,7 @@ const HARDWARE_DOMAIN_TAG_RULES: DomainTagRule[] = [
   { tag: 'Automotive Manufacturing', any: ['Motor Vehicle Manufacturing', 'Automotive Manufacturing'] },
   { tag: 'Nuclear', any: ['Nuclear', 'Nuclear Electric Power Generation', 'Nuclear Fusion', 'Fission'] },
   { tag: 'eVTOL', any: ['eVTOL', 'Vertical Takeoff', 'Air Taxi'] },
+  { tag: 'AI', any: AI_SIGNALS },  // round-2 decision #11
 ]
 
 const NON_HARDWARE_DOMAIN_TAG_RULES: DomainTagRule[] = [
@@ -198,26 +215,31 @@ const NON_HARDWARE_DOMAIN_TAG_RULES: DomainTagRule[] = [
   { tag: 'Consumer', any: ['Consumer'] },
   { tag: 'B2B', any: ['B2B'] },
   { tag: 'Infrastructure', any: ['Infrastructure', 'Cloud Infrastructure', 'AI Infrastructure', 'Networking'] },
+  { tag: 'AI', any: AI_SIGNALS },  // round-2 decision #11
 ]
 
 // ---------- Main ----------
 
 /**
- * Run the deterministic dictionary on a single company's Crust signals.
- * Returns category='unreviewed' when signals can't decide — caller
- * (orchestrator) escalates those to Claude tier-2.
+ * Run the deterministic dictionary on one company's Crust signals.
+ *
+ * Round-2: returns category=null (NOT 'unreviewed') when signals can't decide.
+ * The dictionary is a SANITY CHECK alongside Claude (which always runs);
+ * the orchestrator decides what to write. Dict's role is highest-precision
+ * agreement with Claude — null is honest "I can't tell."
+ *
+ * Option B output: returns single-element `industries: [primary]` array.
+ * Dict doesn't do multi-industry — Claude is the one that lists secondaries.
  */
 export function tagDeterministically(input: TaggerInput): TaggerOutput {
-  const { professional_network_industry: pni, industries, categories } = input
+  const { professional_network_industry: pni, industries: srcIndustries, categories } = input
 
-  // 1) Build the union of all category-relevant signals from PNI + industries + categories.
   const allSignals = new Set<string>([
     ...(pni ? [pni] : []),
-    ...industries,
+    ...srcIndustries,
     ...categories,
   ])
 
-  // 2) Vote on category.
   let hardwareScore = 0
   let nonHardwareScore = 0
   const reasoningParts: string[] = []
@@ -231,71 +253,78 @@ export function tagDeterministically(input: TaggerInput): TaggerOutput {
   }
 
   for (const sig of Array.from(allSignals)) {
-    if (HARDWARE_LEAN_CATEGORIES.has(sig)) {
-      hardwareScore += 1
-    } else if (NON_HARDWARE_LEAN_CATEGORIES.has(sig)) {
-      nonHardwareScore += 1
-    }
+    if (HARDWARE_LEAN_CATEGORIES.has(sig)) hardwareScore += 1
+    else if (NON_HARDWARE_LEAN_CATEGORIES.has(sig)) nonHardwareScore += 1
   }
-  reasoningParts.push(`category votes: hardware=${hardwareScore}, non_hardware=${nonHardwareScore}`)
+  reasoningParts.push(`votes: hw=${hardwareScore}, non_hw=${nonHardwareScore}`)
 
-  // 3) Decide category.
   const margin = Math.abs(hardwareScore - nonHardwareScore)
   const totalVotes = hardwareScore + nonHardwareScore
-  let category: Category
+  let category: CategoryOrUnclassified
   let categoryConfidence: number
 
   if (totalVotes === 0) {
-    category = 'unreviewed'
+    // Round-2: NULL category instead of 'unreviewed' string
+    category = null
     categoryConfidence = 0
-    reasoningParts.push(`no recognized signals → unreviewed`)
+    reasoningParts.push(`no recognized signals → null`)
+    return {
+      category: null, primary_industry: null, industries: [], domain_tags: [],
+      confidence: 0, reasoning: reasoningParts.join('; '), method: 'crust_dictionary',
+    }
   } else if (margin < 2) {
-    category = 'unreviewed'
+    category = null
     categoryConfidence = 0.4
-    reasoningParts.push(`signals split (margin ${margin}) → unreviewed for Claude`)
+    reasoningParts.push(`signals split (margin ${margin}) → null`)
+    return {
+      category: null, primary_industry: null, industries: [], domain_tags: [],
+      confidence: 0.4, reasoning: reasoningParts.join('; '), method: 'crust_dictionary',
+    }
   } else {
     category = hardwareScore > nonHardwareScore ? 'hardware' : 'non_hardware'
-    // Confidence: stronger margin + stronger PNI signal → higher confidence
     const pniBonus = (pni && (HARDWARE_PNI_VALUES.has(pni) || NON_HARDWARE_PNI_VALUES.has(pni))) ? 0.15 : 0
     categoryConfidence = Math.min(1.0, 0.6 + Math.min(margin / 10, 0.3) + pniBonus)
     reasoningParts.push(`category=${category} (margin ${margin}, conf ${categoryConfidence.toFixed(2)})`)
   }
 
-  // 4) Pick industry within the chosen category.
-  let industry: Industry | null = null
-  if (category !== 'unreviewed') {
-    const rules = category === 'hardware' ? HARDWARE_INDUSTRY_RULES : NON_HARDWARE_INDUSTRY_RULES
-    for (const rule of rules) {
-      if (rule.any.some(s => allSignals.has(s))) {
-        industry = rule.industry
-        reasoningParts.push(`industry=${industry} (rule: ${rule.reasoning})`)
-        break
-      }
+  // Pick industry within the chosen category.
+  let primary: Industry | null = null
+  const rules = category === 'hardware' ? HARDWARE_INDUSTRY_RULES : NON_HARDWARE_INDUSTRY_RULES
+  for (const rule of rules) {
+    if (rule.any.some(s => allSignals.has(s))) {
+      primary = rule.industry
+      reasoningParts.push(`industry=${primary} (rule: ${rule.reasoning})`)
+      break
     }
-    if (!industry) {
-      // Fallback for hardware: 'Other Hardware'; for non_hardware: 'SaaS'
-      industry = category === 'hardware' ? 'Other Hardware' : 'SaaS'
-      reasoningParts.push(`industry=${industry} (fallback for ${category})`)
-      categoryConfidence = Math.min(categoryConfidence, 0.65)
+  }
+  if (!primary) {
+    primary = category === 'hardware' ? 'Other Hardware' : 'SaaS'
+    reasoningParts.push(`industry=${primary} (fallback for ${category})`)
+    categoryConfidence = Math.min(categoryConfidence, 0.65)
+  }
+
+  // Domain tags.
+  const domainTags: DomainTag[] = []
+  const tagRules = category === 'hardware' ? HARDWARE_DOMAIN_TAG_RULES : NON_HARDWARE_DOMAIN_TAG_RULES
+  for (const rule of tagRules) {
+    if (rule.any.some(s => allSignals.has(s))) {
+      domainTags.push(rule.tag)
     }
   }
 
-  // 5) Domain tags.
-  const domainTags: DomainTag[] = []
-  if (category !== 'unreviewed') {
-    const tagRules = category === 'hardware' ? HARDWARE_DOMAIN_TAG_RULES : NON_HARDWARE_DOMAIN_TAG_RULES
-    for (const rule of tagRules) {
-      if (rule.any.some(s => allSignals.has(s))) {
-        domainTags.push(rule.tag)
-      }
-    }
-    if (domainTags.length > 0) reasoningParts.push(`domain_tags=${JSON.stringify(domainTags)}`)
+  // Round-2 decision #5: strip a domain_tag that duplicates the primary
+  // industry (currently affects only AI: industry='AI' → drop AI tag).
+  const dedupedTags = dedupeDomainTagsAgainstIndustry(primary, domainTags) as DomainTag[]
+  if (dedupedTags.length !== domainTags.length) {
+    reasoningParts.push(`stripped duplicate-of-industry tag from domain_tags`)
   }
+  if (dedupedTags.length > 0) reasoningParts.push(`domain_tags=${JSON.stringify(dedupedTags)}`)
 
   return {
     category,
-    industry: category === 'unreviewed' ? null : industry,
-    domain_tags: category === 'unreviewed' ? [] : domainTags,
+    primary_industry: primary,
+    industries: [primary],   // Option B: dict is single-industry; Claude does multi
+    domain_tags: dedupedTags,
     confidence: categoryConfidence,
     reasoning: reasoningParts.join('; '),
     method: 'crust_dictionary',

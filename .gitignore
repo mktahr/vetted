@@ -41,3 +41,9 @@ next-env.d.ts
 
 # investigation raw data dumps (regenerable from scripts/_inv*.mjs)
 docs/vetted-companies-v1/*-raw.json
+
+# scratch scripts (workspace clutter)
+scripts/_audit-companies.mjs
+scripts/_check-all-tables.mjs
+scripts/diagnose-*.mjs
+scripts/simulate-*.mjs

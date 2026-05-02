@@ -1,14 +1,17 @@
-// Investigation 2: tagger evaluation.
-// Reads raw data from Investigation 1, runs each company through:
-//   (a) deterministic dictionary at SEARCH-tier signals (no description)
-//   (b) deterministic dictionary at ENRICH-tier signals (with description)
-//   (c) full tagger (dict + Claude fallback) at ENRICH-tier
-// Grades each output against expected ground truth.
-// Writes Markdown report.
+// Investigation 2 — round-2 evaluation.
+//
+// Runs the new Claude-primary, Option B (multi-industry) tagger on the
+// 10 inv1 companies at THREE input levels:
+//   (A) identify-only: name + industries[] + maybe description (+headcount/year/type)
+//       — what Claude sees on unreviewed-tier auto-creates per Concern 3
+//   (B) search-tier: identify + taxonomy.{pn_industry, categories} (no description)
+//   (C) enrich-tier: full signals incl. description
+//
+// Plus runs the dictionary alongside (sanity check) and reports agreement.
 
 import { readFileSync, writeFileSync, existsSync } from 'fs'
-import { tagDeterministically, tagWithClaude } from '../lib/companies/tagger/index'
-import type { TaggerInput, TaggerOutput } from '../lib/companies/tagger/types'
+import { tagCompany } from '../lib/companies/tagger/index'
+import type { TaggerInput, CompositeTaggerOutput } from '../lib/companies/tagger/types'
 
 interface RawCompanyRow {
   seed: { label: string; tier: string; expected_category: string; expected_industry?: string; domain: string }
@@ -20,40 +23,61 @@ interface RawCompanyRow {
 }
 
 interface ExpectedTags {
-  category: 'hardware' | 'non_hardware' | 'unreviewed'
-  industry: string | null
+  category: 'hardware' | 'non_hardware' | null
+  primary_industry: string | null
+  industries: string[]
   domain_tags: string[]
 }
 
-// Ground truth — based on knowing these 10 companies + the V1 taxonomy
 const GROUND_TRUTH: Record<string, ExpectedTags> = {
-  'Anduril Industries': { category: 'hardware', industry: 'Defense', domain_tags: ['Drones', 'Autonomous Driving'] },
-  'Stripe':             { category: 'non_hardware', industry: 'FinTech', domain_tags: ['Payments', 'B2B', 'Infrastructure'] },
-  'OpenAI':             { category: 'non_hardware', industry: 'AI', domain_tags: ['Infrastructure', 'DevTools'] },
-  'Skydio':             { category: 'hardware', industry: 'Aerospace', domain_tags: ['Drones', 'Autonomous Driving'] },
-  'Shield AI':          { category: 'hardware', industry: 'Defense', domain_tags: ['Drones', 'Autonomous Driving'] },
-  'Illumina':           { category: 'hardware', industry: 'Medical Devices', domain_tags: [] },
-  'Recursion Pharmaceuticals': { category: 'non_hardware', industry: 'Biotech', domain_tags: ['Data', 'Infrastructure'] },
-  'Hugging Face':       { category: 'non_hardware', industry: 'AI', domain_tags: ['DevTools', 'Infrastructure', 'B2B'] },
-  'Inflection AI':      { category: 'non_hardware', industry: 'AI', domain_tags: ['Consumer'] },
-  'Astra Space':        { category: 'hardware', industry: 'Aerospace', domain_tags: ['Rockets', 'Satellites'] },
+  'Anduril Industries': { category: 'hardware', primary_industry: 'Defense',
+    industries: ['Defense', 'Aerospace', 'Maritime', 'Industrial Manufacturing'],
+    domain_tags: ['Drones', 'Autonomous Driving', 'AI'] },
+  'Stripe': { category: 'non_hardware', primary_industry: 'FinTech',
+    industries: ['FinTech'], domain_tags: ['Payments', 'B2B', 'Infrastructure'] },
+  'OpenAI': { category: 'non_hardware', primary_industry: 'AI',
+    industries: ['AI'], domain_tags: ['Infrastructure', 'DevTools'] },
+  'Skydio': { category: 'hardware', primary_industry: 'Aerospace',
+    industries: ['Aerospace'], domain_tags: ['Drones', 'Autonomous Driving', 'AI'] },
+  'Shield AI': { category: 'hardware', primary_industry: 'Defense',
+    industries: ['Defense'], domain_tags: ['Drones', 'Autonomous Driving', 'AI'] },
+  'Illumina': { category: 'hardware', primary_industry: 'Medical Devices',
+    industries: ['Medical Devices'], domain_tags: [] },
+  'Recursion Pharmaceuticals': { category: 'non_hardware', primary_industry: 'Biotech',
+    industries: ['Biotech'], domain_tags: ['Data', 'Infrastructure', 'AI'] },
+  'Hugging Face': { category: 'non_hardware', primary_industry: 'AI',
+    industries: ['AI'], domain_tags: ['DevTools', 'Infrastructure', 'B2B'] },
+  'Inflection AI': { category: 'non_hardware', primary_industry: 'AI',
+    industries: ['AI'], domain_tags: ['Consumer'] },
+  'Astra Space': { category: 'hardware', primary_industry: 'Aerospace',
+    industries: ['Aerospace'], domain_tags: ['Rockets', 'Satellites'] },
+}
+
+function buildIdentifyInput(r: RawCompanyRow): TaggerInput {
+  const e = r.enrich || {}
+  return {
+    name: e.basic_info?.name || r.seed.label,
+    professional_network_industry: null,
+    industries: e.basic_info?.industries || [],
+    categories: [],
+    description: e.basic_info?.description || null,
+    year_founded: e.basic_info?.year_founded || null,
+    employee_count_range: e.basic_info?.employee_count_range || null,
+    company_type: e.basic_info?.company_type || null,
+  }
 }
 
 function buildSearchInput(r: RawCompanyRow): TaggerInput {
-  // search-tier: same signals as enrich for taxonomy + industries (these come back identically),
-  // but description is enrich-only — so search-tier has description=null.
-  // Use the search response object for these fields when available; fall back to enrich.
-  const s = r.search || {}
-  const e = r.enrich || {}
+  const s = r.search || r.enrich || {}
   return {
-    name: s.basic_info?.name || e.basic_info?.name || r.seed.label,
-    professional_network_industry: s.taxonomy?.professional_network_industry || e.taxonomy?.professional_network_industry || null,
-    industries: s.basic_info?.industries || e.basic_info?.industries || [],
-    categories: s.taxonomy?.categories || e.taxonomy?.categories || [],
-    description: null,                                              // SEARCH-TIER
-    year_founded: s.basic_info?.year_founded || e.basic_info?.year_founded || null,
-    employee_count_range: s.basic_info?.employee_count_range || e.basic_info?.employee_count_range || null,
-    company_type: s.basic_info?.company_type || e.basic_info?.company_type || null,
+    name: s.basic_info?.name || r.seed.label,
+    professional_network_industry: s.taxonomy?.professional_network_industry || null,
+    industries: s.basic_info?.industries || [],
+    categories: s.taxonomy?.categories || [],
+    description: null,
+    year_founded: s.basic_info?.year_founded || null,
+    employee_count_range: s.basic_info?.employee_count_range || null,
+    company_type: s.basic_info?.company_type || null,
   }
 }
 
@@ -64,33 +88,23 @@ function buildEnrichInput(r: RawCompanyRow): TaggerInput {
     professional_network_industry: e.taxonomy?.professional_network_industry || null,
     industries: e.basic_info?.industries || [],
     categories: e.taxonomy?.categories || [],
-    description: e.basic_info?.description || null,                  // ENRICH-TIER
+    description: e.basic_info?.description || null,
     year_founded: e.basic_info?.year_founded || null,
     employee_count_range: e.basic_info?.employee_count_range || null,
     company_type: e.basic_info?.company_type || null,
   }
 }
 
-function gradeOutput(output: TaggerOutput, expected: ExpectedTags): {
-  catCorrect: boolean
-  indCorrect: boolean
-  domainOverlap: { matched: number; expected: number; precision: number; recall: number }
-} {
+function gradeOutput(output: CompositeTaggerOutput, expected: ExpectedTags) {
   const catCorrect = output.category === expected.category
-  const indCorrect = catCorrect && output.industry === expected.industry
-  const matched = output.domain_tags.filter(t => expected.domain_tags.includes(t)).length
-  const expectedSet = expected.domain_tags.length
-  const outputSet = output.domain_tags.length
-  return {
-    catCorrect,
-    indCorrect,
-    domainOverlap: {
-      matched,
-      expected: expectedSet,
-      precision: outputSet === 0 ? (expectedSet === 0 ? 1 : 0) : matched / outputSet,
-      recall: expectedSet === 0 ? 1 : matched / expectedSet,
-    },
-  }
+  const indPrimaryCorrect = catCorrect && output.primary_industry === expected.primary_industry
+  const indMatched = output.industries.filter(i => expected.industries.includes(i)).length
+  const indPrec = output.industries.length === 0 ? (expected.industries.length === 0 ? 1 : 0) : indMatched / output.industries.length
+  const indRec = expected.industries.length === 0 ? 1 : indMatched / expected.industries.length
+  const tagMatched = output.domain_tags.filter(t => expected.domain_tags.includes(t)).length
+  const tagPrec = output.domain_tags.length === 0 ? (expected.domain_tags.length === 0 ? 1 : 0) : tagMatched / output.domain_tags.length
+  const tagRec = expected.domain_tags.length === 0 ? 1 : tagMatched / expected.domain_tags.length
+  return { catCorrect, indPrimaryCorrect, indPrec, indRec, tagPrec, tagRec }
 }
 
 const RAW_PATH = '/Users/matt/Desktop/DEV/vetted-app/docs/vetted-companies-v1/02-data-delta-raw.json'
@@ -101,115 +115,85 @@ async function main() {
     console.error(`Raw data not found at ${RAW_PATH}. Run scripts/_inv1-data-delta.mjs first.`)
     process.exit(1)
   }
-
   const raw = JSON.parse(readFileSync(RAW_PATH, 'utf-8')) as RawCompanyRow[]
   const successful = raw.filter(r => !r.error && r.search && r.enrich)
 
   const lines: string[] = []
   const w = (...parts: string[]) => lines.push(parts.join(''))
-  w(`# Investigation 2 — Tagger Evaluation Report\n`)
+  w(`# Investigation 2 — Tagger Evaluation Report (Round 2, post-decisions)\n`)
   w(`*Generated: ${new Date().toISOString()}*  `)
-  w(`*Tested ${successful.length} companies via three tagger modes:*  `)
-  w(`*(A) deterministic dictionary at search-tier (no description)*  `)
-  w(`*(B) deterministic dictionary at enrich-tier (with description)*  `)
-  w(`*(C) full tagger (dict→Claude fallback) at enrich-tier*\n`)
+  w(`*Architecture: Claude-primary, dict sanity-check, Option B multi-industry, temp=0.*  `)
+  w(`*Tested ${successful.length} companies at three input levels:*\n`)
+  w(`- **(A) identify-only** — what Claude sees for unreviewed-tier auto-creates per Concern 3 resolution`)
+  w(`- **(B) search-tier** — identify + taxonomy.{pn_industry, categories} (no description)`)
+  w(`- **(C) enrich-tier** — full signals incl. description\n`)
+  w(`*Key question: how does Claude degrade as signals get thinner?*\n`)
 
   const results: any[] = []
-
   for (const r of successful) {
     const expected = GROUND_TRUTH[r.seed.label]
-    if (!expected) {
-      console.error(`No ground truth for ${r.seed.label}`)
-      continue
-    }
-    const searchInput = buildSearchInput(r)
-    const enrichInput = buildEnrichInput(r)
+    if (!expected) { console.error(`No ground truth for ${r.seed.label}`); continue }
+    console.error(`\n[${r.seed.label}]`)
+    console.error(`  identify-only...`)
+    const compIdentify = await tagCompany(buildIdentifyInput(r))
+    console.error(`  search-tier...`)
+    const compSearch = await tagCompany(buildSearchInput(r))
+    console.error(`  enrich-tier...`)
+    const compEnrich = await tagCompany(buildEnrichInput(r))
 
-    const dictSearch = tagDeterministically(searchInput)
-    const dictEnrich = tagDeterministically(enrichInput)
+    const gIdentify = gradeOutput(compIdentify, expected)
+    const gSearch = gradeOutput(compSearch, expected)
+    const gEnrich = gradeOutput(compEnrich, expected)
 
-    // For proper comparison: ALWAYS run Claude at enrich-tier (with description)
-    // even when dict was confident, so we can compare dict's tag recall vs Claude's.
-    let claudeEnrich: TaggerOutput
-    console.error(`[${r.seed.label}] Calling Claude (enrich-tier with description)...`)
-    try {
-      claudeEnrich = await tagWithClaude(enrichInput)
-    } catch (err: any) {
-      console.error(`  Claude error: ${err.message}`)
-      claudeEnrich = { category: 'unreviewed', industry: null, domain_tags: [], confidence: 0,
-        reasoning: `Claude error: ${err.message}`, method: 'claude_inference' }
-    }
-
-    // Full tagger (orchestrator behavior): dict if confident, else Claude
-    const fullResult = (dictEnrich.category !== 'unreviewed' && dictEnrich.confidence >= 0.7)
-      ? dictEnrich
-      : claudeEnrich
-
-    const gradeSearch = gradeOutput(dictSearch, expected)
-    const gradeEnrich = gradeOutput(dictEnrich, expected)
-    const gradeClaude = gradeOutput(claudeEnrich, expected)
-    const gradeFull = gradeOutput(fullResult, expected)
-
-    results.push({ company: r.seed.label, expected, dictSearch, dictEnrich, claudeEnrich, fullResult, gradeSearch, gradeEnrich, gradeClaude, gradeFull })
+    results.push({ company: r.seed.label, expected, compIdentify, compSearch, compEnrich, gIdentify, gSearch, gEnrich })
   }
 
-  // ----- Per-company section -----
   w(`## Per-company results\n`)
   for (const r of results) {
     w(`### ${r.company}`)
-    w(`*Expected:* category=\`${r.expected.category}\`, industry=\`${r.expected.industry || 'null'}\`, domain_tags=\`${JSON.stringify(r.expected.domain_tags)}\`\n`)
-    w(`| mode | category | industry | domain_tags | conf | cat? | ind? | dom-tags p/r | reasoning |`)
-    w(`|---|---|---|---|---|---|---|---|---|`)
-    for (const [mode, out, grade] of [
-      ['(A) Dict @ search', r.dictSearch, r.gradeSearch],
-      ['(B) Dict @ enrich', r.dictEnrich, r.gradeEnrich],
-      ['(C) Claude @ enrich', r.claudeEnrich, r.gradeClaude],
-      ['(D) Full (dict→claude)', r.fullResult, r.gradeFull],
+    w(`*Expected:* category=\`${r.expected.category}\`, primary=\`${r.expected.primary_industry}\`, industries=\`${JSON.stringify(r.expected.industries)}\`, domain_tags=\`${JSON.stringify(r.expected.domain_tags)}\`\n`)
+    w(`| tier | category | primary | industries | domain_tags | conf | method | cat? | prim? | tag p/r |`)
+    w(`|---|---|---|---|---|---|---|---|---|---|`)
+    for (const [tier, comp, g] of [
+      ['(A) identify', r.compIdentify, r.gIdentify],
+      ['(B) search', r.compSearch, r.gSearch],
+      ['(C) enrich', r.compEnrich, r.gEnrich],
     ] as const) {
-      const tags = out.domain_tags.length === 0 ? '[]' : JSON.stringify(out.domain_tags)
-      const reasoning = out.reasoning.length > 80 ? out.reasoning.slice(0, 77) + '...' : out.reasoning
-      w(`| ${mode} | ${out.category} | ${out.industry ?? 'null'} | \`${tags}\` | ${out.confidence.toFixed(2)} | ${grade.catCorrect ? '✓' : '✗'} | ${grade.indCorrect ? '✓' : '✗'} | ${grade.domainOverlap.precision.toFixed(2)}/${grade.domainOverlap.recall.toFixed(2)} | ${reasoning} |`)
+      w(`| ${tier} | ${comp.category ?? 'null'} | ${comp.primary_industry ?? 'null'} | \`${JSON.stringify(comp.industries)}\` | \`${JSON.stringify(comp.domain_tags)}\` | ${comp.confidence.toFixed(2)} | ${comp.method} | ${g.catCorrect ? '✓' : '✗'} | ${g.indPrimaryCorrect ? '✓' : '✗'} | ${g.tagPrec.toFixed(2)}/${g.tagRec.toFixed(2)} |`)
     }
-    w(``)
+    for (const [tier, comp] of [['identify', r.compIdentify], ['search', r.compSearch], ['enrich', r.compEnrich]] as const) {
+      if (comp.agreement === 'disagree') {
+        w(`*${tier} disagreement: claude=${comp.claude_verdict?.category}/${comp.claude_verdict?.primary_industry}, dict=${comp.dict_verdict?.category}/${comp.dict_verdict?.primary_industry}*`)
+      }
+    }
+    w('')
   }
 
-  // ----- Aggregate accuracy -----
   w(`## Aggregate accuracy (${results.length} companies)\n`)
-  for (const [mode, key] of [
-    ['(A) Dict @ search', 'gradeSearch'],
-    ['(B) Dict @ enrich', 'gradeEnrich'],
-    ['(C) Claude @ enrich', 'gradeClaude'],
-    ['(D) Full (dict→claude)', 'gradeFull'],
-  ] as const) {
+  for (const [tier, key] of [['(A) identify', 'gIdentify'], ['(B) search', 'gSearch'], ['(C) enrich', 'gEnrich']] as const) {
     const cat = results.filter(r => r[key].catCorrect).length
-    const ind = results.filter(r => r[key].indCorrect).length
-    const tagPrec = results.reduce((s, r) => s + r[key].domainOverlap.precision, 0) / results.length
-    const tagRec = results.reduce((s, r) => s + r[key].domainOverlap.recall, 0) / results.length
-    w(`- **${mode}:** category=${cat}/${results.length} (${Math.round(cat/results.length*100)}%), industry=${ind}/${results.length} (${Math.round(ind/results.length*100)}%), domain-tag avg precision=${tagPrec.toFixed(2)}, avg recall=${tagRec.toFixed(2)}`)
+    const prim = results.filter(r => r[key].indPrimaryCorrect).length
+    const tagP = results.reduce((s, r) => s + r[key].tagPrec, 0) / results.length
+    const tagR = results.reduce((s, r) => s + r[key].tagRec, 0) / results.length
+    w(`- **${tier}:** category=${cat}/${results.length} (${Math.round(cat/results.length*100)}%), primary_industry=${prim}/${results.length} (${Math.round(prim/results.length*100)}%), tag P/R=${tagP.toFixed(2)}/${tagR.toFixed(2)}`)
   }
 
-  // ----- Industries with 0% deterministic coverage -----
-  w(`\n## V1 industries seen (in ground truth) and their dictionary coverage\n`)
-  const indStats: Record<string, { total: number; dictHit: number }> = {}
-  for (const r of results) {
-    const ind = r.expected.industry
-    if (!ind) continue
-    indStats[ind] ??= { total: 0, dictHit: 0 }
-    indStats[ind].total++
-    if (r.gradeEnrich.indCorrect) indStats[ind].dictHit++
-  }
-  w(`| industry | tested | dict@enrich correct | coverage |`)
-  w(`|---|---|---|---|`)
-  for (const [ind, s] of Object.entries(indStats).sort()) {
-    w(`| ${ind} | ${s.total} | ${s.dictHit} | ${Math.round(s.dictHit/s.total*100)}% |`)
+  w(`\n## Claude vs dict agreement\n`)
+  for (const [tier, key] of [['identify', 'compIdentify'], ['search', 'compSearch'], ['enrich', 'compEnrich']] as const) {
+    const agree = results.filter(r => r[key].agreement === 'agree').length
+    const disagree = results.filter(r => r[key].agreement === 'disagree').length
+    const claudeOnly = results.filter(r => r[key].agreement === 'claude_only').length
+    w(`- **${tier}**: agree=${agree}, disagree=${disagree}, claude-only (dict null)=${claudeOnly}`)
   }
 
-  // ----- Where Claude was needed -----
-  w(`\n## Companies where dictionary needed Claude escalation (enrich-tier)\n`)
-  const escalated = results.filter(r => r.dictEnrich.category === 'unreviewed' || r.dictEnrich.confidence < 0.7)
-  if (escalated.length === 0) w(`(none — dictionary was confident on all 10 at enrich-tier)`)
-  for (const r of escalated) {
-    w(`- **${r.company}** — dict said \`${r.dictEnrich.category}/${r.dictEnrich.industry}\` (conf ${r.dictEnrich.confidence.toFixed(2)}); full tagger said \`${r.fullResult.category}/${r.fullResult.industry}\``)
+  w(`\n## Multi-industry detection (Option B)\n`)
+  const trueMulti = results.filter(r => r.expected.industries.length > 1)
+  if (trueMulti.length === 0) w(`(no multi-industry companies in ground truth — Anduril is the only one and that's it in this 10-co sample)\n`)
+  for (const r of trueMulti) {
+    w(`- **${r.company}** (expected industries=${JSON.stringify(r.expected.industries)})`)
+    for (const [tier, comp] of [['identify', r.compIdentify], ['search', r.compSearch], ['enrich', r.compEnrich]] as const) {
+      w(`  - ${tier}: ${JSON.stringify(comp.industries)}`)
+    }
   }
 
   writeFileSync(RPT_PATH, lines.join('\n'))
