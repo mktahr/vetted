@@ -790,6 +790,13 @@ Not scoped to a build phase yet. Ordered roughly by dependency / impact.
 - **Gaming as a hardware domain_tag.** Currently Gaming lives only in `NON_HARDWARE_DOMAIN_TAGS` (typed as a non-hardware-only tag). Hardware companies with real gaming businesses — Sony PlayStation, Valve (Steam Deck), Razer, Logitech G — have nowhere to surface that signal. During the larger-eval ground truth (2026-05-03), Sony's domain_tags ended up `[]` for this reason. Defer the call until recruiter searches surface gaming-hardware roles often enough to justify adding `Gaming` to `HARDWARE_DOMAIN_TAGS`. If added, requires a migration that updates the CHECK constraint AND `lib/companies/taxonomy.ts` together.
 - **Out-of-scope industry gaps**: Telecommunications (Verizon falls to Services), Real Estate / co-working (WeWork falls to Services), Streaming/Music as primary (Spotify falls to Consumer Tech), Agriculture (John Deere falls to Industrial Manufacturing). Tracked as known gaps in the larger-eval report; only add as V1 industries if recruiter demand surfaces them.
 
+### Vetted Companies V1 — tagger issues to track in production
+
+These are known tagger limitations from the round-3/round-4 eval. Not severe enough to block ship, but worth watching once the cron is live.
+
+- **Climate-vs-Energy disambiguation (systemic).** 2/4 Climate companies misclassified as Energy across rounds 3-4: Climeworks (DAC, called Energy) and Twelve (CO2-to-fuel, called Energy). Charm Industrial and Heirloom Carbon classified correctly. Pattern: Claude reads "produces fuel/material from carbon" as energy-production rather than climate-tech. **Track in production.** Revisit if recruiters surface confusion or if more Climate cos enter the DB and the misclassification rate stays high. A prompt-tightening fix is possible (rule: "carbon removal/avoidance mission → Climate, even if byproduct is fuel/material") but defer until justified.
+- **AI-feature over-tagging on Asana (borderline).** In the larger eval, 3/3 AI-feature-not-core companies (Asana / Zoom / Salesforce) classified primary correctly as SaaS, but Asana was over-tagged with `AI` in domain_tags. Zoom and Salesforce correctly suppressed it; Notion (round-3) also passed. **Don't fix now** — risk of regressing AI-suppression on AI-core companies (Anthropic / OpenAI / Mistral / Perplexity all got AI-suppression right 4/4 in round-4). Track in production; revisit if over-tagging on AI-feature SaaS rises above ~25% of cases.
+
 ### Pipelines
 
 - **Early-stage startup monitoring.** Auto-ingest companies backed by A16Z, Sequoia, YC (and similar) on funding rounds or stealth-exit events. Keeps the scored-company set fresh without manual re-seeding.
