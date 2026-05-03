@@ -156,11 +156,33 @@ When `tagging_method='claude_dict_disagree'`: tagging_notes records both verdict
 
 Admin can override with one click; sets `tagging_method='manual'` and freezes the row.
 
-### Open questions / Concerns flagged but not yet resolved
+### Async tagging architecture (Concern A — RESOLVED 2026-05-03)
 
-- **Concern A: async vs sync tagging during ingest** — tradeoff is latency vs simplicity. Recommend async; awaiting Matt's call.
-- **Concern B: Claude wins on disagreement** — implementing as recommended; Matt confirmed.
+Per round-2 follow-up decision: **async via Vercel Cron**. Implementation:
+
+- `vercel.json` declares one cron: `*/2 * * * *` → `/api/admin/companies/tag-pending`
+- `/api/admin/companies/tag-pending` route handler:
+  - Auth: `Authorization: Bearer <CRON_SECRET>` (Vercel auto-injects on cron) OR `x-ingest-secret` (manual/CLI)
+  - Queries up to 10 companies WHERE `tagging_method IS NULL` ORDER BY `created_at`
+  - For each: `/company/identify` (free) → build TaggerInput from basic_info → `tagCompany()` → write back
+  - Throttles to 4s/call to stay within Crust's 15 req/min limit
+  - On identify failure: row stays NULL, retried next cron (TODO V2: add retry-counter cap)
+- UI (deferred to phase 1 build): "tagging…" pill on company list rows when `tagging_method IS NULL` + "Tag now" button on detail page
+
+### Dict refinements applied 2026-05-03
+
+After E1+E2+E3+M2 round-2 fixes, an Anduril regression surfaced (Aerospace fired on bare "Aerospace" category, beating Defense). Two refinements applied:
+
+- **E2.1:** Aerospace rule fires only on SPECIFIC signals (Drones, Space Travel, Satellites, Aviation Component Manufacturing, eVTOL). The bare "Aerospace" category string is excluded — it's too common on defense companies.
+- **M2 strengthened:** PNI-vs-categories contradiction threshold loosened from "categoryVotesOnly.X > opposite" to absolute `>= 5`. Catches Shield AI (PNI=Software Development but 5 hardware-leaning category signals) and abstains to null instead of confidently picking the wrong category.
+- Defense rule "any" tightened to (Military, National Security, Government). Removed Law Enforcement (cops also buy drones from Skydio etc — not a defense signal alone) and "Defense and Space Manufacturing" PNI (E3 already removed; E2.1 confirms).
+
+Result on the 10-company eval set: dict primary accuracy 6/10 → **9/10 (90%)**. Domain tag precision 0.50 → **1.00**. Targeted expansion eval will validate against 28 new companies.
+
+### Open questions / outstanding
+
 - Companies that exist before V1 migration get `tagging_method=NULL` until first tag (implicit; documented).
+- Cron route + tag-pending implementation **requires V1 schema migration** to function. Route fails gracefully (query error) until columns exist. Wire-up complete; activation depends on phase 1 schema landing.
 
 ---
 

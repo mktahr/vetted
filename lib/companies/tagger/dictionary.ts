@@ -107,10 +107,35 @@ const HARDWARE_INDUSTRY_RULES: Array<{
   any: string[]            // any of these signals (PNI / industries / categories) triggers
   reasoning: string
 }> = [
-  { industry: 'Defense', any: ['Defense and Space Manufacturing', 'Military', 'National Security', 'Law Enforcement'],
-    reasoning: 'Defense / Military / National Security signal' },
-  { industry: 'Aerospace', any: ['Aviation and Aerospace Component Manufacturing', 'Aerospace', 'Space Travel', 'Satellite Communication'],
-    reasoning: 'Aerospace / Space signal' },
+  // Round-2 fixes E2.1 + E3 (2026-05-03): Defense BEFORE Aerospace; both rules
+  // tightened. Strict signal-based ordering:
+  //
+  //   - Defense fires on Military / National Security / Government (real defense
+  //     signals that distinguish defense contractors from generic aerospace).
+  //     Excludes Law Enforcement (cops also buy drones from Skydio etc, not a
+  //     defense signal alone) and the broad "Defense and Space Manufacturing"
+  //     PNI (E3 — fires on commercial space cos like Astra).
+  //
+  //   - Aerospace fires on SPECIFIC aerospace signals only (Drones, Space,
+  //     Satellites, Aviation Component, eVTOL). Does NOT include the bare
+  //     "Aerospace" category string — that string appears on defense-with-aero
+  //     cos like Anduril and would mis-route them.
+  //
+  // Test outcomes after this rule set:
+  //   - Anduril (Military+NatSec+Gov): Defense fires → ✓
+  //   - Astra Space (no defense, has Space Travel+Satellite): Aerospace fires → ✓
+  //   - Skydio (only Law Enforcement; has Drones): Aerospace fires → ✓
+  //   - Lockheed-style defense aerospace (Military+NatSec+Aviation): Defense fires → ✓
+  //   - Pure-aerospace cos with bare "Aerospace" only (no specific signals):
+  //     fall through to Other Hardware. Claude catches.
+  { industry: 'Defense', any: ['Military', 'National Security', 'Government'],
+    reasoning: 'Defense signal (E2.1+E3: Military/NatSec/Government required; Law Enforcement and "Defense and Space Manufacturing" PNI dropped)' },
+  { industry: 'Aerospace', any: [
+      'Aviation and Aerospace Component Manufacturing',
+      'Space Travel', 'Satellite Communication', 'Satellites',
+      'Drones', 'Drone Management', 'UAV', 'Unmanned Aerial', 'eVTOL',
+    ],
+    reasoning: 'Aerospace specific signal (E2.1: bare "Aerospace" string excluded — fires only on Drones/Space/Satellite/Aviation/eVTOL)' },
   { industry: 'Robotics', any: ['Robotics Engineering', 'Robotics'],
     reasoning: 'Robotics signal' },
   { industry: 'Medical Devices', any: ['Medical Equipment Manufacturing', 'Health Diagnostics', 'Medical Device', 'Genetics'],
@@ -142,6 +167,11 @@ const NON_HARDWARE_INDUSTRY_RULES: Array<{
   any: string[]
   reasoning: string
 }> = [
+  // Round-2 fix E1 (2026-05-03): Biotech-specific signals (Pharmaceutical,
+  // Therapeutics, TechBio) checked BEFORE AI. Recursion-style biotech-with-AI
+  // cos previously got mis-tagged as AI because AI fired first.
+  { industry: 'Biotech', any: ['Pharmaceutical', 'Therapeutics', 'TechBio'],
+    reasoning: 'Biotech-specific signal (E1: ordered before AI). Pharmaceutical/Therapeutics/TechBio signal a biotech business even when AI signals are present.' },
   { industry: 'AI', any: ['Foundational AI', 'Generative AI', 'AI Infrastructure', 'Agentic AI', 'Artificial Intelligence', 'Artificial Intelligence (AI)', 'Machine Learning', 'Natural Language Processing'],
     reasoning: 'AI / ML signal' },
   { industry: 'FinTech', any: ['FinTech', 'Mobile Payments', 'Financial Services', 'Personal Finance', 'InsurTech', 'Banking'],
@@ -154,9 +184,10 @@ const NON_HARDWARE_INDUSTRY_RULES: Array<{
     reasoning: 'Blockchain / crypto signal' },
   { industry: 'HealthTech', any: ['Telehealth', 'Hospital & Health Care', 'Mental Health Care', 'Mental Health'],
     reasoning: 'HealthTech (software) signal' },
-  // Biotech (non-hardware) — software/AI for biotech, drug discovery
-  { industry: 'Biotech', any: ['Pharmaceutical', 'Therapeutics', 'TechBio', 'Biotechnology Research', 'Biotechnology'],
-    reasoning: 'Biotech signal (non-hardware-leaning context — software/AI/therapeutics)' },
+  // Biotech fallback for biotech cos that didn't hit the E1 specific-signal
+  // gate above but DO have generic Biotechnology signals
+  { industry: 'Biotech', any: ['Biotechnology Research', 'Biotechnology'],
+    reasoning: 'Biotech (fallback after AI rule — only fires when no AI signals)' },
   { industry: 'Legal', any: ['Legal Services', 'Law Practice', 'Law'],
     reasoning: 'Legal signal' },
   { industry: 'Services', any: ['Management Consulting', 'Professional Services', 'Engineering Services'],
@@ -263,18 +294,44 @@ export function tagDeterministically(input: TaggerInput): TaggerOutput {
   let category: CategoryOrUnclassified
   let categoryConfidence: number
 
+  // Round-2 fix M2 (2026-05-03): cross-signal check.
+  // When PNI says one category but the cumulative category-lean votes (from
+  // categories[] + industries[]) say the other, dict abstains (returns null).
+  // This handles cases like Shield AI: PNI="Software Development" (non_hw +3)
+  // but categories include Drones / National Security / Mechanical Engineering
+  // (hw-leaning). Previously dict picked the PNI-side and was confidently
+  // wrong; now it returns null and lets Claude (with description) decide.
+  const pniIsHw = !!(pni && HARDWARE_PNI_VALUES.has(pni))
+  const pniIsNonHw = !!(pni && NON_HARDWARE_PNI_VALUES.has(pni))
+  const categoryVotesOnly = {
+    hw: hardwareScore - (pniIsHw ? 3 : 0),
+    non_hw: nonHardwareScore - (pniIsNonHw ? 3 : 0),
+  }
+  // M2 (round-2 fix): PNI says one category, but cumulative non-PNI votes
+  // (categories[] + industries[]) say the other AT 5+ ABSOLUTE STRENGTH.
+  // Loosened to ABSOLUTE threshold (>=5) rather than relative-to-other-side
+  // — handles tied cases like Shield AI where PNI=Software but categories
+  // include Drones+National Security+Mechanical Engineering+Robotics+
+  // Autonomous Vehicles (5 hw signals against PNI's non_hw).
+  const pniVsCategoriesContradict =
+    (pniIsHw && categoryVotesOnly.non_hw >= 5) ||
+    (pniIsNonHw && categoryVotesOnly.hw >= 5)
+
   if (totalVotes === 0) {
     // Round-2: NULL category instead of 'unreviewed' string
-    category = null
-    categoryConfidence = 0
     reasoningParts.push(`no recognized signals → null`)
     return {
       category: null, primary_industry: null, industries: [], domain_tags: [],
       confidence: 0, reasoning: reasoningParts.join('; '), method: 'crust_dictionary',
     }
+  } else if (pniVsCategoriesContradict) {
+    // M2: PNI says one thing, categories strongly say the other → null
+    reasoningParts.push(`M2: PNI=${pniIsHw ? 'hw' : 'non_hw'} but categories favor ${pniIsHw ? 'non_hw' : 'hw'} (cat-only votes hw=${categoryVotesOnly.hw}/non_hw=${categoryVotesOnly.non_hw}) → null`)
+    return {
+      category: null, primary_industry: null, industries: [], domain_tags: [],
+      confidence: 0.3, reasoning: reasoningParts.join('; '), method: 'crust_dictionary',
+    }
   } else if (margin < 2) {
-    category = null
-    categoryConfidence = 0.4
     reasoningParts.push(`signals split (margin ${margin}) → null`)
     return {
       category: null, primary_industry: null, industries: [], domain_tags: [],

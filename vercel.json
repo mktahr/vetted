@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/admin/companies/tag-pending",
+      "schedule": "*/2 * * * *"
+    }
+  ]
+}
