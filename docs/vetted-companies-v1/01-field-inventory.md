@@ -1,8 +1,8 @@
 # Vetted Companies V1 — Field-to-UI Mapping Inventory
 
-**Status:** **LOCKED 2026-05-01.** All 8 open issues resolved. This is the contract for phase 1 build.
+**Status:** **LOCKED with Round-2 amendments 2026-05-02.** This is the contract for phase 1 build.
 **Author:** Claude Code
-**Date:** 2026-05-01 (drafted), 2026-05-01 (locked with Matt's resolutions)
+**Date:** 2026-05-01 (drafted, locked round 1) → 2026-05-02 (round-2 amendments after Inv2 evaluation)
 
 This document is the **contract** between:
 - The schema migration (what columns exist, what constraints they have)
@@ -10,6 +10,196 @@ This document is the **contract** between:
 - The UI build (what surfaces display each field, what control type)
 
 If any of these three diverge from this document during implementation, this document is wrong and gets updated; we don't ship code that disagrees with the inventory.
+
+---
+
+## ROUND-2 AMENDMENTS (2026-05-02) — authoritative; supersedes round-1 details below
+
+The original round-1 inventory (rest of this document) was locked on 2026-05-01.
+Inv2's tagger evaluation surfaced architectural and taxonomy adjustments. Round-2
+decisions, listed here, **override** the round-1 sections where they conflict.
+
+### Architecture pivot — Claude is PRIMARY (round-2 decision #1)
+
+Original (round-1): tier-1 dictionary primary, tier-2 Claude fallback for ambiguous cases.
+**New: Claude primary; dictionary runs in parallel as a sanity check.**
+
+`tagging_method` enum (replaces round-1 values `crust_dictionary | claude_inference | admin_manual`):
+- `claude` — Claude verdict written; dict couldn't classify (returned NULL category) so no comparison
+- `claude_dict_agree` — both ran; agreed on (category, primary_industry); confidence boosted
+- `claude_dict_disagree` — both ran; disagreed; **Claude's verdict is written** (Concern B); dict's verdict captured in `tagging_notes` for admin triage; confidence lowered
+- `manual` — admin override; auto-tagger never overwrites
+
+Rows that have not yet been tagged have `tagging_method=NULL`.
+
+### Category enum: drop 'unreviewed' (Concern 1)
+
+Original: `category IN ('hardware', 'non_hardware', 'unreviewed')`.
+**New: `category IN ('hardware', 'non_hardware')` OR NULL.** When the tagger can't classify, set `category=NULL`. The "unreviewed" workflow state lives entirely on `review_status` (see below).
+
+CHECK constraint becomes: `category IS NULL OR category IN ('hardware', 'non_hardware')`. NULL category requires NULL `primary_industry`, empty `industries[]`, empty `domain_tags`.
+
+### Replace `manual_review_status` with `review_status` (Concern 2 + decision #7)
+
+Round-1 kept the existing `manual_review_status` (`unreviewed | reviewed | locked`). **Replace with `review_status`** (`vetted | unreviewed | excluded`).
+
+Migration plan:
+```sql
+ALTER TABLE companies ADD COLUMN review_status TEXT;
+UPDATE companies SET review_status =
+  CASE manual_review_status
+    WHEN 'reviewed' THEN 'vetted'
+    WHEN 'locked'   THEN 'vetted'   -- silent collapse; reviewed/locked distinction not preserved
+    ELSE 'unreviewed'
+  END;
+ALTER TABLE companies ALTER COLUMN review_status SET NOT NULL;
+ALTER TABLE companies ALTER COLUMN review_status SET DEFAULT 'unreviewed';
+ALTER TABLE companies ADD CONSTRAINT companies_review_status_check
+  CHECK (review_status IN ('vetted', 'unreviewed', 'excluded'));
+ALTER TABLE companies DROP COLUMN manual_review_status;
+DROP TYPE manual_review_status_type;  -- if no other references
+```
+
+`review_status='excluded'` semantics (decisions #9, #10):
+- Filter recruiter visibility (ProfileTable + search-builder hide candidates whose primary current company is excluded)
+- Do NOT block candidate ingestion (the candidate is scored on own merits regardless)
+- Visual treatment: company name in muted text (~60% opacity gray, neutral — NOT red/orange) on candidate displays. Hover (~500ms delay) shows tooltip "Company excluded from talent pool." Click navigates to detail page.
+
+### Multi-industry — Option B (single + array)
+
+Original: single `industry TEXT` column.
+**New: `primary_industry TEXT` + `industries TEXT[] NOT NULL DEFAULT '{}'`.**
+
+```sql
+ALTER TABLE companies ADD COLUMN primary_industry TEXT;
+ALTER TABLE companies ADD COLUMN industries TEXT[] NOT NULL DEFAULT '{}';
+
+ALTER TABLE companies ADD CONSTRAINT companies_primary_industry_in_industries_check
+  CHECK (
+    primary_industry IS NULL OR primary_industry = ANY(industries)
+  );
+
+ALTER TABLE companies ADD CONSTRAINT companies_industries_subset_check
+  CHECK (
+    CASE category
+      WHEN 'hardware' THEN industries <@ ARRAY['Defense','Aerospace','Automotive','Robotics','Medical Devices','Biotech','Energy','Energy Storage','Climate','Semiconductors','Consumer Electronics','Industrial Manufacturing','Materials','Maritime','Other Hardware']::text[]
+      WHEN 'non_hardware' THEN industries <@ ARRAY['SaaS','AI','FinTech','Investment Banking','Quant/Trading','Blockchain & Web3','Consumer Tech','HealthTech','Biotech','Services','Legal','Defense','Aerospace']::text[]
+      ELSE industries = ARRAY[]::text[]
+    END
+  );
+
+CREATE INDEX idx_companies_industries ON companies USING GIN (industries);
+```
+
+Tagger output (Claude prompt instructs):
+- Most companies: `industries=[primary_industry]` — single-element
+- Multi-industry companies (Anduril, Tesla, SpaceX, conglomerates): list 2-4
+- Primary first
+
+**Search filter:** returns ANY company with the value in `industries[]` (uses GIN array containment). Display sorted by `primary_industry`.
+
+**UI:** primary shown prominently in tables; "+N more" badge with hover tooltip showing the full list. Detail drawer shows all industries with primary visually marked. **The +N badge is V1 SCOPE for industry display only — do not generalize the pattern across the product yet.**
+
+### Taxonomy additions
+
+**Defense and Aerospace cross-listed** (decision #12). Both industries appear in BOTH branches:
+- `hardware/Defense`: Anduril (physical defense systems)
+- `non_hardware/Defense`: Palantir, Rebellion Defense (software/services SOLD to defense)
+- `hardware/Aerospace`: SpaceX, Astra Space (physical rockets/satellites/aircraft)
+- `non_hardware/Aerospace`: Slingshot Aerospace (software for aerospace industry)
+
+Disambiguation rules locked in the Claude prompt (Concern 6):
+- Hardware/Defense = primary product is a physical defense system
+- Non-hardware/Defense = primary product is software/services SOLD TO defense customers
+- Hardware/Aerospace = builds physical aerospace products
+- Non-hardware/Aerospace = software/services for the aerospace industry
+
+**AI added as a domain_tag in BOTH branches** (decision #11). Hardware tags: `[..., AI]`; non-hardware tags: `[..., AI]`.
+
+**Suppression rule (Concern 5):** when `primary_industry='AI'`, the AI domain_tag is stripped from `domain_tags` (the industry already says it). Generalized: any future cross-listing where industry name == domain_tag name gets the same suppression.
+
+Examples:
+- OpenAI → industry=AI, domain_tags=[] (no AI tag)
+- Anduril → industry=Defense, domain_tags=[Drones, AI] (AI core to Hivemind)
+- Tesla → industry=Automotive, domain_tags=[EVs, Autonomous Driving, AI, Robotics]
+- Recursion → industry=Biotech, domain_tags=[AI, Data]
+- Notion → industry=SaaS, domain_tags=[Productivity] (NO AI tag — it's a feature, not core)
+
+**NO Manufacturing as a domain_tag** (decision #13). `Industrial Manufacturing` stays as a hardware industry only. Multi-business companies that do significant manufacturing (Anduril, Tesla, SpaceX) get `Industrial Manufacturing` as a SECONDARY industry under Option B.
+
+### Dedupe at Crust ingestion (decision #8 + Concern 4)
+
+- **Person dedupe via `exclude_profiles`:** ALREADY SHIPPED (Crust Import V1 routes pass `people.linkedin_url`s as `post_processing.exclude_profiles[]`). No new work.
+- **Company dedupe before /company/search or /company/identify (NEW for company import UI):** before any paid Crust call from the new `/admin/companies/import` flow, check the local `companies` table for the company by `crustdata_company_id` (preferred) or `linkedin_url` (fallback). If known, skip the Crust call and route admin to the existing record's edit page.
+
+### Auto-create Claude tagging (Concern 3 resolution)
+
+Per Concern 3 resolution: run Claude on every never-seen-before company at candidate ingest time, NOT dict-only. Identify-only signals (name + industries[] + maybe description) are sufficient — Inv2 round-2 eval shows Claude at parity with enrich-tier on category + primary_industry on identify-only inputs (see `03-tagger-eval.md`).
+
+**Concern A flagged on this turn:** at ~1.5s/Claude-call, this adds latency to ingest. **Recommend async tagging:** write the company stub immediately with `tagging_method=NULL`, then a background job invokes the tagger and writes results. Doesn't block candidate ingest. **Awaiting Matt's confirmation on async vs sync.**
+
+### `hq_location_name` for unreviewed-tier rows (decision #6 / Inv1 gap)
+
+Set `hq_location_name=NULL` for unreviewed-tier auto-creates. The free `/company/identify` call returns location only as `country` (often null), not the rich `headquarters` string. Populated only on vetted-tier promotion when enrich runs.
+
+### `tagging_notes` schema use under round-2 architecture
+
+When `tagging_method='claude_dict_disagree'`: tagging_notes records both verdicts in machine-readable form so admin triage UI can display them, e.g.:
+
+```json
+{
+  "claude": { "category": "hardware", "primary_industry": "Aerospace" },
+  "dict":   { "category": "hardware", "primary_industry": "Defense" },
+  "summary": "DISAGREEMENT — Claude: hardware/Aerospace; Dict: hardware/Defense. Wrote Claude's verdict; flagged for triage."
+}
+```
+
+Admin can override with one click; sets `tagging_method='manual'` and freezes the row.
+
+### Async tagging architecture (Concern A — RESOLVED 2026-05-03)
+
+Per round-2 follow-up decision: **async via Vercel Cron**. Implementation:
+
+- `vercel.json` declares one cron: `*/2 * * * *` → `/api/admin/companies/tag-pending`
+- `/api/admin/companies/tag-pending` route handler:
+  - Auth: `Authorization: Bearer <CRON_SECRET>` (Vercel auto-injects on cron) OR `x-ingest-secret` (manual/CLI)
+  - Queries up to 10 companies WHERE `tagging_method IS NULL` ORDER BY `created_at`
+  - For each: `/company/identify` (free) → build TaggerInput from basic_info → `tagCompany()` → write back
+  - Throttles to 4s/call to stay within Crust's 15 req/min limit
+  - On identify failure: row stays NULL, retried next cron (TODO V2: add retry-counter cap)
+- UI (deferred to phase 1 build): "tagging…" pill on company list rows when `tagging_method IS NULL` + "Tag now" button on detail page
+
+### Dict refinements applied 2026-05-03
+
+After E1+E2+E3+M2 round-2 fixes, an Anduril regression surfaced (Aerospace fired on bare "Aerospace" category, beating Defense). Two refinements applied:
+
+- **E2.1:** Aerospace rule fires only on SPECIFIC signals (Drones, Space Travel, Satellites, Aviation Component Manufacturing, eVTOL). The bare "Aerospace" category string is excluded — it's too common on defense companies.
+- **M2 strengthened:** PNI-vs-categories contradiction threshold loosened from "categoryVotesOnly.X > opposite" to absolute `>= 5`. Catches Shield AI (PNI=Software Development but 5 hardware-leaning category signals) and abstains to null instead of confidently picking the wrong category.
+- Defense rule "any" tightened to (Military, National Security, Government). Removed Law Enforcement (cops also buy drones from Skydio etc — not a defense signal alone) and "Defense and Space Manufacturing" PNI (E3 already removed; E2.1 confirms).
+
+Result on the 10-company eval set: dict primary accuracy 6/10 → **9/10 (90%)**. Domain tag precision 0.50 → **1.00**. Targeted expansion eval will validate against 28 new companies.
+
+### Open questions / outstanding
+
+- Companies that exist before V1 migration get `tagging_method=NULL` until first tag (implicit; documented).
+- Cron route + tag-pending implementation **requires V1 schema migration** to function. Route fails gracefully (query error) until columns exist. Wire-up complete; activation depends on phase 1 schema landing.
+
+---
+
+## END ROUND-2 AMENDMENTS — round-1 sections below
+
+The remainder of this document is the round-1 inventory. Where it conflicts with the round-2 amendments above, the amendments win. Specific round-1 sections that are now superseded:
+- "Section 2 / `category`" enum (no longer includes 'unreviewed')
+- "Section 2 / `industry`" (replaced by primary_industry + industries[])
+- "Section 5 / `tagging_method`" enum (4 new values, not 3)
+- "Section 6 / `manual_review_status`" (replaced by `review_status`)
+- "Controlled vocabularies" (new lists — see updated section below)
+- "CHECK constraints" (see round-2 SQL above; round-1 SQL is superseded)
+- "TS config mirror" (new exports added)
+
+The round-1 section descriptions of UI behavior, source field mapping, and other column details remain accurate.
+
+---
 
 ## Scope
 
@@ -363,13 +553,20 @@ These are columns that V1 inventory keeps untouched but that Investigation found
 
 ---
 
-## Controlled vocabularies (CHECK constraint values)
+## Controlled vocabularies (round-2 — superseded round-1 lists)
 
-### `category`
+### `category` (round-2 amendment: dropped 'unreviewed')
 ```
 hardware
 non_hardware
+```
+NULL category = "tagger couldn't classify"; row needs admin attention via `review_status='unreviewed'`.
+
+### `review_status` (NEW round-2)
+```
+vetted
 unreviewed
+excluded
 ```
 
 ### `industry` by category
@@ -393,7 +590,7 @@ Maritime
 Other Hardware
 ```
 
-**non_hardware (11):**
+**non_hardware (13 — round-2 added Defense + Aerospace per decision #12):**
 ```
 SaaS
 AI
@@ -406,6 +603,8 @@ HealthTech
 Biotech
 Services
 Legal
+Defense          ← round-2 added (software/services for defense customers)
+Aerospace        ← round-2 added (software for the aerospace industry)
 ```
 
 **unreviewed:** `industry` MUST BE NULL.
@@ -414,7 +613,7 @@ Legal
 
 ### `domain_tags` by category
 
-**hardware (8):**
+**hardware (9 — round-2 added AI per decision #11):**
 ```
 Rockets
 Satellites
@@ -424,9 +623,10 @@ Autonomous Driving
 Automotive Manufacturing
 EVs
 Nuclear
+AI               ← round-2 added (suppress when primary_industry='AI')
 ```
 
-**non_hardware (16):**
+**non_hardware (17 — round-2 added AI per decision #11):**
 ```
 Consumer
 Infrastructure
@@ -444,7 +644,10 @@ Streaming
 Marketplace
 Analytics
 Enterprise Software
+AI               ← round-2 added (suppress when primary_industry='AI')
 ```
+
+**Suppression rule (round-2 decision #5 / Concern 5):** the orchestrator strips a domain_tag from `domain_tags[]` when it duplicates `primary_industry`. Currently affects only AI (industry name = tag name). Generalized for any future cross-listings.
 
 **unreviewed:** `domain_tags` MUST BE empty array `'{}'::text[]`.
 
