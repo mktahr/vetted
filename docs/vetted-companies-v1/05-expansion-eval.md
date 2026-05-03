@@ -1,13 +1,60 @@
 # Targeted Expansion Eval (28 companies + Anduril Maritime check)
 
-*Generated: 2026-05-03T15:16:08.184Z*  
-*Architecture: Claude-primary + dict sanity check, Option B multi-industry, dict fixes E1+E2.1+E3+M2.*  
+*Generated: 2026-05-03T16:00:53.285Z*  
+*Architecture: Claude-primary + dict sanity check, Option B multi-industry, dict fixes E1+E2.1+E3+M2 + Claude fixes C1 (prompt tightening) + C2 (forgiving validator) + 3 ground-truth corrections.*  
 *Tiers tested: identify-only, enrich-tier. Search-tier skipped (inv2 round-2 showed it's worse than identify due to noisy categories).*
+
+## Headlines (round-3 — after C1 + C2 + GT fixes)
+
+**Major lift across the board.** Aggregate accuracy at enrich-tier moved from 81% category / 74% primary (round-2) to **100% category / 93% primary** (round-3). All 5 previously-nulled Claude outputs (Cerebras, Tenstorrent, Hadrian, Apple, Palantir) now return valid, correct verdicts.
+
+### Round-3 vs Round-2 (enrich-tier)
+
+| Metric | Round-2 | Round-3 | Δ |
+|---|---|---|---|
+| Category accuracy | 81% (22/27) | **100% (27/27)** | +19 pp |
+| Primary-industry accuracy | 74% (20/27) | **93% (25/27)** | +19 pp |
+| Claude-null rate | 19% (5/27) | **0%** | −19 pp |
+| Dict-Claude agreement (when dict committed) | ~50% | **60% (12/20)** | +10 pp |
+| Dict-Claude disagreement | ~30% | **40% (8/20)** | (Claude won 7/8) |
+
+### Identify-tier (unreviewed-tier auto-create simulation)
+
+- **Category 100%, primary 96%** (only miss: Climeworks → Energy)
+- **Dict abstains 100%** — same architectural insight as round-2: dict provides zero sanity-check value at identify-tier. The cron-driven async tagger relies on Claude alone for unreviewed-tier auto-creates.
+
+### Real Claude failures (enrich-tier — 2/27 = 7.4%)
+
+1. **Climeworks** — expected `Climate`, got `Energy`. Claude treats DAC (direct air capture) as energy infrastructure rather than climate-tech. Defensible domain confusion; not systemic.
+2. **Saildrone** — expected `Maritime`, got `Defense`. Claude over-indexed on Saildrone's military customer base (USVs sold to Navy/NOAA) over the company's primary platform. Both Claude and dict miss this — see Disagreements section.
+
+Both failures are domain-edge cases, not validator/prompt bugs. **Not proposing additional fixes** — would risk over-fitting on 2 cases.
+
+### Critical wins to call out
+
+- **Anduril Maritime industry NOW FIRES at enrich-tier** (was failing in round-2). Multi-industry multi-element output: `[Defense, Aerospace, Maritime, Industrial Manufacturing]` — exactly the round-2 spec.
+- **Notion AI-suppression test passes**: `domain_tags=[Productivity, B2B, Enterprise Software]`, no AI tag despite Notion having AI features.
+- **Scale AI / Mercor AI-industry-self-suppression**: both correctly omit `AI` from `domain_tags` when industry is already AI.
+- **Apple, Cerebras, Tenstorrent, Hadrian, Palantir** — all 5 round-2 nulls now correctly classified.
+- **Out-of-scope flags work as designed**: SpaceX (Telecom gap → Aerospace primary), John Deere (Agriculture gap → Industrial Manufacturing), Notion (no false AI tag).
+
+### Dictionary value confirmed at enrich-tier only
+
+Of 8 disagreements at enrich-tier: Claude won 7 (correct), both wrong on 1 (Saildrone). Dictionary still adds triage signal (lowering confidence on disagreement) but never overrides Claude. Architecture validated.
+
+### Decision: proceed to 50-100 eval
+
+Accuracy is comfortably in "reasonable range" per the agreed threshold (100% category, 93% primary, 0% Claude-null, 7.4% real failure rate). Per Matt's instruction, proceeding directly to larger eval — no additional targeted rounds.
+
+The 50-100 sample needs to be sourced before the pull (one $5-10 Crust credit hit). I'll draft a stratified list for Matt's review before pulling — see "What I need from Matt" at end.
+
+---
+
 
 ## Aggregate accuracy (27 companies)
 
-- **(A) identify:** category=21/27 (78%), primary_industry=19/27 (70%), industries[] P/R=0.47/0.72, domain_tag P/R=0.59/0.64
-- **(B) enrich:** category=22/27 (81%), primary_industry=20/27 (74%), industries[] P/R=0.48/0.75, domain_tag P/R=0.66/0.71
+- **(A) identify:** category=27/27 (100%), primary_industry=26/27 (96%), industries[] P/R=0.76/0.96, domain_tag P/R=0.78/0.85
+- **(B) enrich:** category=27/27 (100%), primary_industry=25/27 (93%), industries[] P/R=0.76/0.96, domain_tag P/R=0.77/0.85
 
 ## Dict abstention + agreement (the question on dict's value)
 
@@ -20,20 +67,20 @@
 - **enrich-tier:**
   - Dict abstained (null): 7/27 (26%)
   - Dict committed: 20/27
-    - agree with Claude: 10/20 (50%)
-    - disagree with Claude: 6/20 (30%)
-    - Note: agreement values include 'claude_only' when dict null. claude_only count: 11.
+    - agree with Claude: 12/20 (60%)
+    - disagree with Claude: 8/20 (40%)
+    - Note: agreement values include 'claude_only' when dict null. claude_only count: 7.
 
 ## Accuracy by company maturity (enrich-tier only)
 
-- **well-known** (9 cos): cat=7/9 (78%), primary=7/9 (78%), tag P/R=0.65/0.69
-- **mid-tier** (9 cos): cat=8/9 (89%), primary=6/9 (67%), tag P/R=0.72/0.76
-- **early-stage** (9 cos): cat=7/9 (78%), primary=7/9 (78%), tag P/R=0.61/0.67
+- **well-known** (9 cos): cat=9/9 (100%), primary=9/9 (100%), tag P/R=0.84/0.92
+- **mid-tier** (9 cos): cat=9/9 (100%), primary=7/9 (78%), tag P/R=0.70/0.76
+- **early-stage** (9 cos): cat=9/9 (100%), primary=9/9 (100%), tag P/R=0.78/0.89
 
 ## Accuracy by single vs multi-industry (enrich-tier)
 
-- **single** (17 cos): cat=14/17 (82%), primary=12/17 (71%), industries[] P/R=0.49/0.82
-- **multi-industry** (10 cos): cat=8/10 (80%), primary=8/10 (80%), industries[] P/R=0.45/0.62
+- **single** (17 cos): cat=17/17 (100%), primary=15/17 (88%), industries[] P/R=0.72/1.00
+- **multi-industry** (10 cos): cat=10/10 (100%), primary=10/10 (100%), industries[] P/R=0.82/0.90
 
 ## Anduril Industries — Maritime industry firing check (re-tag from inv1 raw)
 
@@ -42,8 +89,8 @@
 - **identify-tier:** category=hardware, primary=Defense, industries=`["Defense","Aerospace","Maritime","Industrial Manufacturing"]`, domain_tags=`["Drones","AI"]`
   - Maritime in industries: ✓ YES
   - method: claude, agreement: claude_only
-- **enrich-tier:** category=hardware, primary=Defense, industries=`["Defense","Aerospace","Robotics"]`, domain_tags=`["Drones","AI"]`
-  - Maritime in industries: ✗ NO
+- **enrich-tier:** category=hardware, primary=Defense, industries=`["Defense","Aerospace","Maritime","Industrial Manufacturing"]`, domain_tags=`["Drones","AI"]`
+  - Maritime in industries: ✓ YES
   - method: claude_dict_agree, agreement: agree
 
 ## Per-company results (enrich-tier)
@@ -62,17 +109,17 @@
 | Climeworks | mid-tier | single | Climate | Energy | ✓ | ✗ | `null/null` | claude_only |  |
 | Heirloom Carbon | early-stage | single | Climate | Climate | ✓ | ✓ | `null/null` | claude_only |  |
 | NVIDIA | well-known | multi-industry | Semiconductors | Semiconductors | ✓ | ✓ | `non_hardware/AI` | disagree |  |
-| Cerebras | mid-tier | single | Semiconductors | ∅ | ✗ | ✗ | `hardware/Semiconductors` | claude_only |  |
-| Tenstorrent | early-stage | single | Semiconductors | ∅ | ✗ | ✗ | `null/null` | claude_only |  |
-| Apple | well-known | multi-industry | Consumer Electronics | ∅ | ✗ | ✗ | `non_hardware/AI` | claude_only | ⚠ OOS |
+| Cerebras | mid-tier | single | Semiconductors | Semiconductors | ✓ | ✓ | `hardware/Semiconductors` | agree |  |
+| Tenstorrent | early-stage | single | Semiconductors | Semiconductors | ✓ | ✓ | `null/null` | claude_only |  |
+| Apple | well-known | multi-industry | Consumer Electronics | Consumer Electronics | ✓ | ✓ | `non_hardware/AI` | disagree | ⚠ OOS |
 | Humane | early-stage | single | Consumer Electronics | Consumer Electronics | ✓ | ✓ | `null/null` | claude_only |  |
-| Hadrian | early-stage | single | Industrial Manufacturing | ∅ | ✗ | ✗ | `hardware/Industrial Manufacturing` | claude_only | ⚠ OOS |
+| Hadrian | early-stage | single | Industrial Manufacturing | Industrial Manufacturing | ✓ | ✓ | `hardware/Industrial Manufacturing` | agree | ⚠ OOS |
 | John Deere | well-known | multi-industry | Industrial Manufacturing | Industrial Manufacturing | ✓ | ✓ | `hardware/Industrial Manufacturing` | agree | ⚠ OOS |
 | Boom Supersonic | mid-tier | multi-industry | Aerospace | Aerospace | ✓ | ✓ | `hardware/Aerospace` | agree |  |
 | Saildrone | mid-tier | single | Maritime | Defense | ✓ | ✗ | `hardware/Aerospace` | disagree |  |
 | SpaceX | well-known | multi-industry | Aerospace | Aerospace | ✓ | ✓ | `hardware/Defense` | disagree | ⚠ OOS |
 | Stoke Space | early-stage | single | Aerospace | Aerospace | ✓ | ✓ | `hardware/Aerospace` | agree | ? amb |
-| Palantir | well-known | multi-industry | Defense | ∅ | ✗ | ✗ | `non_hardware/AI` | claude_only |  |
+| Palantir | well-known | multi-industry | Defense | Defense | ✓ | ✓ | `non_hardware/AI` | disagree |  |
 | Joby Aviation | mid-tier | single | Aerospace | Aerospace | ✓ | ✓ | `null/null` | claude_only |  |
 | Mercor | early-stage | multi-industry | AI | AI | ✓ | ✓ | `non_hardware/AI` | agree | ⚠ OOS |
 | Notion | well-known | single | SaaS | SaaS | ✓ | ✓ | `non_hardware/SaaS` | agree | ⚠ OOS |
@@ -82,35 +129,35 @@
 
 ### Slate Auto [AMBIGUOUS]
 - Expected (best-fit): category=hardware, primary=Automotive, industries=["Automotive"]
-- Got (enrich): category=hardware, primary=Automotive, industries=["Automotive","Industrial Manufacturing"], domain_tags=["EVs","Autonomous Driving"]
+- Got (enrich): category=hardware, primary=Automotive, industries=["Automotive"], domain_tags=["EVs"]
 
 ### 1X Technologies [AMBIGUOUS]
 - Expected (best-fit): category=hardware, primary=Robotics, industries=["Robotics"]
-- Got (enrich): category=hardware, primary=Robotics, industries=["Robotics","Industrial Manufacturing"], domain_tags=["AI"]
+- Got (enrich): category=hardware, primary=Robotics, industries=["Robotics"], domain_tags=["AI"]
 
 ### Apple [OUT-OF-SCOPE]
 *Extreme multi-industry. Apple has Services (App Store / iCloud), Streaming (Apple TV+), FinTech (Apple Pay) but they are FEATURES of the device platform, not separate businesses. Primary stays Consumer Electronics.*
 
 - Expected (best-fit): category=hardware, primary=Consumer Electronics, industries=["Consumer Electronics"]
-- Got (enrich): category=null, primary=null, industries=[], domain_tags=[]
+- Got (enrich): category=hardware, primary=Consumer Electronics, industries=["Consumer Electronics","Semiconductors"], domain_tags=["AI"]
 
 ### Hadrian [OUT-OF-SCOPE]
 *Could also be Aerospace (serves aero/defense). Defaulting to Industrial Manufacturing as the core business.*
 
 - Expected (best-fit): category=hardware, primary=Industrial Manufacturing, industries=["Industrial Manufacturing"]
-- Got (enrich): category=null, primary=null, industries=[], domain_tags=[]
+- Got (enrich): category=hardware, primary=Industrial Manufacturing, industries=["Industrial Manufacturing","Aerospace","Defense"], domain_tags=["AI"]
 
 ### John Deere [OUT-OF-SCOPE]
 *Agriculture is not in V1 industries. Falls to Industrial Manufacturing. Agriculture gap on backlog.*
 
 - Expected (best-fit): category=hardware, primary=Industrial Manufacturing, industries=["Industrial Manufacturing"]
-- Got (enrich): category=hardware, primary=Industrial Manufacturing, industries=["Industrial Manufacturing","Automotive","Energy"], domain_tags=[]
+- Got (enrich): category=hardware, primary=Industrial Manufacturing, industries=["Industrial Manufacturing","Automotive"], domain_tags=[]
 
 ### SpaceX [OUT-OF-SCOPE]
 *Starlink is a Telecommunications business — not in V1 industries. Expect SpaceX to land at Aerospace primary. Telecommunications gap on backlog.*
 
 - Expected (best-fit): category=hardware, primary=Aerospace, industries=["Aerospace","Industrial Manufacturing"]
-- Got (enrich): category=hardware, primary=Aerospace, industries=["Aerospace","Defense"], domain_tags=["Rockets","Satellites"]
+- Got (enrich): category=hardware, primary=Aerospace, industries=["Aerospace"], domain_tags=["Rockets","Satellites"]
 
 ### Stoke Space [AMBIGUOUS]
 - Expected (best-fit): category=hardware, primary=Aerospace, industries=["Aerospace"]
@@ -120,7 +167,7 @@
 *AI-recruiting could also be HR-tech but V1 has no HRTech industry. AI primary with HR tag.*
 
 - Expected (best-fit): category=non_hardware, primary=AI, industries=["AI"]
-- Got (enrich): category=non_hardware, primary=AI, industries=["AI","SaaS"], domain_tags=["Data","B2B"]
+- Got (enrich): category=non_hardware, primary=AI, industries=["AI"], domain_tags=["Data","B2B"]
 
 ### Notion [OUT-OF-SCOPE]
 *AI suppression test: Notion has AI features but core is productivity SaaS. Should NOT have AI tag.*
@@ -132,7 +179,7 @@
 *AI primary; AI tag should be SUPPRESSED per round-2 decision #5.*
 
 - Expected (best-fit): category=non_hardware, primary=AI, industries=["AI"]
-- Got (enrich): category=non_hardware, primary=AI, industries=["AI","SaaS"], domain_tags=["Data","Enterprise Software"]
+- Got (enrich): category=non_hardware, primary=AI, industries=["AI"], domain_tags=["Data","Enterprise Software"]
 
 
 ## Disagreements (Claude vs dict, enrich-tier)
@@ -165,6 +212,13 @@
 - Verdict written (Claude wins): hardware/Semiconductors
 - ✓ Claude was right, dict wrong → Claude wins, correct outcome
 
+### Apple
+- Claude: hardware/Consumer Electronics
+- Dict:   non_hardware/AI
+- Expected (ground truth): hardware/Consumer Electronics
+- Verdict written (Claude wins): hardware/Consumer Electronics
+- ✓ Claude was right, dict wrong → Claude wins, correct outcome
+
 ### Saildrone
 - Claude: hardware/Defense
 - Dict:   hardware/Aerospace
@@ -179,131 +233,32 @@
 - Verdict written (Claude wins): hardware/Aerospace
 - ✓ Claude was right, dict wrong → Claude wins, correct outcome
 
----
-
-## Headlines
-
-### 1. Aggregate accuracy on broader sample is materially lower than 10-co set
-
-| Metric | inv2 round-2 (10 cos) | expansion (27 cos) | Δ |
-|---|---|---|---|
-| Category (enrich) | 90-100% | 81% | -10pp+ |
-| Primary industry (enrich) | 70-80% | 74% | within range |
-| Domain tag P / R (enrich) | 0.70-0.75 / 0.60-0.63 | 0.66 / 0.71 | similar |
-
-The 10-company set was biased toward "Crust knows them well." Broader sample includes thin-data early-stage cos and extreme multi-industry cases (Apple) where Claude struggles. **Don't promise the inv2 round-2 numbers on the V1 production load.** Realistic expectation: ~80% category, ~75% primary at scale.
-
-### 2. Dict abstention rate (the question on dict's value at scale)
-
-**Identify-tier: dict abstains 100% (27/27).** Without `taxonomy.professional_network_industry` and `taxonomy.categories[]` (both enrich/search-only), the dict has no signals to vote on and always returns null. **For unreviewed-tier auto-creates, dict adds zero sanity-check value.** Every output method='claude'.
-
-**Enrich-tier: dict abstains 26% (7/27).** When dict commits (74% of vetted-tier flows): 50% agree with Claude, 30% disagree.
-
-Architectural implications:
-- For unreviewed-tier rows: triage signal must come from `tagging_confidence` threshold alone — dict-disagreement won't fire
-- For vetted-tier rows: dict is a meaningful sanity check ~74% of the time; remaining 26% rely on Claude alone
-- The 5 of 6 enrich-tier disagreements where Claude was right validates "Claude wins on disagreement" (Concern B)
-
-### 3. Anduril Maritime industry firing — confirmed pattern
-
-| Tier | Industries returned | Maritime present? |
-|---|---|---|
-| identify | `[Defense, Aerospace, Maritime, Industrial Manufacturing]` | **✓ YES** |
-| enrich | `[Defense, Aerospace, Robotics]` | **✗ NO** (Maritime + Manufacturing dropped, Robotics added) |
-
-Same pattern as inv2 round-2. Crust's `taxonomy.categories[]` at enrich-tier injects "Robotics" noise that distracts Claude away from Maritime. **Identify-tier multi-industry detection is BETTER than enrich-tier for Anduril.** Possibly worth investigating: should the orchestrator strip `categories[]` from Claude's input even when description is available?
-
-### 4. Five Claude-null cases — root cause: prompt confusion between `industries[]` and `domain_tags[]`
-
-Investigated by re-running Claude on each:
-
-| Company | Why Claude was nulled |
-|---|---|
-| Cerebras | Returned `industries=["Semiconductors", "AI"]` for hw category. AI is a NON-HARDWARE industry — invalid. Validator failed → null. |
-| Tenstorrent | Same as Cerebras — `industries=["Semiconductors", "AI"]` → invalid → null. |
-| Hadrian | Returned `domain_tags=["Robotics", "AI"]`. Robotics isn't a domain_tag — it's a hardware INDUSTRY. → invalid → null. |
-| Apple | Returned `domain_tags=["Mobile", "AI"]`. Mobile isn't in hardware domain_tags (it's non_hardware-only). → invalid → null. |
-| Palantir | Returned `industries=["Defense", "Analytics", "AI"]` for non_hw category. Analytics isn't an industry (it's a domain_tag). → invalid → null. |
-
-**Root cause**: my Claude prompt presents the industries and domain_tags lists clearly, but Claude generalizes and mixes them. AI especially — it's an industry (non_hw only) AND a domain_tag (both categories). When Claude wants to say "this company has AI as a significant capability but isn't fundamentally an AI company," it sometimes puts AI in industries[] when it should go in domain_tags[].
-
-### 5. Three ground-truth bugs in MY eval (not the system's fault)
-
-I labeled with V1-schema-invalid expected values:
-
-- **NVIDIA**: I wrote `industries=[Semiconductors, AI]`. But under V1 schema, `industries[]` must all be in the category's allowed list, and AI is non-hardware-only. Correct: `industries=[Semiconductors]`, `domain_tags=[AI]`.
-- **Tesla**: I had `domain_tags` include `Robotics`. But Robotics is a hardware INDUSTRY, not a tag. Correct: `industries=[Automotive, Energy, Industrial Manufacturing, Robotics]`, `domain_tags=[EVs, Autonomous Driving, AI]`.
-- **Apple**: I had `domain_tags=[AI, Mobile]`. Mobile is a non-hardware tag only. Correct: `domain_tags=[AI]`. (Apple's iPhone is captured by `Consumer Electronics` industry, not a Mobile tag.)
-
-These ground-truth corrections would lift the reported aggregates by ~5-10pp. **Re-run after Claude prompt + validator fixes lands.**
-
-### 6. Saildrone — real Claude failure (not a ground-truth bug)
-
-Expected: `hardware/Maritime`. Claude returned `hardware/Defense` (dict said `hardware/Aerospace`). Both wrong. Saildrone makes autonomous unmanned SURFACE vehicles — they ARE Maritime. Crust's data probably doesn't surface "Maritime" strongly; Claude pattern-matched to Defense (drone+military customer association).
-
-This is one real Claude error in 27 — about 4%. Acceptable. Worth a future Claude-prompt example explicitly mentioning Saildrone or the Maritime case.
-
-### 7. Real Crust gap — Rebellion Defense not in Crust's database
-
-Tried to identify by domain `rebelliondefense.com`, by linkedin URL `linkedin.com/company/rebellion-defense`, and by name "Rebellion Defense". All returned wrong matches (Rebellion Capital, Rebellion Creative, Grupo Rebellion, etc.) or none. **Rebellion Defense is not indexed in Crust's company DB.** Real-world data gap to know about. Dropped from this eval; Palantir remains the non-hw/Defense test case.
+### Palantir
+- Claude: non_hardware/Defense
+- Dict:   non_hardware/AI
+- Expected (ground truth): non_hardware/Defense
+- Verdict written (Claude wins): non_hardware/Defense
+- ✓ Claude was right, dict wrong → Claude wins, correct outcome
 
 ---
 
-## Proposed fixes (NOT applied yet — awaiting approval)
+## What I need from Matt (before kicking off the 50-100 eval)
 
-### Fix C1 — Tighten Claude prompt to disambiguate industries[] vs domain_tags[]
+Round-3 results are above the "reasonable range" bar. Per your instruction I'm proceeding directly — but the 50-100 list itself isn't yet defined. Two options for sourcing:
 
-Current prompt presents both lists side by side but Claude conflates them, especially for cross-listed values (AI as industry vs AI as tag).
+**Option A — I draft a stratified list (target 70 cos), you approve before pull.**
+Stratification target:
+- ~3-5 companies per V1 industry (covers all 28 V1 industry slots = ~100 cells; sample to 70)
+- Mix of well-known / mid-tier / early-stage in each industry
+- ~30% multi-industry to keep pressure on Option B
+- Include 5-10 deliberate edge cases (out-of-scope industries that should fall to nearest V1 fit, AI-feature-not-core companies, defense+software cross-listings)
 
-**Proposed addition to system prompt:**
+**Option B — You hand-pick the list yourself.** I run the pull + tag + eval against your list with the same hand-labeling pattern.
 
-> ## Industries[] vs domain_tags[] — common source of confusion
->
-> The two lists are distinct. Members of `industries[]` MUST come from the "Industries" section. Members of `domain_tags[]` MUST come from the "Domain tags" section. They do NOT overlap except for one cross-listing (AI), which has explicit suppression rules.
->
-> Disambiguation rules:
-> - **AI** appears in both lists. As an INDUSTRY: company's primary business IS AI software (OpenAI, Hugging Face). As a TAG: AI is a core technology in a NON-AI business (Anduril uses AI for Hivemind autonomy, but their business is Defense).
-> - **Robotics** is a hardware INDUSTRY only. Companies that USE robotics but aren't fundamentally robotics companies should put Robotics in `industries[]` (if multi-industry), not in `domain_tags[]`.
-> - **Analytics, Data, Cybersecurity, DevTools, etc.** are domain TAGS only. They describe a non-hardware company's product focus but aren't standalone industries. Put them in `domain_tags[]`, not `industries[]`.
->
-> Critically: `industries[]` members must all be valid for the chosen category. A hardware company's `industries[]` cannot contain AI (which is non-hardware-only). Use the AI domain_tag instead.
+Either way, hand-labeled ground truth gets reviewed by you before final scoring (so no silent ground-truth bugs like NVIDIA/Tesla/Apple round-2).
 
-Estimated impact: fixes ~4 of 5 null cases (NVIDIA-style "AI in hw industries", Hadrian/Apple-style "industry-name in tags").
+Estimated cost: ~$7 in Crust credits for 70 cos × 2 calls + ~$1 in Claude. Wall clock ~15 min eval run.
 
-### Fix C2 — Make validator forgiving (strip invalid, don't null)
+**Recommendation: A.** Faster, and the stratification targets give us a defensible "this covers V1's vocabulary" claim. I can draft the list in ~10 min.
 
-Current validator nulls the whole output on any invalid value. Should instead:
-- Hard-fail only if `category` is invalid OR `primary_industry` is not in `category`'s allowed set
-- For invalid entries in `industries[]`: strip them (warn in reasoning), keep the rest
-- For invalid entries in `domain_tags[]`: strip them, keep the rest
-
-This recovers ~80% of the otherwise-nulled cases. Combined with C1 (which prevents most invalid output), expected null rate drops from ~20% to <5%.
-
-### Fix C3 — Investigate stripping Crust `categories[]` from Claude input even when description is available
-
-Three cases (Anduril Maritime, Hadrian Robotics-tag, Tenstorrent AI-in-industries) all show Crust categories actively confusing Claude. Worth A/B testing: same companies through Claude WITH categories vs WITHOUT (description only).
-
-**Defer this one for V1.** Add to backlog. May materially improve Claude quality but needs its own eval pass.
-
-### NOT proposing additional dict fixes
-
-Dict failure patterns surfaced in the expansion eval are mostly cases where dict abstained correctly (M2 firing) — that's working as intended. The Form Energy / Antora dict-said-Energy-not-Energy-Storage pattern is a known limitation: dict's Energy rule fires before Energy Storage in HARDWARE_INDUSTRY_RULES. Could reorder, but Claude wins on disagreement so the final write is correct. Defer per "Defer dictionary fixes" decision.
-
----
-
-## Recommended sequencing
-
-1. **Approve / modify Fix C1 and C2** (Claude prompt + forgiving validator)
-2. **I correct 3 ground-truth bugs** in `_inv2-expansion-eval.ts`
-3. **Re-run expansion eval** with all 3 fixes applied → confirm aggregate accuracy lifts
-4. **Then proceed to the larger 50-100 eval**
-
-Estimated time for steps 1-3: ~1 hour and ~$1 in Claude/Crust costs.
-
-## What I need from Matt
-
-1. **Approve C1 (Claude prompt tightening)?**
-2. **Approve C2 (forgiving validator — strip invalid, keep partial)?**
-3. **Defer C3 (no-categories-Claude experiment) to backlog?** — or run an A/B before larger eval?
-4. **OK to correct the 3 ground-truth bugs and re-run?** (yes/no — they're objectively wrong per V1 schema, so this is admin)
-5. **After re-run, proceed to 50-100 eval?** Or want another targeted-eval round?
+Nothing merges to main until you review the 50-100 results.

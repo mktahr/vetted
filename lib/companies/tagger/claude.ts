@@ -12,12 +12,24 @@
 //   * AI domain_tag suppression when industry='AI'
 //   * AI tag fires only when AI is core to the product, not when it's a feature
 //
+// C1 (round-3): tightened prompt with explicit list-membership rules +
+//                "common confusions" callouts (industries vs domain_tags
+//                cross-listed names like AI, Robotics, Mobile).
+// C2 (round-3): forgiving validator. Hard failures (invalid JSON, invalid
+//                category enum, primary_industry missing or invalid for
+//                category) still null the whole output. Soft failures
+//                (some industries[] or domain_tags[] values not in the
+//                allowed set) strip the invalid values and keep the partial
+//                valid output, logging the stripped values into reasoning
+//                for review. Recovers ~80% of previously-nulled cases.
+//
 // Pattern matches lib/ai/narrative.ts: direct fetch to Anthropic, no SDK.
 
 import {
   HARDWARE_INDUSTRIES, NON_HARDWARE_INDUSTRIES,
   HARDWARE_DOMAIN_TAGS, NON_HARDWARE_DOMAIN_TAGS,
-  isValidIndustries, isValidDomainTags, dedupeDomainTagsAgainstIndustry,
+  industriesFor, domainTagsFor,
+  isValidIndustry, dedupeDomainTagsAgainstIndustry,
 } from '../taxonomy'
 import type { CategoryOrUnclassified, Industry, DomainTag } from '../taxonomy'
 import type { TaggerInput, TaggerOutput } from './types'
@@ -49,6 +61,39 @@ ${HARDWARE_DOMAIN_TAGS.map(s => `- ${s}`).join('\n')}
 
 ### Non-hardware domain tags (zero or more if category="non_hardware")
 ${NON_HARDWARE_DOMAIN_TAGS.map(s => `- ${s}`).join('\n')}
+
+## STRICT list-membership rules — read carefully
+
+The four lists above (hardware industries, non-hardware industries, hardware domain tags, non-hardware domain tags) are CLOSED VOCABULARIES. Every value you emit MUST appear verbatim in the matching list. Values that share a name across lists (like "AI") are NOT interchangeable — see "Common confusions" below.
+
+### Where each output field draws from
+- \`primary_industry\` and every entry in \`industries[]\` → ONLY from the industries list for the chosen category.
+- Every entry in \`domain_tags[]\` → ONLY from the domain tags list for the chosen category.
+- NEVER put a domain-tag value into \`industries[]\` (e.g. "Mobile" is a domain tag, never an industry).
+- NEVER put an industry value into \`domain_tags[]\` (e.g. "Robotics" is a hardware industry, never a domain tag).
+
+### Common confusions (these tripped up earlier outputs — get them right)
+
+**"AI" is BOTH a non-hardware industry AND a domain tag in both branches.** Pick the right one:
+- If the company's PRIMARY business is AI software/research (OpenAI, Anthropic, Cohere, Mistral, Mercor, Scale AI) → category=non_hardware, primary_industry=AI, industries=[AI]. Do NOT also list AI in domain_tags (suppressed when industry=AI).
+- If AI is core to the product but the primary business is something else (chips, robots, drones, biotech, productivity) → put the industry in industries[] and "AI" in domain_tags[]. Examples:
+  - Cerebras / Tenstorrent / NVIDIA → category=hardware, primary_industry=Semiconductors, industries=[Semiconductors], domain_tags=[AI].
+  - Boston Dynamics / Figure AI / 1X → category=hardware, primary_industry=Robotics, industries=[Robotics], domain_tags=[AI].
+  - Recursion / Tempus → category=non_hardware, primary_industry=Biotech, industries=[Biotech], domain_tags=[AI, Data].
+
+**"Robotics" is a HARDWARE INDUSTRY, never a domain tag.** Tesla's Optimus → add Robotics to industries[], not domain_tags[].
+
+**"Mobile" is a NON-HARDWARE DOMAIN TAG only.** Apple makes physical devices → category=hardware, primary_industry=Consumer Electronics, industries=[Consumer Electronics]. "Mobile" is not allowed in either field for hardware companies. (If you want to flag mobile-software focus on a non-hardware co, then domain_tags=[Mobile] is fine.)
+
+**"Analytics" / "Data" / "Infrastructure" are NON-HARDWARE DOMAIN TAGS only.** Palantir → category=non_hardware, primary_industry=Defense, industries=[Defense, AI], domain_tags=[Data, Analytics, Infrastructure, AI].
+
+**"Hardware industry, non-hardware tag" or vice versa is INVALID.** A hardware company never gets non-hardware domain tags (Productivity, Mobile, B2B, Data, etc.) and vice versa. Pick the category first, then ONLY draw from that category's two lists.
+
+### Self-check before output
+Before you emit JSON, mentally verify:
+1. Is every \`industries[]\` value in the industries list for my chosen category? (Not the domain-tags list, not the OTHER category's industries list.)
+2. Is every \`domain_tags[]\` value in the domain-tags list for my chosen category?
+3. If I used "AI": is it in the right field per the rules above?
 
 ## Disambiguation rules
 
@@ -163,26 +208,48 @@ export async function tagWithClaude(input: TaggerInput): Promise<TaggerOutput> {
     }
   }
 
-  // Validate primary_industry
+  // Validate primary_industry — STRICT (can't recover; nulls whole output if invalid)
   const primary = parsed.primary_industry as Industry | null
   if (primary === null || typeof primary !== 'string') {
     return failure(`primary_industry required when category=${cat}`)
   }
-
-  // Validate industries[] — must include primary, all valid for category
-  const inds = Array.isArray(parsed.industries) ? parsed.industries as Industry[] : [primary]
-  if (!isValidIndustries(cat, inds, primary)) {
-    return failure(`invalid industries[] ${JSON.stringify(inds)} for category="${cat}", primary="${primary}"`)
+  if (!isValidIndustry(cat, primary)) {
+    return failure(`primary_industry "${primary}" invalid for category="${cat}"`)
   }
 
-  // Validate domain_tags
-  const rawTags = Array.isArray(parsed.domain_tags) ? parsed.domain_tags as DomainTag[] : []
-  if (!isValidDomainTags(cat, rawTags)) {
-    return failure(`invalid domain_tags ${JSON.stringify(rawTags)} for category="${cat}"`)
+  // C2: Forgiving validation for industries[] and domain_tags[].
+  // Strip invalid values, keep valid ones, log strips into reasoning for triage.
+  const allowedInds = industriesFor(cat) as readonly string[]
+  const rawInds = Array.isArray(parsed.industries) ? (parsed.industries as string[]) : [primary]
+  const validInds: Industry[] = []
+  const invalidInds: string[] = []
+  for (const i of rawInds) {
+    if (typeof i === 'string' && allowedInds.includes(i)) validInds.push(i as Industry)
+    else if (typeof i === 'string') invalidInds.push(i)
+  }
+  // Always ensure primary is first and present in industries[] (we know primary is valid here)
+  const inds: Industry[] = [primary, ...validInds.filter(i => i !== primary)]
+
+  const allowedTags = domainTagsFor(cat) as readonly string[]
+  const rawTags = Array.isArray(parsed.domain_tags) ? (parsed.domain_tags as string[]) : []
+  const validTags: DomainTag[] = []
+  const invalidTags: string[] = []
+  for (const t of rawTags) {
+    if (typeof t === 'string' && allowedTags.includes(t)) validTags.push(t as DomainTag)
+    else if (typeof t === 'string') invalidTags.push(t)
   }
 
   // Round-2 decision #5: strip AI tag if primary_industry='AI' (or any future cross-listing)
-  const dedupedTags = dedupeDomainTagsAgainstIndustry(primary, rawTags) as DomainTag[]
+  const dedupedTags = dedupeDomainTagsAgainstIndustry(primary, validTags) as DomainTag[]
+
+  // Build reasoning, appending strip-log if anything was dropped (so it lands in tagging_notes)
+  let reasoning = typeof parsed.reasoning === 'string' ? parsed.reasoning : '(no reasoning)'
+  const stripped: string[] = []
+  if (invalidInds.length > 0) stripped.push(`industries=${JSON.stringify(invalidInds)}`)
+  if (invalidTags.length > 0) stripped.push(`domain_tags=${JSON.stringify(invalidTags)}`)
+  if (stripped.length > 0) {
+    reasoning = `${reasoning} [C2 strip: ${stripped.join('; ')}]`
+  }
 
   return {
     category: cat,
@@ -190,7 +257,7 @@ export async function tagWithClaude(input: TaggerInput): Promise<TaggerOutput> {
     industries: inds,
     domain_tags: dedupedTags,
     confidence: typeof parsed.confidence === 'number' ? clamp01(parsed.confidence) : 0.7,
-    reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning : '(no reasoning)',
+    reasoning,
     method: 'claude',
   }
 

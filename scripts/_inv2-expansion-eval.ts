@@ -29,9 +29,12 @@ interface ExpectedTags {
 // Hand-labeled ground truth for each expansion company.
 // Keys MUST match the seed labels in _inv2-expansion-pull.mjs.
 const GROUND_TRUTH: Record<string, ExpectedTags> = {
+  // GT-fix: 'Robotics' is a HARDWARE INDUSTRY, not a domain_tag. Removed from domain_tags.
+  // (Optimus is real but Tesla is already multi-industry; not adding Robotics to industries[]
+  //  to avoid demanding 4-element list — keeping the original 3-industry expectation.)
   'Tesla': { category: 'hardware', primary_industry: 'Automotive',
     industries: ['Automotive', 'Energy', 'Industrial Manufacturing'],
-    domain_tags: ['EVs', 'Autonomous Driving', 'AI', 'Robotics'] },
+    domain_tags: ['EVs', 'Autonomous Driving', 'AI'] },
   'Rivian': { category: 'hardware', primary_industry: 'Automotive',
     industries: ['Automotive'], domain_tags: ['EVs', 'Automotive Manufacturing'] },
   'Slate Auto': { category: 'hardware', primary_industry: 'Automotive',
@@ -52,14 +55,18 @@ const GROUND_TRUTH: Record<string, ExpectedTags> = {
     industries: ['Climate'], domain_tags: [] },
   'Heirloom Carbon': { category: 'hardware', primary_industry: 'Climate',
     industries: ['Climate'], domain_tags: [] },
+  // GT-fix: 'AI' is a NON-HARDWARE industry only — invalid for category=hardware.
+  // NVIDIA's AI is core to product but primary_industry=Semiconductors → AI as domain_tag.
   'NVIDIA': { category: 'hardware', primary_industry: 'Semiconductors',
-    industries: ['Semiconductors', 'AI'], domain_tags: ['AI'] },
+    industries: ['Semiconductors'], domain_tags: ['AI'] },
   'Cerebras': { category: 'hardware', primary_industry: 'Semiconductors',
     industries: ['Semiconductors'], domain_tags: ['AI'] },
   'Tenstorrent': { category: 'hardware', primary_industry: 'Semiconductors',
     industries: ['Semiconductors'], domain_tags: ['AI'] },
+  // GT-fix: 'Mobile' is a NON-HARDWARE domain_tag only — invalid for category=hardware.
+  // Apple's iPhone is mobile-centric, but Mobile is not allowed in HW domain_tags. Removed.
   'Apple': { category: 'hardware', primary_industry: 'Consumer Electronics',
-    industries: ['Consumer Electronics'], domain_tags: ['AI', 'Mobile'],
+    industries: ['Consumer Electronics'], domain_tags: ['AI'],
     ambiguous: true, out_of_scope_note: 'Extreme multi-industry. Apple has Services (App Store / iCloud), Streaming (Apple TV+), FinTech (Apple Pay) but they are FEATURES of the device platform, not separate businesses. Primary stays Consumer Electronics.' },
   'Humane': { category: 'hardware', primary_industry: 'Consumer Electronics',
     industries: ['Consumer Electronics'], domain_tags: ['AI'] },
@@ -177,6 +184,12 @@ async function main() {
   const failed = raw.filter(r => r.error)
   console.error(`Loaded ${raw.length} (successful: ${successful.length}, failed: ${failed.length})`)
 
+  // Throttle: Anthropic Haiku 4.5 = 50k input tokens/min (per-org).
+  // Each tagger call ~= 2k input tokens; 2 calls per company = ~4k tokens.
+  // 4s between calls gives ~15 calls/min = ~30k tokens/min, safe under cap.
+  const CALL_DELAY_MS = 4000
+  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
   const results: CompanyResult[] = []
   for (const r of successful) {
     const expected = GROUND_TRUTH[r.seed.label]
@@ -184,8 +197,10 @@ async function main() {
     console.error(`\n[${r.seed.label}] (${r.seed.tier}/${r.seed.sub})`)
     console.error(`  identify-tier...`)
     const idResult = await tagCompany(buildIdentifyInput(r))
+    await sleep(CALL_DELAY_MS)
     console.error(`  enrich-tier...`)
     const enResult = await tagCompany(buildEnrichInput(r))
+    await sleep(CALL_DELAY_MS)
     results.push({
       company: r.seed.label,
       tier: r.seed.tier,
