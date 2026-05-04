@@ -9,7 +9,9 @@ import { COMPANY_FUNCTIONS } from '@/app/constants'
 import {
   HARDWARE_INDUSTRIES, NON_HARDWARE_INDUSTRIES,
   HARDWARE_DOMAIN_TAGS, NON_HARDWARE_DOMAIN_TAGS,
-  REVIEW_STATUSES, dedupeDomainTagsAgainstIndustry,
+  REVIEW_STATUSES, FUNDING_STAGES, FUNDING_STAGE_LABELS,
+  HEADCOUNT_RANGES, COMPANY_TYPES, COMPANY_TYPE_LABELS,
+  dedupeDomainTagsAgainstIndustry,
 } from '@/lib/companies/taxonomy'
 
 const BUCKET_OPTIONS: Array<{ value: CompanyBucket; label: string }> = [
@@ -55,6 +57,7 @@ export default function CompanyEditPage() {
     domain_tags: [] as string[],
     review_status: 'unreviewed' as CompanyReviewStatus,
     // Firmographics
+    company_type: '',
     founding_year: '' as string,
     current_status: 'active' as CompanyStatus,
     company_bucket: '' as CompanyBucket | '',
@@ -84,6 +87,7 @@ export default function CompanyEditPage() {
           industries: Array.isArray(c.industries) ? c.industries : [],
           domain_tags: Array.isArray(c.domain_tags) ? c.domain_tags : [],
           review_status: (c.review_status as CompanyReviewStatus) || 'unreviewed',
+          company_type: c.company_type || '',
           founding_year: c.founding_year != null ? String(c.founding_year) : '',
           current_status: c.current_status,
           company_bucket: c.company_bucket || '',
@@ -138,6 +142,7 @@ export default function CompanyEditPage() {
         industries,
         domain_tags: domainTags,
         review_status: form.review_status,
+        company_type: form.company_type || null,
         founding_year: form.founding_year ? parseInt(form.founding_year, 10) : null,
         current_status: form.current_status,
         company_bucket: (form.company_bucket as CompanyBucket) || null,
@@ -476,14 +481,17 @@ export default function CompanyEditPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Funding Stage</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                Funding Stage
+                <span className="text-tertiary ml-1 normal-case font-normal">(priced equity rounds only)</span>
+              </label>
               <select
                 value={form.funding_stage}
                 onChange={(e) => setForm({ ...form, funding_stage: e.target.value })}
                 className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">— none —</option>
-                {['Pre-Seed','Seed','Series A','Series B','Series C','Series D','Series E','Series F','Series G','Series H','Public','Acquired','Bootstrapped'].map(s => <option key={s} value={s}>{s}</option>)}
+                {FUNDING_STAGES.map(s => <option key={s} value={s}>{FUNDING_STAGE_LABELS[s]}</option>)}
               </select>
             </div>
 
@@ -495,7 +503,22 @@ export default function CompanyEditPage() {
                 className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">— none —</option>
-                {['1-10','11-50','51-200','201-500','501-1000','1000+'].map(s => <option key={s} value={s}>{s}</option>)}
+                {HEADCOUNT_RANGES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                Company Type
+                <span className="text-tertiary ml-1 normal-case font-normal">(corporate structure — distinct from lifecycle Status above)</span>
+              </label>
+              <select
+                value={form.company_type}
+                onChange={(e) => setForm({ ...form, company_type: e.target.value })}
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">— unknown —</option>
+                {COMPANY_TYPES.map(t => <option key={t} value={t}>{COMPANY_TYPE_LABELS[t]}</option>)}
               </select>
             </div>
 

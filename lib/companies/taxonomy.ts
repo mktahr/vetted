@@ -85,6 +85,49 @@ export type TaggingMethod = typeof TAGGING_METHODS[number]
 export const REVIEW_STATUSES = ['vetted', 'unreviewed', 'excluded'] as const
 export type ReviewStatus = typeof REVIEW_STATUSES[number]
 
+// V1 priced equity rounds only (resolved issue #4). Skip-list for non-stage
+// events: Grant, Secondary Market, Corporate Round, Venture Round, Post-IPO
+// Equity, Debt, Convertible Note, Unknown. Public/Acquired status lives on
+// `current_status`, NOT here.
+export const FUNDING_STAGES = [
+  'pre_seed', 'seed',
+  'series_a', 'series_b', 'series_c', 'series_d', 'series_e',
+  'series_f', 'series_g', 'series_h', 'series_i', 'series_j', 'series_k',
+] as const
+export type FundingStage = typeof FUNDING_STAGES[number]
+
+// Display labels (snake_case storage → human-readable UI label)
+export const FUNDING_STAGE_LABELS: Record<FundingStage, string> = {
+  pre_seed: 'Pre-Seed',
+  seed: 'Seed',
+  series_a: 'Series A', series_b: 'Series B', series_c: 'Series C',
+  series_d: 'Series D', series_e: 'Series E', series_f: 'Series F',
+  series_g: 'Series G', series_h: 'Series H', series_i: 'Series I',
+  series_j: 'Series J', series_k: 'Series K',
+}
+
+// V1 banded headcount per Crust's basic_info.employee_count_range. Used for
+// time-stable filtering. Pair with `headcount_latest` (precise integer from
+// enrich) for sortable display.
+export const HEADCOUNT_RANGES = [
+  '1-10', '11-50', '51-200', '201-500',
+  '501-1000', '1001-5000', '5001-10000', '10000+',
+] as const
+export type HeadcountRange = typeof HEADCOUNT_RANGES[number]
+
+// V1 starter set per resolved issue #1. Migration adds the column without a
+// CHECK constraint; the final enum is added in a follow-up migration after
+// Investigation 2 enumerates the full Crust value set (likely additions:
+// `partnership` already observed for OpenAI; `nonprofit`, `government`,
+// `educational` likely).
+export const COMPANY_TYPES = ['private', 'public', 'subsidiary'] as const
+export type CompanyType = typeof COMPANY_TYPES[number]
+export const COMPANY_TYPE_LABELS: Record<CompanyType, string> = {
+  private: 'Private',
+  public: 'Public',
+  subsidiary: 'Subsidiary',
+}
+
 // ---------- Helpers ----------
 
 export function industriesFor(category: CategoryOrUnclassified): readonly string[] {
