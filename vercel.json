@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/admin/companies/tag-pending",
-      "schedule": "*/2 * * * *"
+      "schedule": "0 12 * * *"
     }
   ]
 }
