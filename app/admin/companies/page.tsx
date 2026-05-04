@@ -346,25 +346,27 @@ export default function CompaniesListPage() {
           <a href="/" className="text-sm text-muted-foreground hover:text-foreground">← Back to people</a>
           <h1 className="text-3xl font-bold mt-2">Companies</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <ThemeToggle />
           <button
             onClick={() => router.push('/admin/companies/triage')}
-            className="px-3 py-2 text-sm border border-border rounded-lg hover:bg-background"
+            className="px-3 py-1.5 text-sm font-medium border border-border rounded-md bg-card text-foreground hover:bg-background transition"
+            title="Companies needing review (unreviewed, low confidence, untagged)"
           >
-            Triage queue
+            Triage
           </button>
           <button
             onClick={() => router.push('/admin/import/companies')}
-            className="px-3 py-2 text-sm border border-border rounded-lg hover:bg-background"
+            className="px-3 py-1.5 text-sm font-medium border border-border rounded-md bg-card text-foreground hover:bg-background transition"
+            title="Pull companies from Crust"
           >
             Import
           </button>
           <button
             onClick={() => router.push('/admin/companies/new')}
-            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-accent-strong"
+            className="px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-white hover:bg-accent-strong transition"
           >
-            + Add Company
+            + Add company
           </button>
         </div>
       </div>
@@ -689,8 +691,14 @@ export default function CompaniesListPage() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       {c.category ? (
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs ${c.category === 'hardware' ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'}`}>
-                          {c.category === 'hardware' ? 'HW' : 'NH'}
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs ${
+                            c.category === 'hardware' ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'
+                          }`}
+                          title={c.category === 'hardware' ? 'Hardware' : 'Non-hardware'}
+                        >
+                          <span className={`inline-block w-1.5 h-1.5 rounded-full ${c.category === 'hardware' ? 'bg-emerald-600' : 'bg-sky-600'}`} aria-hidden />
+                          {c.category === 'hardware' ? 'Hardware' : 'Non-hw'}
                         </span>
                       ) : <span className="text-tertiary text-xs">—</span>}
                     </td>
