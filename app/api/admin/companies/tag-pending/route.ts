@@ -33,6 +33,12 @@ export const maxDuration = 60  // seconds — fits within Vercel Pro 5-min cap w
 const BATCH_SIZE = 10
 const CRUST_THROTTLE_MS = 4000  // 15 req/min = 1 every 4s
 
+// Daily Anthropic spend cap. One Haiku 4.5 tagCompany() call ≈ $0.005.
+// EST_CENTS_PER_TAG=1 (round up). MAX_DAILY_ANTHROPIC_CENTS=1000 → ~$10/day cap.
+// Override either via env var; values must be positive integers.
+const MAX_DAILY_ANTHROPIC_CENTS = parseInt(process.env.MAX_DAILY_ANTHROPIC_CENTS || '1000', 10)
+const EST_CENTS_PER_TAG = parseInt(process.env.EST_CENTS_PER_TAG || '1', 10)
+
 interface PendingCompany {
   company_id: string
   company_name: string
@@ -65,6 +71,29 @@ async function handle(req: NextRequest): Promise<Response> {
 
   const supabase = createClient(supabaseUrl, supabaseKey)
 
+  // Daily spend cap check. Read today's spend log row first; abort if at cap.
+  const today = new Date().toISOString().slice(0, 10)  // YYYY-MM-DD UTC
+  const { data: spendRow } = await supabase
+    .from('companies_tag_spend_log')
+    .select('estimated_anthropic_cents, total_companies_tagged')
+    .eq('log_date', today)
+    .maybeSingle()
+  const spentToday = spendRow?.estimated_anthropic_cents ?? 0
+  if (spentToday >= MAX_DAILY_ANTHROPIC_CENTS) {
+    return Response.json({
+      ok: false,
+      throttled: true,
+      reason: 'daily_anthropic_cap_reached',
+      cap_cents: MAX_DAILY_ANTHROPIC_CENTS,
+      spent_cents: spentToday,
+      tagged_today: spendRow?.total_companies_tagged ?? 0,
+    }, { status: 429 })
+  }
+  // How many tags can still fit under the cap this run?
+  const remainingBudgetCents = MAX_DAILY_ANTHROPIC_CENTS - spentToday
+  const maxTagsByBudget = Math.max(1, Math.floor(remainingBudgetCents / EST_CENTS_PER_TAG))
+  const effectiveBatchSize = Math.min(BATCH_SIZE, maxTagsByBudget)
+
   // Find companies needing tagging.
   // NOTE: tagging_method column lands in the V1 schema migration. Until then
   // this query will error and the route returns the SQL error — that's correct
@@ -74,7 +103,7 @@ async function handle(req: NextRequest): Promise<Response> {
     .select('company_id, company_name, linkedin_url, crustdata_company_id, founding_year, headcount_range, company_type')
     .is('tagging_method', null)
     .order('created_at', { ascending: true })
-    .limit(BATCH_SIZE)
+    .limit(effectiveBatchSize)
 
   if (queryError) {
     return Response.json({ error: `query failed (V1 schema migration may not be applied): ${queryError.message}` }, { status: 500 })
@@ -138,6 +167,9 @@ async function handle(req: NextRequest): Promise<Response> {
         errors.push({ company_id: co.company_id, reason: `write: ${writeError.message}` })
       } else {
         counts.succeeded++
+        // Bump spend log. Fire-and-forget — never blocks. UPSERT pattern handles
+        // the create-on-first-tag-of-day case.
+        await incrementSpendLog(supabase, today, EST_CENTS_PER_TAG)
       }
 
       await sleep(CRUST_THROTTLE_MS)
@@ -150,11 +182,48 @@ async function handle(req: NextRequest): Promise<Response> {
 
   return Response.json({
     ok: true,
-    batch_size: BATCH_SIZE,
+    batch_size: effectiveBatchSize,
     invoked_by: isCron ? 'cron' : 'ingest_secret',
+    daily_cap_cents: MAX_DAILY_ANTHROPIC_CENTS,
+    spent_before_run_cents: spentToday,
+    estimated_run_cost_cents: counts.succeeded * EST_CENTS_PER_TAG,
     ...counts,
     errors: errors.slice(0, 10),
   })
+}
+
+async function incrementSpendLog(
+  // Loose typing — supabase-js generic surface is brittle when it crosses
+  // module boundaries; this helper just runs writes against a known table.
+  supabase: any,
+  today: string,
+  cents: number,
+): Promise<void> {
+  // Upsert pattern: try update; if no row, insert. Atomic-enough for a
+  // 2-min cron — race between two parallel requests is negligible.
+  const { data: existing } = await supabase
+    .from('companies_tag_spend_log')
+    .select('estimated_anthropic_cents, total_companies_tagged')
+    .eq('log_date', today)
+    .maybeSingle()
+  if (existing) {
+    await supabase
+      .from('companies_tag_spend_log')
+      .update({
+        estimated_anthropic_cents: (existing.estimated_anthropic_cents ?? 0) + cents,
+        total_companies_tagged: (existing.total_companies_tagged ?? 0) + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('log_date', today)
+  } else {
+    await supabase
+      .from('companies_tag_spend_log')
+      .insert({
+        log_date: today,
+        estimated_anthropic_cents: cents,
+        total_companies_tagged: 1,
+      })
+  }
 }
 
 // ---------- helpers ----------

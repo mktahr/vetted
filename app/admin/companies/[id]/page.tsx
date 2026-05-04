@@ -69,6 +69,9 @@ export default function CompanyEditPage() {
 
   const [newYear, setNewYear] = useState<string>(String(new Date().getFullYear()))
   const [newScore, setNewScore] = useState<string>('3')
+  const [tagging, setTagging] = useState(false)
+  const [reEnriching, setReEnriching] = useState(false)
+  const [tagMsg, setTagMsg] = useState<{ text: string; ok: boolean } | null>(null)
 
   useEffect(() => {
     async function fetchAll() {
@@ -165,6 +168,54 @@ export default function CompanyEditPage() {
     } finally {
       setSaving(false)
       setTimeout(() => setSaveMsg(null), 2500)
+    }
+  }
+
+  async function handleTagNow() {
+    setTagging(true)
+    setTagMsg(null)
+    try {
+      const resp = await fetch(`/api/admin/companies/${companyId}/tag`, { method: 'POST' })
+      const data = await resp.json()
+      if (!resp.ok) {
+        setTagMsg({ text: data.error || `HTTP ${resp.status}`, ok: false })
+      } else {
+        setTagMsg({ text: 'Tagged. Reload to see updated values.', ok: true })
+        // Reload company row to surface fresh values
+        const { data: refreshed } = await supabase.from('companies').select('*').eq('company_id', companyId).single()
+        if (refreshed) {
+          setCompany(refreshed as Company)
+        }
+      }
+    } catch (err: any) {
+      setTagMsg({ text: err?.message || 'Network error', ok: false })
+    } finally {
+      setTagging(false)
+      setTimeout(() => setTagMsg(null), 4000)
+    }
+  }
+
+  async function handleReEnrich() {
+    if (!confirm('Re-enrich from Crust? This costs 2 Crust credits + ~$0.005 in tagger spend, and may overwrite tagger fields.')) return
+    setReEnriching(true)
+    setTagMsg(null)
+    try {
+      const resp = await fetch(`/api/admin/companies/${companyId}/re-enrich`, { method: 'POST' })
+      const data = await resp.json()
+      if (!resp.ok) {
+        setTagMsg({ text: data.error || `HTTP ${resp.status}`, ok: false })
+      } else {
+        setTagMsg({ text: 'Re-enriched. Reload to see updated values.', ok: true })
+        const { data: refreshed } = await supabase.from('companies').select('*').eq('company_id', companyId).single()
+        if (refreshed) {
+          setCompany(refreshed as Company)
+        }
+      }
+    } catch (err: any) {
+      setTagMsg({ text: err?.message || 'Network error', ok: false })
+    } finally {
+      setReEnriching(false)
+      setTimeout(() => setTagMsg(null), 4000)
     }
   }
 
@@ -559,20 +610,51 @@ export default function CompanyEditPage() {
 
           </div>
 
-          {/* Tagger metadata (read-only, set by auto-tagger) */}
-          {company && company.tagging_method && (
+          {/* Tagger metadata + on-demand actions */}
+          {company && (
             <div className="mt-4 p-3 bg-background rounded-lg text-xs">
-              <div className="text-muted-foreground mb-1">Tagger metadata (auto-set; manual edits override)</div>
-              <div className="grid grid-cols-2 gap-2">
-                <div><span className="text-tertiary">Method:</span> <span className="font-mono">{company.tagging_method}</span></div>
-                <div><span className="text-tertiary">Confidence:</span> {company.tagging_confidence != null ? company.tagging_confidence.toFixed(2) : '—'}</div>
-                {company.tagging_notes && (
-                  <div className="col-span-2 mt-1">
-                    <span className="text-tertiary">Notes:</span>
-                    <pre className="whitespace-pre-wrap text-[11px] mt-1 text-muted-foreground">{company.tagging_notes}</pre>
-                  </div>
-                )}
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-muted-foreground">Tagger metadata (auto-set; manual edits override)</div>
+                <div className="flex items-center gap-2">
+                  {company.tagging_method == null && (
+                    <button
+                      onClick={handleTagNow}
+                      disabled={tagging}
+                      className="px-2 py-1 text-xs border border-border rounded bg-card hover:bg-background disabled:opacity-50"
+                      title="Run identify + tagCompany() now (instead of waiting for the 2-min cron)"
+                    >
+                      {tagging ? 'Tagging…' : 'Tag now'}
+                    </button>
+                  )}
+                  {company.crustdata_company_id != null && company.review_status === 'vetted' && company.tagging_method !== 'manual' && (
+                    <button
+                      onClick={handleReEnrich}
+                      disabled={reEnriching}
+                      className="px-2 py-1 text-xs border border-amber-300 rounded bg-amber-50 text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                      title="Re-pull from Crust enrich (2 credits) and re-tag. Overwrites firmographics + tagger fields."
+                    >
+                      {reEnriching ? 'Re-enriching…' : 'Re-enrich from Crust'}
+                    </button>
+                  )}
+                </div>
               </div>
+              {tagMsg && (
+                <div className={`mb-2 text-xs ${tagMsg.ok ? 'text-green-700' : 'text-red-700'}`}>{tagMsg.text}</div>
+              )}
+              {company.tagging_method ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <div><span className="text-tertiary">Method:</span> <span className="font-mono">{company.tagging_method}</span></div>
+                  <div><span className="text-tertiary">Confidence:</span> {company.tagging_confidence != null ? company.tagging_confidence.toFixed(2) : '—'}</div>
+                  {company.tagging_notes && (
+                    <div className="col-span-2 mt-1">
+                      <span className="text-tertiary">Notes:</span>
+                      <pre className="whitespace-pre-wrap text-[11px] mt-1 text-muted-foreground">{company.tagging_notes}</pre>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-tertiary">Not yet tagged. Cron picks this up every 2 min, or click Tag now.</div>
+              )}
             </div>
           )}
 
