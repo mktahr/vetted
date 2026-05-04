@@ -6,6 +6,7 @@ import CompanyLogo, { guessDomain, guessSchoolDomain } from './CompanyLogo'
 export interface DrawerExperience {
   company_id: string | null
   company_name: string | null
+  company_review_status?: 'vetted' | 'unreviewed' | 'excluded' | null
   title_raw: string | null
   start_date: string | null
   end_date: string | null
@@ -327,13 +328,17 @@ export default function ProfileDrawer({ person, experiences, education, signals,
                     const company = cleanCompanyName(exp.company_name)
                     const dateRange = formatDateRange(exp.start_date, exp.end_date, exp.is_current)
                     const duration = computeDuration(exp.start_date, exp.end_date, exp.is_current)
+                    const isExcluded = exp.company_review_status === 'excluded'
                     return (
                       <div key={i} style={{ position: 'relative', marginBottom: i < allRoles.length - 1 ? 16 : 0 }}>
                         {/* Timeline dot */}
                         <div style={{ position: 'absolute', left: -20, top: 6, width: 9, height: 9, borderRadius: 'var(--r-full)', border: '2px solid var(--border-default)', background: 'var(--bg-surface)' }} />
                         <div style={{ color: 'var(--fg-primary)', fontSize: 'var(--fs-14)', fontWeight: 'var(--fw-medium)', fontFamily: 'var(--font-sans)' }}>{title}</div>
                         {company && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                          <div
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, opacity: isExcluded ? 0.6 : 1 }}
+                            title={isExcluded ? 'Company excluded from talent pool.' : undefined}
+                          >
                             <CompanyLogo domain={guessDomain(company)} companyName={company} size={16} />
                             <span style={{ color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)' }}>{company}</span>
                           </div>

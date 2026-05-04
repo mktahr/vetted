@@ -1103,10 +1103,19 @@ export default function ProfileTable() {
                       </td>
                       {/* Company */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <CompanyLogo domain={guessDomain(person.current_company_name)} companyName={person.current_company_name} size={20} />
-                          <span style={{ color: 'var(--fg-primary)' }}>{cleanCompanyName(person.current_company_name) || '—'}</span>
-                        </div>
+                        {(() => {
+                          const currentExp = person.experiences_lite.find(e => e.is_current && e.company_id)
+                          const isExcluded = currentExp?.company_review_status === 'excluded'
+                          return (
+                            <div
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: isExcluded ? 0.6 : 1 }}
+                              title={isExcluded ? 'Company excluded from talent pool.' : undefined}
+                            >
+                              <CompanyLogo domain={guessDomain(person.current_company_name)} companyName={person.current_company_name} size={20} />
+                              <span style={{ color: 'var(--fg-primary)' }}>{cleanCompanyName(person.current_company_name) || '—'}</span>
+                            </div>
+                          )
+                        })()}
                       </td>
                       {/* Title */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-primary)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -1180,6 +1189,7 @@ export default function ProfileTable() {
           return sp.experiences_lite.map(e => ({
             company_id: e.company_id,
             company_name: e.company_id ? (companyNameMap[e.company_id] ?? null) : null,
+            company_review_status: e.company_review_status,
             title_raw: e.title_raw,
             start_date: e.start_date,
             end_date: e.end_date,

@@ -51,17 +51,18 @@ export default function ProfilePage() {
   const [skillsTags, setSkillsTags] = useState<string[]>([])
   const [skillsOpen, setSkillsOpen] = useState(false)
   const [profileSignals, setProfileSignals] = useState<Array<{ canonical_name: string; category: string; evidence_url: string | null; canonical_url: string | null }>>([])
+  const [currentCompanyReviewStatus, setCurrentCompanyReviewStatus] = useState<'vetted' | 'unreviewed' | 'excluded' | null>(null)
 
 
   useEffect(() => {
     async function fetchAll() {
       try {
-        // Fetch person with company name
+        // Fetch person with company name + review status (for excluded-company display).
         const { data: personData, error: personErr } = await supabase
           .from('people')
           .select(`
             *,
-            companies:current_company_id ( company_name )
+            companies:current_company_id ( company_name, review_status )
           `)
           .eq('person_id', params.id)
           .single()
@@ -73,17 +74,18 @@ export default function ProfilePage() {
           current_company_name: personData.companies?.company_name || null,
         }
         setPerson(p)
+        setCurrentCompanyReviewStatus(personData.companies?.review_status ?? null)
         if (p.narrative_summary) {
           setNarrative(p.narrative_summary)
           setNarrativeAt(p.narrative_summary_generated_at)
         }
 
-        // Fetch experiences with company names
+        // Fetch experiences with company names + review status.
         const { data: expData } = await supabase
           .from('person_experiences')
           .select(`
             *,
-            companies:company_id ( company_name )
+            companies:company_id ( company_name, review_status )
           `)
           .eq('person_id', params.id)
           .order('is_current', { ascending: false })
@@ -92,6 +94,7 @@ export default function ProfilePage() {
         const exps: Experience[] = (expData || []).map((row: any) => ({
           ...row,
           company_name: row.companies?.company_name || null,
+          company_review_status: row.companies?.review_status ?? null,
         }))
         setExperiences(exps)
 
@@ -329,7 +332,11 @@ export default function ProfilePage() {
           </div>
           <div>
             <p className="text-xs text-tertiary uppercase">Company</p>
-            <div className="flex items-center gap-1.5 font-medium text-sm">
+            <div
+              className="flex items-center gap-1.5 font-medium text-sm"
+              style={{ opacity: currentCompanyReviewStatus === 'excluded' ? 0.6 : 1 }}
+              title={currentCompanyReviewStatus === 'excluded' ? 'Company excluded from talent pool.' : undefined}
+            >
               <CompanyLogo domain={guessDomain(companyName)} companyName={companyName} size={18} />
               {companyName || 'N/A'}
             </div>
@@ -556,7 +563,11 @@ export default function ProfilePage() {
                   <p className="font-medium">
                     {exp.title_normalized || exp.title_raw || 'Unknown title'}
                   </p>
-                  <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
+                  <div
+                    className="flex items-center gap-1.5 text-muted-foreground text-sm"
+                    style={{ opacity: exp.company_review_status === 'excluded' ? 0.6 : 1 }}
+                    title={exp.company_review_status === 'excluded' ? 'Company excluded from talent pool.' : undefined}
+                  >
                     <CompanyLogo domain={guessDomain(exp.company_name)} companyName={exp.company_name} size={16} />
                     <span>
                       {cleanCompanyName(exp.company_name) || 'Unknown company'}
