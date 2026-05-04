@@ -41,6 +41,13 @@ export interface RawExperience {
   // matching/upsert instead of the case-insensitive name match. Chrome extension
   // ingest doesn't produce this — it stays undefined and we fall back to name match.
   company_linkedin_url?: string
+  // Crust v2 only — canonical Crust company id (BIGINT) from the embedded employer
+  // sub-object. Used as PRIMARY identity key by upsertCompany (per resolved issue #8).
+  // Beats linkedin_url which beats name fallback.
+  crustdata_company_id?: number
+  // Crust v2 only — LinkedIn's internal numeric company id (string in Crust). Stored
+  // as a secondary identity key for rebrand resilience.
+  company_professional_network_id?: string
   title?: string
   start_date?: string        // YYYY-MM-DD (stripped of time)
   end_date?: string
@@ -71,6 +78,9 @@ export interface CanonicalProfile {
   // LinkedIn URL of the candidate's primary current employer. Lets the ingest
   // path's upsertCompany() match by canonical URL rather than by name.
   current_company_linkedin_url?: string | null
+  // Crust v2 only — canonical Crust id of the candidate's primary current employer.
+  current_company_crustdata_id?: number | null
+  current_company_professional_network_id?: string | null
   current_title?: string | null
   years_experience?: number | null
   years_at_current_company?: number | null

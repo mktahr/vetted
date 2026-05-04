@@ -37,11 +37,14 @@ function BucketChip({ bucket }: { bucket: CandidateBucket | null | undefined }) 
   return <span style={{ display: 'inline-block', padding: '1px 8px', borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)', fontWeight: 'var(--fw-medium)', fontFamily: 'var(--font-sans)', background: s.bg, border: `1px solid ${s.border}`, color: s.text }}>{s.label}</span>
 }
 
-type FocusScope = 'all' | 'hard_tech' | 'all_tech'
+// V1: replaces the old FocusScope. Imported from FilterSidebar where the types live.
+import type { CategoryScope, ReviewStatusScope } from './FilterSidebar'
 
 interface ExperienceLite {
   company_id: string | null
-  company_focus: 'hard_tech' | 'all_tech' | 'unreviewed' | null
+  // V1 (post-migration 031): two independent dimensions per company
+  company_category: 'hardware' | 'non_hardware' | null
+  company_review_status: 'vetted' | 'unreviewed' | 'excluded' | null
   specialty: string | null
   seniority: string | null
   start_date: string | null
@@ -199,7 +202,10 @@ export default function ProfileTable() {
       return existing || { value: v, scope: 'ever' as TemporalScope }
     }))
   }
-  const [focusScope, setFocusScope] = useState<FocusScope>('all')
+  // V1 (post-migration 031): two independent scope filters, both default 'all'
+  // per Matt's Option C decision (zero disruption to existing visibility).
+  const [categoryScope, setCategoryScope] = useState<CategoryScope>('all')
+  const [reviewStatusScope, setReviewStatusScope] = useState<ReviewStatusScope>('all')
   const [compoundCompanyPills, setCompoundCompanyPills] = useState<ScopedPill[]>([])
   // Derived for backward compat
   const compoundCompany = compoundCompanyPills.map(p => p.value)
@@ -290,7 +296,13 @@ export default function ProfileTable() {
       if (f.yearsMax) setYearsMax(f.yearsMax)
       if (f.clearanceSel) setClearanceSel(f.clearanceSel)
       if (f.locationSel) setLocationSel(f.locationSel)
-      if (f.focusScope) setFocusScope(f.focusScope)
+      // V1 backward-compat: old saved filters used `focusScope` with hard_tech/all_tech values.
+      // Map: hard_tech → categoryScope=hardware, all_tech → categoryScope=all (no equivalent),
+      // all → all. New saved filters use categoryScope + reviewStatusScope directly.
+      if (f.focusScope === 'hard_tech') setCategoryScope('hardware')
+      else if (f.focusScope) setCategoryScope('all')
+      if (f.categoryScope) setCategoryScope(f.categoryScope)
+      if (f.reviewStatusScope) setReviewStatusScope(f.reviewStatusScope)
       // Per-pill scope: new format has compoundCompanyPills, old format has compoundCompany + compoundCompanyScope
       if (f.compoundCompanyPills) setCompoundCompanyPills(f.compoundCompanyPills)
       else if (f.compoundCompany) {
@@ -350,7 +362,7 @@ export default function ProfileTable() {
           supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, seniority_normalized, start_date, end_date, is_current, employment_type_normalized, title_raw, description_raw'),
           supabase.from('person_education').select('person_id, school_id, school_name_raw, degree_raw, degree_level, field_of_study_raw, start_year, end_year'),
           supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
-          fetchAllRows<any>('companies', 'company_id, company_name, primary_industry_tag, focus, company_groups', 'company_name').then(data => ({ data })),
+          fetchAllRows<any>('companies', 'company_id, company_name, primary_industry, industries, category, review_status, legacy_primary_industry_tag, company_groups', 'company_name').then(data => ({ data })),
           fetchAllRows<any>('schools', 'school_id, school_name, school_score, is_foreign, school_groups, school_type', 'school_name').then(data => ({ data })),
           supabase.from('specialty_dictionary').select('specialty_normalized, parent_function').eq('active', true).order('specialty_normalized'),
           supabase.from('role_dictionary').select('role_id, role_name, display_order').eq('active', true).order('display_order'),
@@ -363,8 +375,13 @@ export default function ProfileTable() {
         const latestBucket: Record<string, { bucket: CandidateBucket; reason: string | null }> = {}
         for (const r of bucketData || []) { if (!latestBucket[r.person_id]) latestBucket[r.person_id] = { bucket: r.candidate_bucket as CandidateBucket, reason: r.assignment_reason } }
 
-        const companyFocus: Record<string, string> = {}
-        for (const c of companies || []) companyFocus[c.company_id] = (c as any).focus ?? 'all_tech'
+        // V1 (post-migration 031): track company category + review_status separately
+        const companyCategory: Record<string, 'hardware' | 'non_hardware' | null> = {}
+        const companyReviewStatus: Record<string, 'vetted' | 'unreviewed' | 'excluded' | null> = {}
+        for (const c of companies || []) {
+          companyCategory[c.company_id] = (c as any).category ?? null
+          companyReviewStatus[c.company_id] = (c as any).review_status ?? null
+        }
 
         const companyIds: Record<string, Set<string>> = {}
         const expLite: Record<string, ExperienceLite[]> = {}
@@ -374,7 +391,9 @@ export default function ProfileTable() {
           if (r.company_id) { if (!companyIds[pid]) companyIds[pid] = new Set(); companyIds[pid].add(r.company_id) }
           if (!expLite[pid]) expLite[pid] = []
           expLite[pid].push({
-            company_id: r.company_id, company_focus: r.company_id ? (companyFocus[r.company_id] as any ?? null) : null,
+            company_id: r.company_id,
+            company_category: r.company_id ? (companyCategory[r.company_id] ?? null) : null,
+            company_review_status: r.company_id ? (companyReviewStatus[r.company_id] ?? null) : null,
             specialty: (r as any).specialty_normalized ?? null, seniority: (r as any).seniority_normalized ?? null,
             start_date: (r as any).start_date ?? null,
             end_date: (r as any).end_date ?? null, is_current: (r as any).is_current ?? false,
@@ -423,7 +442,14 @@ export default function ProfileTable() {
         })))
 
         setSeniorityOptions((srs || []).map(s => ({ value: s.seniority_normalized, label: s.seniority_normalized.replace(/_/g, ' ') })))
-        setCompanyOptions((companies || []).filter((c: any) => c.focus === 'hard_tech' || c.focus === 'all_tech').map((c: any) => ({ value: c.company_id, label: c.company_name, sublabel: c.primary_industry_tag || undefined })))
+        // V1: filter the company autocomplete to vetted+unreviewed (exclude excluded companies).
+        // The unreviewed-tier auto-creates need to surface so admin can use them in compound filters
+        // even before they're tagged. Excluded companies are explicitly out of scope for searches.
+        setCompanyOptions((companies || []).filter((c: any) => c.review_status !== 'excluded').map((c: any) => ({
+          value: c.company_id,
+          label: c.company_name,
+          sublabel: c.primary_industry || c.legacy_primary_industry_tag || undefined,
+        })))
         setCompanyNameMap(cMap)
         setCompaniesRaw(companies || [])
         setSchoolOptions((schools || []).filter((s: any) => s.school_score != null).map((s: any) => ({ value: s.school_id, label: s.school_name, sublabel: s.is_foreign ? "Int'l" : undefined })))
@@ -654,8 +680,13 @@ export default function ProfileTable() {
       rows = rows.filter(p => p.education_lite.some(e => selAccel.has(e.school_id)))
     }
 
-    if (focusScope === 'hard_tech') rows = rows.filter(p => p.experiences_lite.some(e => e.company_focus === 'hard_tech'))
-    else if (focusScope === 'all_tech') rows = rows.filter(p => p.experiences_lite.some(e => e.company_focus === 'hard_tech' || e.company_focus === 'all_tech'))
+    // V1 (Option C): both scopes default to 'all' so candidate visibility isn't silently
+    // filtered after migration. Admin can opt into stricter scopes via FilterSidebar.
+    if (categoryScope === 'hardware') rows = rows.filter(p => p.experiences_lite.some(e => e.company_category === 'hardware'))
+    else if (categoryScope === 'non_hardware') rows = rows.filter(p => p.experiences_lite.some(e => e.company_category === 'non_hardware'))
+    if (reviewStatusScope === 'vetted') rows = rows.filter(p => p.experiences_lite.some(e => e.company_review_status === 'vetted'))
+    else if (reviewStatusScope === 'unreviewed') rows = rows.filter(p => p.experiences_lite.some(e => e.company_review_status === 'unreviewed'))
+    else if (reviewStatusScope === 'excluded') rows = rows.filter(p => p.experiences_lite.some(e => e.company_review_status === 'excluded'))
 
     // Compound company filter with temporal scope + multi-select (OR across companies)
     // Compound company filter with per-pill scope (OR across pills)
@@ -698,13 +729,21 @@ export default function ProfileTable() {
         targetIds = new Set(row.target.companyIds)
       } else if (row.target.type === 'attributes' && row.target.companyAttributes) {
         const ca = row.target.companyAttributes
-        if (!ca.stage?.length && !ca.size?.length && !ca.focus?.length && !ca.industry?.length && !ca.foundedAfter && !ca.foundedBefore) continue // no attributes set
+        if (!ca.stage?.length && !ca.size?.length && !ca.category?.length && !ca.industry?.length && !ca.foundedAfter && !ca.foundedBefore) continue // no attributes set
         const attrs = row.target.companyAttributes
         const matching = companiesRaw.filter(comp => {
           if (attrs.stage?.length && (!comp.funding_stage || !attrs.stage.includes(comp.funding_stage))) return false
           if (attrs.size?.length && (!comp.headcount_range || !attrs.size.includes(comp.headcount_range))) return false
-          if (attrs.focus?.length && !attrs.focus.includes(comp.focus)) return false
-          if (attrs.industry?.length && (!comp.primary_industry_tag || !attrs.industry.includes(comp.primary_industry_tag))) return false
+          // V1: filter by category (hardware/non_hardware) — replaces legacy focus
+          if (attrs.category?.length && (!comp.category || !attrs.category.includes(comp.category))) return false
+          // V1: industry filter checks the primary_industry OR any element in industries[].
+          // Falls back to legacy_primary_industry_tag for un-tagged companies.
+          if (attrs.industry?.length) {
+            const matchesNew = comp.primary_industry && attrs.industry.includes(comp.primary_industry)
+            const matchesArray = Array.isArray(comp.industries) && comp.industries.some((i: string) => attrs.industry!.includes(i))
+            const matchesLegacy = comp.legacy_primary_industry_tag && attrs.industry.includes(comp.legacy_primary_industry_tag)
+            if (!matchesNew && !matchesArray && !matchesLegacy) return false
+          }
           if (attrs.foundedAfter && (!comp.founding_year || comp.founding_year < attrs.foundedAfter)) return false
           if (attrs.foundedBefore && (!comp.founding_year || comp.founding_year > attrs.foundedBefore)) return false
           return true
@@ -821,12 +860,13 @@ export default function ProfileTable() {
       })
     }
     return rows
-  }, [people, searchQuery, bucketSel, stageSel, rolePills, seniorityPills, schoolSel, schoolTemporalScope, locationSel, specialtyPills, clearanceSel, focusScope, compoundCompanyPills, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel, companyConditions, schoolConditions, companiesRaw, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap, currentTenureMin, currentTenureMax, avgTenureMin, avgTenureMax, avgTenureIncludeCurrent])
+  }, [people, searchQuery, bucketSel, stageSel, rolePills, seniorityPills, schoolSel, schoolTemporalScope, locationSel, specialtyPills, clearanceSel, categoryScope, reviewStatusScope, compoundCompanyPills, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel, companyConditions, schoolConditions, companiesRaw, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap, currentTenureMin, currentTenureMax, avgTenureMin, avgTenureMax, avgTenureIncludeCurrent])
 
   const activeFilterCount =
     (roleSel.length > 0 ? 1 : 0) + (bucketSel.length > 0 ? 1 : 0) + (stageSel.length > 0 ? 1 : 0) +
     (senioritySel.length > 0 ? 1 : 0) + (schoolSel.length > 0 ? 1 : 0) + (locationSel.length > 0 ? 1 : 0) +
-    (specialtySel.length > 0 ? 1 : 0) + (clearanceSel.length > 0 ? 1 : 0) + (focusScope !== 'all' ? 1 : 0) +
+    (specialtySel.length > 0 ? 1 : 0) + (clearanceSel.length > 0 ? 1 : 0) +
+    (categoryScope !== 'all' ? 1 : 0) + (reviewStatusScope !== 'all' ? 1 : 0) +
     (compoundCompany.length > 0 ? 1 : 0) + (yearsMin || yearsMax ? 1 : 0) + (titleBoolean ? 1 : 0) + (experienceBoolean ? 1 : 0) +
     (signalSel.length > 0 ? 1 : 0) + (schoolGroupSel.length > 0 ? 1 : 0) + (companyGroupSel.length > 0 ? 1 : 0) +
     (acceleratorSel.length > 0 ? 1 : 0) +
@@ -836,7 +876,7 @@ export default function ProfileTable() {
   const clearAllFilters = () => {
     setSearchQuery(''); setRoleSel([]); setBucketSel([]); setStageSel([]); setSenioritySel([])
     setSchoolSel([]); setLocationSel([]); setSpecialtySel([])
-    setClearanceSel([]); setFocusScope('all'); setCompoundCompany([]); setCompoundSpecialties([])
+    setClearanceSel([]); setCategoryScope('all'); setReviewStatusScope('all'); setCompoundCompany([]); setCompoundSpecialties([])
     setCompoundYearMin(''); setCompoundYearMax('')
     setYearsMin(''); setYearsMax(''); setTitleBoolean(''); setTitleBooleanScope('ever'); setExperienceBoolean('')
     setSignalSel([]); setSchoolGroupSel([]); setCompanyGroupSel([]); setAcceleratorSel([])
@@ -864,7 +904,8 @@ export default function ProfileTable() {
   // ─── Chips ────────────────────────────────────────────────────────────
 
   const chips: Array<{ label: string; onRemove: () => void }> = []
-  if (focusScope !== 'all') chips.push({ label: `Scope: ${focusScope.replace('_', ' ')}`, onRemove: () => setFocusScope('all') })
+  if (categoryScope !== 'all') chips.push({ label: `Category: ${categoryScope.replace('_', ' ')}`, onRemove: () => setCategoryScope('all') })
+  if (reviewStatusScope !== 'all') chips.push({ label: `Visibility: ${reviewStatusScope}`, onRemove: () => setReviewStatusScope('all') })
   for (const pill of rolePills) { const r = roleOptions.find(o => o.value === pill.value); chips.push({ label: `Role: ${r?.label || pill.value}${pill.scope !== 'ever' ? ` · ${pill.scope}` : ''}`, onRemove: () => setRolePills(rolePills.filter(p => p.value !== pill.value)) }) }
   for (const pill of specialtyPills) chips.push({ label: `Specialty: ${pill.value.replace(/_/g, ' ')}${pill.scope !== 'ever' ? ` · ${pill.scope}` : ''}`, onRemove: () => setSpecialtyPills(specialtyPills.filter(p => p.value !== pill.value)) })
   for (const pill of seniorityPills) chips.push({ label: `Seniority: ${pill.value.replace(/_/g, ' ')}${pill.scope !== 'ever' ? ` · ${pill.scope}` : ''}`, onRemove: () => setSeniorityPills(seniorityPills.filter(p => p.value !== pill.value)) })
@@ -904,7 +945,8 @@ export default function ProfileTable() {
         yearsMin={yearsMin} setYearsMin={setYearsMin} yearsMax={yearsMax} setYearsMax={setYearsMax}
         clearanceSel={clearanceSel} setClearanceSel={setClearanceSel}
         locationSel={locationSel} setLocationSel={setLocationSel} locationOptions={locationOptions}
-        focusScope={focusScope} setFocusScope={setFocusScope}
+        categoryScope={categoryScope} setCategoryScope={setCategoryScope}
+        reviewStatusScope={reviewStatusScope} setReviewStatusScope={setReviewStatusScope}
         compoundCompany={compoundCompany} setCompoundCompany={setCompoundCompany}
         compoundCompanyPills={compoundCompanyPills} setCompoundCompanyPills={setCompoundCompanyPills}
         compoundSpecialties={compoundSpecialties} setCompoundSpecialties={setCompoundSpecialties}
@@ -930,7 +972,7 @@ export default function ProfileTable() {
         onOpenBuilder={() => {
           // Encode current filter state as JSON in URL param
           const state = {
-            rolePills, specialtyPills, seniorityPills, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, focusScope, compoundCompanyPills, compoundSpecialties, compoundYearMin, compoundYearMax, schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel,
+            rolePills, specialtyPills, seniorityPills, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, categoryScope, reviewStatusScope, compoundCompanyPills, compoundSpecialties, compoundYearMin, compoundYearMax, schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel,
             cc: companyConditions.map(conditionToCompact),
             sc: schoolConditions.map(conditionToCompact),
           }

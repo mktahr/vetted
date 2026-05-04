@@ -135,27 +135,52 @@ export type SortDirection = 'asc' | 'desc'
 export type CompanyBucket = 'static_mature' | 'high_bar_tech' | 'growth_startup' | 'emerging_startup'
 export type CompanyStatus = 'active' | 'acquired' | 'public' | 'shut_down'
 export type CompanyScoreMode = 'manual' | 'calculated' | 'hybrid'
-export type CompanyReviewStatus = 'unreviewed' | 'reviewed' | 'locked'
-export type CompanyFocus = 'hard_tech' | 'all_tech' | 'unreviewed'
+
+// V1 (post-migration 031). See lib/companies/taxonomy.ts for the controlled vocabularies.
+export type CompanyCategory = 'hardware' | 'non_hardware'         // OR null when unclassified
+export type CompanyReviewStatus = 'vetted' | 'unreviewed' | 'excluded'
+export type CompanyTaggingMethod = 'claude' | 'claude_dict_agree' | 'claude_dict_disagree' | 'manual'
 
 export interface Company {
   company_id: string
   company_name: string
-  primary_industry_tag: string | null
-  company_bucket: CompanyBucket | null
-  company_score_mode: CompanyScoreMode
-  manual_review_status: CompanyReviewStatus
-  focus: CompanyFocus
-  is_stealth_company: boolean
-  founding_date: string | null
-  founding_year: number | null
-  current_status: CompanyStatus
-  hq_location_name: string | null
+  // V1 taxonomy
+  category: CompanyCategory | null
+  primary_industry: string | null
+  industries: string[]
+  domain_tags: string[]
+  review_status: CompanyReviewStatus
+  // Identity
+  crustdata_company_id: number | null
+  professional_network_id: string | null
   linkedin_url: string | null
   website_url: string | null
-  funding_stage: string | null
+  // Firmographics
+  company_type: string | null
+  founding_year: number | null
   headcount_range: string | null
+  headcount_latest: number | null
+  headcount_latest_at: string | null
+  hq_location_name: string | null
+  // Funding
+  funding_stage: string | null
+  // Tagger metadata
+  tagging_method: CompanyTaggingMethod | null
+  tagging_confidence: number | null
+  tagging_notes: string | null
+  // Lifecycle
+  current_status: CompanyStatus
+  is_stealth_company: boolean
+  company_bucket: CompanyBucket | null
+  company_score_mode: CompanyScoreMode
+  founding_date: string | null
   notes: string | null
+  // Legacy taxonomy (renamed; preserved for read-only display in collapsed pane)
+  legacy_primary_industry_tag: string | null
+  legacy_sub_industry_1: string | null
+  legacy_sub_industry_2: string | null
+  legacy_sub_industry_3: string | null
+  // Audit
   created_at: string
   updated_at: string
   // joined

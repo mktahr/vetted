@@ -11,7 +11,14 @@ const IconGrad = () => <svg viewBox="0 0 24 24" width="14" height="14" fill="non
 const IconCode = () => <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
 const IconChevron = ({ collapsed }: { collapsed: boolean }) => <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ transition: 'transform var(--dur-hover) var(--ease)', transform: collapsed ? 'rotate(180deg)' : '' }}><path d="m15 18-6-6 6-6"/></svg>
 
-type FocusScope = 'all' | 'hard_tech' | 'all_tech'
+// V1 (post-migration 031): two independent visibility filters replace the old `focusScope`.
+// CategoryScope filters by company category (hardware/non_hardware classification).
+// ReviewStatusScope filters by company review_status (vetted/unreviewed/excluded).
+//
+// Per Matt's Option C decision (2026-05-04): both filters DEFAULT to 'all' so candidate
+// search is not silently filtered after migration. Admin can opt into stricter scopes.
+export type CategoryScope = 'all' | 'hardware' | 'non_hardware'
+export type ReviewStatusScope = 'all' | 'vetted' | 'unreviewed' | 'excluded'
 
 export interface FilterSidebarProps {
   roleSel: string[];             setRoleSel: (v: string[]) => void
@@ -34,7 +41,8 @@ export interface FilterSidebarProps {
   clearanceSel: string[];        setClearanceSel: (v: string[]) => void
   locationSel: string[];         setLocationSel: (v: string[]) => void
   locationOptions: MultiSelectOption[]
-  focusScope: FocusScope;        setFocusScope: (v: FocusScope) => void
+  categoryScope: CategoryScope;          setCategoryScope: (v: CategoryScope) => void
+  reviewStatusScope: ReviewStatusScope;  setReviewStatusScope: (v: ReviewStatusScope) => void
   compoundCompany: string[];     setCompoundCompany: (v: string[]) => void
   compoundCompanyPills: Array<{ value: string; scope: 'ever' | 'currently' | 'previously' }>
   setCompoundCompanyPills: (v: Array<{ value: string; scope: 'ever' | 'currently' | 'previously' }>) => void
@@ -145,13 +153,23 @@ export default function FilterSidebar(props: FilterSidebarProps) {
           </button>
         )}
 
-        {/* SEARCH SCOPE */}
+        {/* SEARCH SCOPE — V1: two independent filters, both default 'all' */}
         <SH icon={<IconSearch />} label="Search scope" />
-        <div style={{ marginBottom: 16 }}>
-          <select value={props.focusScope} onChange={e => props.setFocusScope(e.target.value as FocusScope)} style={selectStyle}>
+        <div style={{ marginBottom: 8 }}>
+          <Lbl>Category</Lbl>
+          <select value={props.categoryScope} onChange={e => props.setCategoryScope(e.target.value as CategoryScope)} style={selectStyle}>
             <option value="all">All candidates</option>
-            <option value="hard_tech">Hard tech experience</option>
-            <option value="all_tech">All tech experience</option>
+            <option value="hardware">Hardware experience</option>
+            <option value="non_hardware">Non-hardware experience</option>
+          </select>
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <Lbl>Visibility</Lbl>
+          <select value={props.reviewStatusScope} onChange={e => props.setReviewStatusScope(e.target.value as ReviewStatusScope)} style={selectStyle}>
+            <option value="all">All companies (default)</option>
+            <option value="vetted">Vetted only</option>
+            <option value="unreviewed">Unreviewed only</option>
+            <option value="excluded">Excluded only</option>
           </select>
         </div>
 

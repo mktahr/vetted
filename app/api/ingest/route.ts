@@ -57,6 +57,9 @@ interface CanonicalProfile {
   summary_raw?: string | null;
   current_company?: string | null;
   current_company_linkedin_url?: string | null;
+  // V1 (post-mapper 1.2.0): canonical Crust id of the candidate's primary current employer.
+  current_company_crustdata_id?: number | null;
+  current_company_professional_network_id?: string | null;
   current_title?: string | null;
   years_experience?: number | null;
   years_at_current_company?: number | null;
@@ -76,6 +79,10 @@ interface RawExperience {
   // backfilling companies.linkedin_url on existing rows that lack it.
   // Chrome extension + legacy v1 mapper leave this undefined.
   company_linkedin_url?: string;
+  // V1 (post-mapper 1.2.0): canonical Crust id from the embedded employer sub-object.
+  // Beats linkedin_url which beats name fallback (resolved issue #8).
+  crustdata_company_id?: number;
+  company_professional_network_id?: string;
   title?: string;
   start_date?: string;
   end_date?: string;
@@ -102,24 +109,28 @@ interface RawEducation {
 interface UpsertCompanyInput {
   name: string | null | undefined;
   linkedin_url?: string | null;
+  // V1: canonical Crust identifiers from the embedded person sub-object
+  crustdata_company_id?: number | null;
+  professional_network_id?: string | null;
 }
 
 /**
  * Look up or create a company record.
  *
- * Match priority:
- *   1. companies.linkedin_url exact match (canonical identity, when available)
- *   2. companies.company_name case-insensitive ILIKE (legacy fallback)
+ * Match priority (per resolved issue #8 in field inventory):
+ *   1. crustdata_company_id exact match (Crust canonical, BIGINT) — most reliable
+ *   2. linkedin_url exact match
+ *   3. company_name case-insensitive ILIKE (legacy fallback; brittle for short
+ *      names like "Anduril" which Crust returns 4+ unrelated companies for)
  *
- * On match, this performs a *real* upsert: any null/empty columns we have new
+ * On match, this performs a real upsert: any null/empty columns we have new
  * data for get backfilled; non-null columns are NEVER overwritten so admin-
- * curated values win. Today the only enrichable field is linkedin_url; the
- * structure is forward-compatible with website_url / industry / founding_year
- * once the company-enrichment task lands.
+ * curated values win.
  *
- * Auto-created rows always land as focus='unreviewed' / manual_review_status=
- * 'unreviewed' — preserving the existing tier-tagging convention so admin
- * triage queues still work.
+ * Auto-created rows always land as review_status='unreviewed' / tagging_method=NULL.
+ * The Vercel cron picks up tagging_method=NULL rows every 2 minutes and runs
+ * /company/identify + tagCompany() to fill category/primary_industry/industries[]/
+ * domain_tags. See app/api/admin/companies/tag-pending/route.ts.
  */
 async function upsertCompany(
   supabase: SupabaseClient,
@@ -128,73 +139,112 @@ async function upsertCompany(
   const name = input.name?.trim();
   if (!name) return null;
   const linkedinUrl = input.linkedin_url?.trim() || null;
+  const crustId = input.crustdata_company_id ?? null;
+  const pnId = input.professional_network_id ?? null;
 
-  // 1. Match by linkedin_url first when available — most reliable identity.
+  // 1. Match by crustdata_company_id (canonical) when available.
+  if (crustId !== null) {
+    const { data: byCrust } = await supabase
+      .from('companies')
+      .select('company_id, linkedin_url, professional_network_id')
+      .eq('crustdata_company_id', crustId)
+      .maybeSingle();
+    if (byCrust) {
+      // Backfill missing identity fields on the existing row.
+      const updates: Record<string, unknown> = {};
+      if (linkedinUrl && !byCrust.linkedin_url) updates.linkedin_url = linkedinUrl;
+      if (pnId && !byCrust.professional_network_id) updates.professional_network_id = pnId;
+      if (Object.keys(updates).length > 0) {
+        updates.updated_at = new Date().toISOString();
+        await supabase.from('companies').update(updates).eq('company_id', byCrust.company_id);
+      }
+      return byCrust.company_id;
+    }
+  }
+
+  // 2. Match by linkedin_url.
   if (linkedinUrl) {
     const { data: byUrl } = await supabase
       .from('companies')
-      .select('company_id')
+      .select('company_id, crustdata_company_id, professional_network_id')
       .eq('linkedin_url', linkedinUrl)
       .maybeSingle();
-    if (byUrl) return byUrl.company_id;
+    if (byUrl) {
+      const updates: Record<string, unknown> = {};
+      if (crustId !== null && !byUrl.crustdata_company_id) updates.crustdata_company_id = crustId;
+      if (pnId && !byUrl.professional_network_id) updates.professional_network_id = pnId;
+      if (Object.keys(updates).length > 0) {
+        updates.updated_at = new Date().toISOString();
+        await supabase.from('companies').update(updates).eq('company_id', byUrl.company_id);
+      }
+      return byUrl.company_id;
+    }
   }
 
-  // 2. Fall back to case-insensitive name match.
+  // 3. Fall back to case-insensitive name match.
   const { data: byName } = await supabase
     .from('companies')
-    .select('company_id, linkedin_url')
+    .select('company_id, linkedin_url, crustdata_company_id, professional_network_id')
     .ilike('company_name', name)
     .maybeSingle();
 
   if (byName) {
-    // Backfill linkedin_url only if the existing row is missing it. The
-    // .is('linkedin_url', null) guard makes the update atomic — if a
-    // concurrent ingest just filled it, we don't overwrite.
-    if (linkedinUrl && !byName.linkedin_url) {
-      const { error: updateError } = await supabase
-        .from('companies')
-        .update({ linkedin_url: linkedinUrl, updated_at: new Date().toISOString() })
-        .eq('company_id', byName.company_id)
-        .is('linkedin_url', null);
-      if (updateError) {
-        console.error('[ingest] Failed to backfill linkedin_url:', name, updateError);
-      }
+    const updates: Record<string, unknown> = {};
+    if (linkedinUrl && !byName.linkedin_url) updates.linkedin_url = linkedinUrl;
+    if (crustId !== null && !byName.crustdata_company_id) updates.crustdata_company_id = crustId;
+    if (pnId && !byName.professional_network_id) updates.professional_network_id = pnId;
+    if (Object.keys(updates).length > 0) {
+      updates.updated_at = new Date().toISOString();
+      // Atomic backfill on linkedin_url respects the UNIQUE constraint via .is() guard
+      // when it's the only field; for multi-field updates we accept rare race overwrite.
+      await supabase.from('companies').update(updates).eq('company_id', byName.company_id);
     }
     return byName.company_id;
   }
 
-  // 3. Insert new stub. focus='unreviewed' so admin triage picks it up.
+  // 4. Insert new stub. review_status='unreviewed' / tagging_method=NULL → cron tags later.
   const { data: created, error } = await supabase
     .from('companies')
     .insert({
       company_name: name,
       linkedin_url: linkedinUrl,
+      crustdata_company_id: crustId,
+      professional_network_id: pnId,
       company_score_mode: 'manual',
-      manual_review_status: 'unreviewed',
+      review_status: 'unreviewed',
       current_status: 'active',
-      focus: 'unreviewed',
+      // category, primary_industry, industries[], domain_tags[], tagging_method all NULL/empty.
+      // Cron picks up tagging_method=NULL rows.
     })
     .select('company_id')
     .single();
 
   if (error) {
-    // Race: a concurrent ingest just inserted the same row, tripping the
-    // linkedin_url UNIQUE constraint. Re-resolve by URL or name and return.
+    // Race: a concurrent ingest just inserted the same row, tripping a UNIQUE
+    // constraint (linkedin_url or crustdata_company_id). Re-resolve and return.
     if ((error as { code?: string }).code === '23505') {
+      if (crustId !== null) {
+        const { data } = await supabase
+          .from('companies')
+          .select('company_id')
+          .eq('crustdata_company_id', crustId)
+          .maybeSingle();
+        if (data) return data.company_id;
+      }
       if (linkedinUrl) {
-        const { data: rematched } = await supabase
+        const { data } = await supabase
           .from('companies')
           .select('company_id')
           .eq('linkedin_url', linkedinUrl)
           .maybeSingle();
-        if (rematched) return rematched.company_id;
+        if (data) return data.company_id;
       }
-      const { data: rematchedByName } = await supabase
+      const { data } = await supabase
         .from('companies')
         .select('company_id')
         .ilike('company_name', name)
         .maybeSingle();
-      if (rematchedByName) return rematchedByName.company_id;
+      if (data) return data.company_id;
     }
     console.error('[ingest] Failed to create company:', name, error);
     return null;
@@ -385,6 +435,8 @@ export async function POST(req: NextRequest) {
   const currentCompanyId = await upsertCompany(supabase, {
     name: canonical.current_company,
     linkedin_url: canonical.current_company_linkedin_url,
+    crustdata_company_id: canonical.current_company_crustdata_id,
+    professional_network_id: canonical.current_company_professional_network_id,
   });
 
   // ── Step 3: Normalize current title ─────────────────────────────────────
@@ -476,6 +528,8 @@ export async function POST(req: NextRequest) {
     const expCompanyId = await upsertCompany(supabase, {
       name: exp.company_name,
       linkedin_url: exp.company_linkedin_url,
+      crustdata_company_id: exp.crustdata_company_id,
+      professional_network_id: exp.company_professional_network_id,
     });
     const expTitleData = await normalizeTitle(supabase, exp.title);
 
