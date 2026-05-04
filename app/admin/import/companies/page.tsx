@@ -37,6 +37,9 @@ interface ImportResult {
   created: boolean
   already_imported?: boolean
   race_resolved?: boolean
+  merged_into_existing?: boolean
+  preserved_manual_taxonomy?: boolean
+  existing_name?: string
   existing?: any
   tagger?: {
     category: string | null
@@ -47,7 +50,7 @@ interface ImportResult {
     method: string
     agreement: string
     reasoning: string
-  }
+  } | null
   basic_info?: any
 }
 
@@ -370,8 +373,21 @@ export default function CompaniesImportPage() {
           {importResult && (
             <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
               <h3 className="font-semibold text-green-900 mb-2">
-                {importResult.already_imported ? 'Already imported' : '✓ Imported'}
+                {importResult.already_imported
+                  ? 'Already imported'
+                  : importResult.merged_into_existing
+                  ? `✓ Merged into existing row${importResult.existing_name ? ` (${importResult.existing_name})` : ''}`
+                  : '✓ Imported'}
               </h3>
+              {importResult.merged_into_existing && (
+                <p className="text-xs text-green-900 mb-2">
+                  A row with this LinkedIn URL already existed. Backfilled identity fields
+                  (Crust ID, headcount, etc.).
+                  {importResult.preserved_manual_taxonomy
+                    ? ' Tagger fields were NOT overwritten because the existing row was manually edited.'
+                    : ' Tagger fields were updated with fresh enrich data.'}
+                </p>
+              )}
               {importResult.tagger && (
                 <div className="space-y-1 text-sm">
                   <div><span className="text-muted-foreground">Category:</span> <span className="font-medium">{importResult.tagger.category || '(unclassified)'}</span></div>

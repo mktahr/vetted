@@ -110,9 +110,9 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: `Tagger exception: ${err?.message || String(err)}` }, { status: 500 })
   }
 
-  // Build INSERT row
-  const insertRow: Record<string, any> = {
-    company_name: taggerInput.name,
+  // Common field shape from the enrich response — used for both UPDATE-merge
+  // and fresh-INSERT paths.
+  const enrichFields = {
     crustdata_company_id: body.crustdata_company_id,
     professional_network_id: bi.professional_network_id || null,
     linkedin_url: bi.professional_network_url || null,
@@ -122,6 +122,8 @@ export async function POST(req: NextRequest) {
     headcount_range: bi.employee_count_range || null,
     headcount_latest: typeof hc.total === 'number' ? hc.total : null,
     headcount_latest_at: typeof hc.total === 'number' ? new Date().toISOString() : null,
+  }
+  const taggerFields = {
     category: tagger.category,
     primary_industry: tagger.primary_industry,
     industries: tagger.industries,
@@ -134,6 +136,73 @@ export async function POST(req: NextRequest) {
       claude_verdict: tagger.claude_verdict,
       agreement: tagger.agreement,
     }),
+  }
+
+  // BEFORE INSERT: check for an existing row matching by linkedin_url.
+  // Common case: a hand-curated company predating the V1 schema, or an
+  // auto-created stub from a candidate ingest. Either way we MERGE INTO that
+  // row rather than failing on the linkedin_url UNIQUE constraint.
+  if (enrichFields.linkedin_url) {
+    const { data: byUrl } = await supabase
+      .from('companies')
+      .select('company_id, company_name, review_status, tagging_method, linkedin_url, crustdata_company_id')
+      .eq('linkedin_url', enrichFields.linkedin_url)
+      .limit(1)
+      .maybeSingle()
+    if (byUrl) {
+      // Build update. Always backfill identity. Tagger fields preserved if manual.
+      const existingIsManual = byUrl.tagging_method === 'manual'
+      const update: Record<string, any> = {
+        ...enrichFields,
+        // Don't change the linkedin_url itself (we matched on it)
+        linkedin_url: undefined,
+        updated_at: new Date().toISOString(),
+      }
+      delete update.linkedin_url
+      // Backfill company_name only if existing is missing/empty
+      if (!byUrl.company_name) update.company_name = taggerInput.name
+      // Tagger fields — overwrite only if existing was never manually edited
+      if (!existingIsManual) Object.assign(update, taggerFields)
+
+      const { error: updateErr } = await supabase
+        .from('companies')
+        .update(update)
+        .eq('company_id', byUrl.company_id)
+      if (updateErr) {
+        return Response.json({ error: `Merge update failed: ${updateErr.message}` }, { status: 500 })
+      }
+      return Response.json({
+        company_id: byUrl.company_id,
+        created: false,
+        merged_into_existing: true,
+        preserved_manual_taxonomy: existingIsManual,
+        existing_name: byUrl.company_name,
+        tagger: existingIsManual ? null : {
+          category: tagger.category,
+          primary_industry: tagger.primary_industry,
+          industries: tagger.industries,
+          domain_tags: tagger.domain_tags,
+          confidence: tagger.confidence,
+          method: tagger.method,
+          agreement: tagger.agreement,
+          reasoning: tagger.reasoning,
+        },
+        basic_info: {
+          name: bi.name,
+          primary_domain: bi.primary_domain,
+          professional_network_url: bi.professional_network_url,
+          employee_count_range: bi.employee_count_range,
+          headcount_total: hc.total,
+        },
+      })
+    }
+  }
+
+  // No conflict — INSERT a new row.
+  const insertRow: Record<string, any> = {
+    company_name: taggerInput.name,
+    ...enrichFields,
+    ...taggerFields,
     review_status: targetReviewStatus,
   }
 
@@ -144,14 +213,15 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (insertErr) {
-    // 23505 = unique violation. Race with another concurrent import; re-fetch.
+    // 23505 = unique violation. Race with a concurrent import (or existing
+    // row matched a different unique key — name? — that we missed above).
     if (insertErr.code === '23505') {
       const { data: existing2 } = await supabase
         .from('companies')
         .select('company_id, review_status')
         .eq('crustdata_company_id', body.crustdata_company_id)
         .limit(1)
-        .single()
+        .maybeSingle()
       if (existing2) {
         return Response.json({
           company_id: existing2.company_id,
