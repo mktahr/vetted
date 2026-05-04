@@ -106,6 +106,7 @@ export interface Experience {
   description_raw: string | null
   // Joined
   company_name?: string | null
+  company_review_status?: 'vetted' | 'unreviewed' | 'excluded' | null
 }
 
 export interface Education {
