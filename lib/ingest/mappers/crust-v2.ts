@@ -12,7 +12,7 @@
 //   experience.employment_details.past[]                         → past experiences
 //   education.schools[]                                          → education
 
-export const MAPPER_VERSION = '1.1.0'
+export const MAPPER_VERSION = '1.2.0'
 
 import type { IngestPayload, CanonicalProfile, RawExperience, RawEducation } from './crust'
 import type { PersonSearchResult, PersonSearchEmployer, PersonSearchSchool } from '../crust-person-search'
@@ -73,15 +73,20 @@ function extractLinkedInUrl(r: PersonSearchResult): string | null {
 function mapEmployer(e: PersonSearchEmployer, isCurrent: boolean): RawExperience {
   const start = dateOnly(e.start_date)
   const end = dateOnly(e.end_date)
-  // Capture the company's canonical LinkedIn URL when present. Crust returns
-  // this on every embedded employer in v2 person responses; the ingest path
-  // uses it as the canonical match key for upsertCompany(). Only the URL is
-  // available — domain/website/industry/founding_year live on the separate
-  // /company/search endpoint and require a richer enrichment pass.
+  // Capture the company's identity signals from the v2 person sub-object.
+  // Per resolved issue #8: crustdata_company_id is the canonical match key
+  // (beats linkedin_url which beats name fallback) — Crust returns multiple
+  // distinct entities for short names like "Anduril", and the integer id
+  // disambiguates them. linkedin_url + professional_network_id are stored
+  // as secondary identity for rebrand resilience.
   const companyLinkedinUrl = e.company_professional_network_profile_url?.trim() || undefined
+  const crustdataCompanyId = typeof e.crustdata_company_id === 'number' ? e.crustdata_company_id : undefined
+  const companyPnId = e.professional_network_id?.trim() || undefined
   return {
     company_name: e.name?.trim() || undefined,
     company_linkedin_url: companyLinkedinUrl,
+    crustdata_company_id: crustdataCompanyId,
+    company_professional_network_id: companyPnId,
     title: e.title?.trim() || undefined,
     start_date: start,
     end_date: end,
@@ -199,6 +204,8 @@ export function mapPersonSearchToCanonical(record: PersonSearchResult): IngestPa
     location_resolved: resolveLocation(record),
     current_company: primaryCurrent?.name?.trim() || null,
     current_company_linkedin_url: primaryCurrent?.company_professional_network_profile_url?.trim() || null,
+    current_company_crustdata_id: typeof primaryCurrent?.crustdata_company_id === 'number' ? primaryCurrent.crustdata_company_id : null,
+    current_company_professional_network_id: primaryCurrent?.professional_network_id?.trim() || null,
     current_title: primaryCurrent?.title?.trim() || record.basic_profile?.current_title?.trim() || null,
     years_experience: yearsExperience,
     years_at_current_company: yearsAtCurrent,

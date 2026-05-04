@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { CompanyBucket, CompanyStatus } from '@/app/types'
+import { CompanyBucket, CompanyStatus, CompanyCategory, CompanyReviewStatus } from '@/app/types'
+import { HARDWARE_INDUSTRIES, NON_HARDWARE_INDUSTRIES, REVIEW_STATUSES } from '@/lib/companies/taxonomy'
 
 const BUCKET_OPTIONS: Array<{ value: CompanyBucket; label: string }> = [
   { value: 'static_mature',    label: 'Static Mature' },
@@ -26,11 +27,17 @@ export default function NewCompanyPage() {
 
   const [form, setForm] = useState({
     company_name: '',
-    primary_industry_tag: '',
+    category: '' as '' | CompanyCategory,
+    primary_industry: '',
     founding_year: '' as string,
     current_status: 'active' as CompanyStatus,
     company_bucket: '' as CompanyBucket | '',
+    review_status: 'unreviewed' as CompanyReviewStatus,
   })
+
+  const industryOptions = form.category === 'hardware' ? HARDWARE_INDUSTRIES
+    : form.category === 'non_hardware' ? NON_HARDWARE_INDUSTRIES
+    : []
 
   async function handleCreate() {
     if (!form.company_name.trim()) {
@@ -40,14 +47,18 @@ export default function NewCompanyPage() {
     setSubmitting(true)
     setError(null)
     try {
-      const insert = {
+      // V1 schema: category=null requires primary_industry=null + empty industries[]/domain_tags[]
+      const insert: Record<string, unknown> = {
         company_name: form.company_name.trim(),
-        primary_industry_tag: form.primary_industry_tag.trim() || null,
+        category: form.category || null,
+        primary_industry: form.category && form.primary_industry ? form.primary_industry : null,
+        industries: form.category && form.primary_industry ? [form.primary_industry] : [],
+        domain_tags: [],
         founding_year: form.founding_year ? parseInt(form.founding_year, 10) : null,
         current_status: form.current_status,
         company_bucket: (form.company_bucket as CompanyBucket) || null,
         company_score_mode: 'manual' as const,
-        manual_review_status: 'unreviewed' as const,
+        review_status: form.review_status,
       }
       const { data, error } = await supabase
         .from('companies')
@@ -96,14 +107,29 @@ export default function NewCompanyPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Industry Tag</label>
-            <input
-              type="text"
-              value={form.primary_industry_tag}
-              onChange={(e) => setForm({ ...form, primary_industry_tag: e.target.value })}
-              placeholder="e.g. AI, FinTech, SaaS"
-              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Category</label>
+            <select
+              value={form.category}
+              onChange={(e) => setForm({ ...form, category: e.target.value as '' | CompanyCategory, primary_industry: '' })}
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">— unclassified —</option>
+              <option value="hardware">Hardware</option>
+              <option value="non_hardware">Non-hardware</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Primary Industry</label>
+            <select
+              value={form.primary_industry}
+              onChange={(e) => setForm({ ...form, primary_industry: e.target.value })}
+              disabled={!form.category}
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+            >
+              <option value="">— pick —</option>
+              {industryOptions.map(i => <option key={i} value={i}>{i}</option>)}
+            </select>
           </div>
 
           <div>
@@ -130,6 +156,17 @@ export default function NewCompanyPage() {
           </div>
 
           <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Review Status</label>
+            <select
+              value={form.review_status}
+              onChange={(e) => setForm({ ...form, review_status: e.target.value as CompanyReviewStatus })}
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              {REVIEW_STATUSES.map(rs => <option key={rs} value={rs}>{rs}</option>)}
+            </select>
+          </div>
+
+          <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">Company Bucket</label>
             <select
               value={form.company_bucket}
@@ -143,7 +180,8 @@ export default function NewCompanyPage() {
         </div>
 
         <p className="text-xs text-tertiary mb-4">
-          After creating the company, you can add year scores on the edit page.
+          After creating the company, you can add year scores, domain tags, and additional industries on the edit page.
+          New companies created via candidate ingestion auto-fill review_status=&apos;unreviewed&apos; and tagging_method=NULL — the cron picks them up.
         </p>
 
         <div className="flex gap-2">

@@ -11,7 +11,8 @@ interface ConditionRowEditorProps {
   specialtyOptions: MultiSelectOption[]
   seniorityOptions: MultiSelectOption[]
   industryOptions?: MultiSelectOption[]
-  focusOptions?: MultiSelectOption[]
+  // V1 (post-migration 031): renamed from focusOptions to categoryOptions.
+  categoryOptions?: MultiSelectOption[]
   stageOptions?: MultiSelectOption[]
   schoolGroupOptions?: MultiSelectOption[]
   onSave: (row: ConditionRow) => void
@@ -49,7 +50,7 @@ const inputStyle: React.CSSProperties = { width: '100%', maxWidth: 120, padding:
 
 export default function ConditionRowEditor({
   row, entityType, entityOptions, specialtyOptions, seniorityOptions,
-  industryOptions, focusOptions, schoolGroupOptions,
+  industryOptions, categoryOptions, schoolGroupOptions,
   onSave, onCancel, onDelete,
 }: ConditionRowEditorProps) {
   const [scope, setScope] = useState<TemporalScope>(row.scope)
@@ -58,7 +59,7 @@ export default function ConditionRowEditor({
     entityType === 'company' ? (row.target.companyIds || []) : (row.target.schoolIds || [])
   )
   const [attrIndustry, setAttrIndustry] = useState<string[]>(row.target.companyAttributes?.industry || [])
-  const [attrFocus, setAttrFocus] = useState<string[]>(row.target.companyAttributes?.focus || [])
+  const [attrCategory, setAttrCategory] = useState<string[]>(row.target.companyAttributes?.category || [])
   const [attrStage, setAttrStage] = useState<string[]>(row.target.companyAttributes?.stage || [])
   const [attrFoundedAfter, setAttrFoundedAfter] = useState(row.target.companyAttributes?.foundedAfter?.toString() || '')
   const [attrFoundedBefore, setAttrFoundedBefore] = useState(row.target.companyAttributes?.foundedBefore?.toString() || '')
@@ -79,7 +80,7 @@ export default function ConditionRowEditor({
   // Validation: must have at least one target
   const isValid = targetType === 'specific'
     ? entityIds.length > 0
-    : (attrIndustry.length > 0 || attrFocus.length > 0 || attrStage.length > 0 ||
+    : (attrIndustry.length > 0 || attrCategory.length > 0 || attrStage.length > 0 ||
        !!attrFoundedAfter || !!attrFoundedBefore || attrSchoolGroups.length > 0)
 
   function handleSave() {
@@ -100,7 +101,7 @@ export default function ConditionRowEditor({
       if (entityType === 'company') {
         built.target.companyAttributes = {
           industry: attrIndustry.length > 0 ? attrIndustry : undefined,
-          focus: attrFocus.length > 0 ? attrFocus : undefined,
+          category: attrCategory.length > 0 ? attrCategory : undefined,
           stage: attrStage.length > 0 ? attrStage : undefined,
           foundedAfter: attrFoundedAfter ? parseInt(attrFoundedAfter) : undefined,
           foundedBefore: attrFoundedBefore ? parseInt(attrFoundedBefore) : undefined,
@@ -164,8 +165,8 @@ export default function ConditionRowEditor({
               {industryOptions && industryOptions.length > 0 && (
                 <MultiSelect label="Industry" options={industryOptions} selected={attrIndustry} onChange={setAttrIndustry} placeholder="Any industry" />
               )}
-              {focusOptions && focusOptions.length > 0 && (
-                <MultiSelect label="Focus" options={focusOptions} selected={attrFocus} onChange={setAttrFocus} placeholder="Any focus" />
+              {categoryOptions && categoryOptions.length > 0 && (
+                <MultiSelect label="Category" options={categoryOptions} selected={attrCategory} onChange={setAttrCategory} placeholder="Any category" />
               )}
               <MultiSelect label="Stage" options={STAGE_OPTIONS} selected={attrStage} onChange={setAttrStage} placeholder="Any stage" />
               <MultiSelect label="Size" options={SIZE_OPTIONS} selected={[]} onChange={() => {}} placeholder="Any size (data pending)" />

@@ -17,7 +17,8 @@ interface ConditionRowListProps {
   defaultScope: TemporalScope
   onDefaultScopeChange: (v: TemporalScope) => void
   industryOptions?: MultiSelectOption[]
-  focusOptions?: MultiSelectOption[]
+  // V1 (post-migration 031): renamed from focusOptions to categoryOptions.
+  categoryOptions?: MultiSelectOption[]
   stageOptions?: MultiSelectOption[]
   schoolGroupOptions?: MultiSelectOption[]
   label: string
@@ -35,7 +36,7 @@ const scopeBtn = (active: boolean): React.CSSProperties => ({
 export default function ConditionRowList({
   rows, onChange, entityType, entityOptions, entityNameMap,
   specialtyOptions, seniorityOptions, defaultScope, onDefaultScopeChange,
-  industryOptions, focusOptions, stageOptions, schoolGroupOptions, label,
+  industryOptions, categoryOptions, stageOptions, schoolGroupOptions, label,
 }: ConditionRowListProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   // Pending row: held in local state until Save. Never touches rows array.
@@ -105,7 +106,7 @@ export default function ConditionRowList({
                 specialtyOptions={specialtyOptions}
                 seniorityOptions={seniorityOptions}
                 industryOptions={industryOptions}
-                focusOptions={focusOptions}
+                categoryOptions={categoryOptions}
                 stageOptions={stageOptions}
                 schoolGroupOptions={schoolGroupOptions}
                 onSave={(updated) => { updateRow(updated); setEditingId(null) }}
@@ -128,7 +129,7 @@ export default function ConditionRowList({
             specialtyOptions={specialtyOptions}
             seniorityOptions={seniorityOptions}
             industryOptions={industryOptions}
-            focusOptions={focusOptions}
+            categoryOptions={categoryOptions}
             stageOptions={stageOptions}
             schoolGroupOptions={schoolGroupOptions}
             onSave={savePending}

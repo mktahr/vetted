@@ -118,7 +118,9 @@ function SearchBuilderInner() {
   const [yearsMax, setYearsMax] = useState('')
   const [clearanceSel, setClearanceSel] = useState<string[]>([])
   const [locationSel, setLocationSel] = useState<string[]>([])
-  const [focusScope, setFocusScope] = useState<'all' | 'hard_tech' | 'all_tech'>('all')
+  // V1 (post-migration 031): two independent scope filters, both default 'all' per Option C.
+  const [categoryScope, setCategoryScope] = useState<'all' | 'hardware' | 'non_hardware'>('all')
+  const [reviewStatusScope, setReviewStatusScope] = useState<'all' | 'vetted' | 'unreviewed' | 'excluded'>('all')
   const [compoundCompany, setCompoundCompany] = useState<string[]>([])
   const [compoundCompanyScope, setCompoundCompanyScope] = useState<TemporalScope>('ever')
   const [compoundSpecialties, setCompoundSpecialties] = useState<string[]>([])
@@ -151,7 +153,7 @@ function SearchBuilderInner() {
   const [schoolGroupOptions, setSchoolGroupOptions] = useState<MultiSelectOption[]>([])
   const [companyGroupOptions, setCompanyGroupOptions] = useState<MultiSelectOption[]>([])
   const [industryOptions, setIndustryOptions] = useState<MultiSelectOption[]>([])
-  const [focusFilterOptions, setFocusFilterOptions] = useState<MultiSelectOption[]>([])
+  const [categoryFilterOptions, setCategoryFilterOptions] = useState<MultiSelectOption[]>([])
   const [companyNameMap, setCompanyNameMap] = useState<Record<string, string>>({})
   const [schoolNameMap, setSchoolNameMap] = useState<Record<string, string>>({})
   const locationOptions = buildLocationOptions()
@@ -165,7 +167,7 @@ function SearchBuilderInner() {
       ] = await Promise.all([
         supabase.from('role_dictionary').select('role_id, role_name, display_order').eq('active', true).order('display_order'),
         supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
-        fetchAllRows<any>('companies', 'company_id, company_name, primary_industry_tag, focus, company_groups', 'company_name').then(data => ({ data })),
+        fetchAllRows<any>('companies', 'company_id, company_name, primary_industry, industries, category, review_status, legacy_primary_industry_tag, company_groups', 'company_name').then(data => ({ data })),
         fetchAllRows<any>('schools', 'school_id, school_name, school_score, is_foreign, school_groups', 'school_name').then(data => ({ data })),
         supabase.from('specialty_dictionary').select('specialty_normalized, parent_function').eq('active', true).order('specialty_normalized'),
         supabase.from('person_signals_active').select('signal_id, canonical_name, category').order('confidence', { ascending: false }),
@@ -173,7 +175,12 @@ function SearchBuilderInner() {
 
       setRoleOptions((roles || []).map((r: any) => ({ value: r.role_id, label: r.role_name })))
       setSeniorityOptions((srs || []).map(s => ({ value: s.seniority_normalized, label: s.seniority_normalized.replace(/_/g, ' ') })))
-      setCompanyOptions((companies || []).filter((c: any) => c.focus === 'hard_tech' || c.focus === 'all_tech').map((c: any) => ({ value: c.company_id, label: c.company_name, sublabel: c.primary_industry_tag || undefined })))
+      // V1: include all non-excluded companies (vetted + unreviewed). Excluded are hidden.
+      setCompanyOptions((companies || []).filter((c: any) => c.review_status !== 'excluded').map((c: any) => ({
+        value: c.company_id,
+        label: c.company_name,
+        sublabel: c.primary_industry || c.legacy_primary_industry_tag || undefined,
+      })))
       setSchoolOptions((schools || []).filter((s: any) => s.school_score != null).map((s: any) => ({ value: s.school_id, label: s.school_name, sublabel: s.is_foreign ? "Int'l" : undefined })))
       setSpecialtyOptions((specs || []).map((d: any) => ({ value: d.specialty_normalized, label: d.specialty_normalized.replace(/_/g, ' '), sublabel: (d.parent_function || '').replace(/_/g, ' ') })))
 
@@ -217,16 +224,20 @@ function SearchBuilderInner() {
       const cgLabels: Record<string, string> = { top_law_firm: 'Top Law Firm' }
       setCompanyGroupOptions(Array.from(cgVals).sort().map(g => ({ value: g, label: cgLabels[g] || g.replace(/_/g, ' ') })))
 
-      // Name maps + attribute options for condition rows
+      // Name maps + attribute options for condition rows.
+      // V1: industry options come from primary_industry, industries[], or fall back
+      // to legacy_primary_industry_tag for un-tagged companies.
       const cnMap: Record<string, string> = {}
       const indVals = new Set<string>()
       for (const c of companies || []) {
         cnMap[c.company_id] = c.company_name
-        if (c.primary_industry_tag) indVals.add(c.primary_industry_tag)
+        if (c.primary_industry) indVals.add(c.primary_industry)
+        if (Array.isArray(c.industries)) for (const i of c.industries) indVals.add(i)
+        if (c.legacy_primary_industry_tag) indVals.add(c.legacy_primary_industry_tag)
       }
       setCompanyNameMap(cnMap)
       setIndustryOptions(Array.from(indVals).sort().map(v => ({ value: v, label: v })))
-      setFocusFilterOptions([{ value: 'hard_tech', label: 'Hard Tech' }, { value: 'all_tech', label: 'All Tech' }])
+      setCategoryFilterOptions([{ value: 'hardware', label: 'Hardware' }, { value: 'non_hardware', label: 'Non-hardware' }])
       const snMap: Record<string, string> = {}
       for (const s of schools || []) snMap[s.school_id] = s.school_name
       setSchoolNameMap(snMap)
@@ -248,7 +259,11 @@ function SearchBuilderInner() {
           if (f.yearsMax) setYearsMax(f.yearsMax)
           if (f.clearanceSel) setClearanceSel(f.clearanceSel)
           if (f.locationSel) setLocationSel(f.locationSel)
-          if (f.focusScope) setFocusScope(f.focusScope)
+          // V1 backward compat: legacy focusScope=hard_tech maps to categoryScope=hardware.
+          if (f.focusScope === 'hard_tech') setCategoryScope('hardware')
+          else if (f.focusScope) setCategoryScope('all')
+          if (f.categoryScope) setCategoryScope(f.categoryScope)
+          if (f.reviewStatusScope) setReviewStatusScope(f.reviewStatusScope)
           // Per-pill scope: new format from ProfileTable
           if (f.compoundCompanyPills && Array.isArray(f.compoundCompanyPills)) {
             setCompoundCompany(f.compoundCompanyPills.map((p: any) => p.value))
@@ -287,7 +302,7 @@ function SearchBuilderInner() {
   function runSearch() {
     const state = {
       rolePills, specialtyPills, seniorityPills,
-      bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, focusScope,
+      bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, categoryScope, reviewStatusScope,
       compoundCompanyPills: compoundCompany.map(v => ({ value: v, scope: compoundCompanyScope })),
       compoundSpecialties, compoundYearMin, compoundYearMax,
       schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean,
@@ -314,11 +329,18 @@ function SearchBuilderInner() {
           <h1 style={{ fontSize: 'var(--fs-22)', fontWeight: 'var(--fw-semibold)' as any, marginTop: 8 }}>Build a Search</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)' }}>Scope:</span>
-          <select value={focusScope} onChange={e => setFocusScope(e.target.value as any)} style={{ padding: '4px 8px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-button)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)', background: 'var(--bg-surface)', color: 'var(--fg-primary)', cursor: 'pointer' }}>
-            <option value="all">All candidates</option>
-            <option value="hard_tech">Hard tech</option>
-            <option value="all_tech">All tech</option>
+          <span style={{ fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)' }}>Category:</span>
+          <select value={categoryScope} onChange={e => setCategoryScope(e.target.value as any)} style={{ padding: '4px 8px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-button)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)', background: 'var(--bg-surface)', color: 'var(--fg-primary)', cursor: 'pointer' }}>
+            <option value="all">All</option>
+            <option value="hardware">Hardware</option>
+            <option value="non_hardware">Non-hardware</option>
+          </select>
+          <span style={{ fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)', marginLeft: 8 }}>Visibility:</span>
+          <select value={reviewStatusScope} onChange={e => setReviewStatusScope(e.target.value as any)} style={{ padding: '4px 8px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-button)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-sans)', background: 'var(--bg-surface)', color: 'var(--fg-primary)', cursor: 'pointer' }}>
+            <option value="all">All companies</option>
+            <option value="vetted">Vetted only</option>
+            <option value="unreviewed">Unreviewed only</option>
+            <option value="excluded">Excluded only</option>
           </select>
         </div>
       </div>
@@ -376,7 +398,7 @@ function SearchBuilderInner() {
             defaultScope={companyDefaultScope}
             onDefaultScopeChange={setCompanyDefaultScope}
             industryOptions={industryOptions}
-            focusOptions={focusFilterOptions}
+            categoryOptions={categoryFilterOptions}
             label="Company conditions"
           />
         </div>

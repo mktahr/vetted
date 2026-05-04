@@ -3,10 +3,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Company, CompanyBucket, CompanyStatus, CompanyFocus, CompanyYearScore, CompanyFunctionScore } from '@/app/types'
+import { Company, CompanyBucket, CompanyStatus, CompanyCategory, CompanyReviewStatus, CompanyYearScore, CompanyFunctionScore } from '@/app/types'
 import CompanyLogo, { guessDomain } from '@/app/components/CompanyLogo'
 import { COMPANY_FUNCTIONS } from '@/app/constants'
 import ThemeToggle from '@/app/components/ThemeToggle'
+import IndustryBadge from '@/app/components/IndustryBadge'
+import {
+  HARDWARE_INDUSTRIES, NON_HARDWARE_INDUSTRIES,
+  HARDWARE_DOMAIN_TAGS, NON_HARDWARE_DOMAIN_TAGS,
+  REVIEW_STATUSES, industriesFor,
+} from '@/lib/companies/taxonomy'
 
 const BUCKET_OPTIONS: Array<{ value: CompanyBucket; label: string }> = [
   { value: 'static_mature',    label: 'Static Mature' },
@@ -22,17 +28,23 @@ const STATUS_OPTIONS: Array<{ value: CompanyStatus; label: string }> = [
   { value: 'shut_down', label: 'Shut Down' },
 ]
 
-const FOCUS_OPTIONS: Array<{ value: CompanyFocus; label: string }> = [
-  { value: 'hard_tech',  label: 'Hard Tech' },
-  { value: 'all_tech',   label: 'All Tech' },
-  { value: 'unreviewed', label: 'Unreviewed' },
+// V1 category options (with NULL=unclassified represented as 'unclassified')
+type CategoryFilter = '' | 'hardware' | 'non_hardware' | 'unclassified'
+const CATEGORY_OPTIONS: Array<{ value: CategoryFilter; label: string }> = [
+  { value: '',             label: 'All categories' },
+  { value: 'hardware',     label: 'Hardware' },
+  { value: 'non_hardware', label: 'Non-hardware' },
+  { value: 'unclassified', label: 'Unclassified (NULL)' },
 ]
 
-// Default focus filter shows reviewed companies only (hard_tech + all_tech).
-// Use 'all' to include unreviewed in the view.
-type FocusFilter = '' | 'hard_tech' | 'all_tech' | 'unreviewed' | 'all'
+const REVIEW_OPTIONS: Array<{ value: '' | CompanyReviewStatus; label: string }> = [
+  { value: '',           label: 'All review statuses' },
+  { value: 'vetted',     label: 'Vetted' },
+  { value: 'unreviewed', label: 'Unreviewed' },
+  { value: 'excluded',   label: 'Excluded' },
+]
 
-type SortBy = 'name_asc' | 'name_desc' | 'year_score' | 'function_score'
+type SortBy = 'name_asc' | 'name_desc' | 'year_score' | 'function_score' | 'tagging_confidence' | 'headcount_latest'
 
 export default function CompaniesListPage() {
   const router = useRouter()
@@ -47,14 +59,15 @@ export default function CompaniesListPage() {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('')
-  const [industryFilter, setIndustryFilter] = useState('')
+  const [industryFilter, setIndustryFilter] = useState('')              // matches against industries[] (GIN containment)
+  const [domainTagFilter, setDomainTagFilter] = useState('')            // matches against domain_tags[]
   const [bucketFilter, setBucketFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [reviewFilter, setReviewFilter] = useState('')
-  // Default: reviewed-only view (hard_tech + all_tech). Matches recruiter
-  // workflow — unreviewed is the admin-triage list, opted in explicitly.
-  const [focusFilter, setFocusFilter] = useState<FocusFilter>('')
-  const [bulkFocusing, setBulkFocusing] = useState(false)
+  const [reviewFilter, setReviewFilter] = useState<'' | CompanyReviewStatus>('')
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('')
+  const [taggingMethodFilter, setTaggingMethodFilter] = useState('')
+  const [confidenceMinFilter, setConfidenceMinFilter] = useState<number | ''>('')
+  const [bulkUpdating, setBulkUpdating] = useState(false)
 
   // Sort
   const [sortBy, setSortBy] = useState<SortBy>('name_asc')
@@ -65,8 +78,6 @@ export default function CompaniesListPage() {
   useEffect(() => {
     async function fetchAll() {
       try {
-        // Fetch all companies — Supabase defaults to 1000 rows, so we
-        // need to paginate or set a higher limit for 1300+ companies.
         let allCompanies: Company[] = []
         let from = 0
         const pageSize = 1000
@@ -78,7 +89,7 @@ export default function CompaniesListPage() {
             .range(from, from + pageSize - 1)
           if (pageErr) throw pageErr
           if (!page || page.length === 0) break
-          allCompanies = allCompanies.concat(page)
+          allCompanies = allCompanies.concat(page as Company[])
           if (page.length < pageSize) break
           from += pageSize
         }
@@ -93,9 +104,6 @@ export default function CompaniesListPage() {
           .from('company_function_scores')
           .select('company_id, function_normalized, year, function_score')
         setFunctionScoresAll(fs || [])
-
-        // Function options come from curated COMPANY_FUNCTIONS constant
-        // (not function_dictionary which has irrelevant entries like 'founder')
       } catch (err: any) {
         setError(err?.message || 'Failed to load companies.')
       } finally {
@@ -105,7 +113,6 @@ export default function CompaniesListPage() {
     fetchAll()
   }, [])
 
-  // Build per-company year-score lookups (latest score, all years, map by year)
   const scoresByCompany = useMemo(() => {
     const map: Record<string, CompanyYearScore[]> = {}
     for (const ys of yearScoresAll) {
@@ -113,7 +120,7 @@ export default function CompaniesListPage() {
       map[ys.company_id].push(ys)
     }
     for (const id of Object.keys(map)) {
-      map[id].sort((a, b) => b.year - a.year) // newest first
+      map[id].sort((a, b) => b.year - a.year)
     }
     return map
   }, [yearScoresAll])
@@ -121,7 +128,6 @@ export default function CompaniesListPage() {
   const functionScoreByCompany = useMemo(() => {
     const map: Record<string, number | null> = {}
     if (!sortFunction) return map
-    // Take the MAX function_score for that function across years per company
     for (const fs of functionScoresAll) {
       if (fs.function_normalized !== sortFunction) continue
       const current = map[fs.company_id]
@@ -132,14 +138,24 @@ export default function CompaniesListPage() {
     return map
   }, [functionScoresAll, sortFunction])
 
-  // Unique industries for the filter dropdown
+  // Industry options reflect the V1 controlled vocabulary, gated by category.
   const industryOptions = useMemo(() => {
-    const set = new Set<string>()
-    for (const c of companies) if (c.primary_industry_tag) set.add(c.primary_industry_tag)
+    if (categoryFilter === 'hardware') return HARDWARE_INDUSTRIES.slice()
+    if (categoryFilter === 'non_hardware') return NON_HARDWARE_INDUSTRIES.slice()
+    if (categoryFilter === 'unclassified') return [] as string[]
+    // Default: union (deduped)
+    const set = new Set<string>([...HARDWARE_INDUSTRIES, ...NON_HARDWARE_INDUSTRIES])
     return Array.from(set).sort()
-  }, [companies])
+  }, [categoryFilter])
 
-  // Filter + sort
+  const domainTagOptions = useMemo(() => {
+    if (categoryFilter === 'hardware') return HARDWARE_DOMAIN_TAGS.slice()
+    if (categoryFilter === 'non_hardware') return NON_HARDWARE_DOMAIN_TAGS.slice()
+    if (categoryFilter === 'unclassified') return [] as string[]
+    const set = new Set<string>([...HARDWARE_DOMAIN_TAGS, ...NON_HARDWARE_DOMAIN_TAGS])
+    return Array.from(set).sort()
+  }, [categoryFilter])
+
   const filtered = useMemo(() => {
     let rows = [...companies]
 
@@ -147,22 +163,31 @@ export default function CompaniesListPage() {
       const q = searchQuery.toLowerCase()
       rows = rows.filter(c => c.company_name.toLowerCase().includes(q))
     }
-    if (industryFilter) rows = rows.filter(c => c.primary_industry_tag === industryFilter)
-    if (bucketFilter)   rows = rows.filter(c => c.company_bucket === bucketFilter)
-    if (statusFilter)   rows = rows.filter(c => c.current_status === statusFilter)
-    if (reviewFilter === 'scored') rows = rows.filter(c => c.manual_review_status === 'reviewed' || c.manual_review_status === 'locked')
-    if (reviewFilter === 'unscored') rows = rows.filter(c => c.manual_review_status === 'unreviewed')
-
-    // Focus filter. Default ('') = reviewed only = hard_tech + all_tech.
-    // 'all' explicitly includes unreviewed; specific values filter exactly.
-    if (focusFilter === '' || focusFilter === 'all_tech') {
-      rows = rows.filter(c => c.focus === 'hard_tech' || c.focus === 'all_tech')
-    } else if (focusFilter === 'hard_tech') {
-      rows = rows.filter(c => c.focus === 'hard_tech')
-    } else if (focusFilter === 'unreviewed') {
-      rows = rows.filter(c => c.focus === 'unreviewed')
+    if (industryFilter) {
+      // Match against V1 industries[] OR legacy_primary_industry_tag (display compat)
+      rows = rows.filter(c =>
+        (c.industries && c.industries.includes(industryFilter)) ||
+        c.legacy_primary_industry_tag === industryFilter,
+      )
     }
-    // focusFilter === 'all' → no filter applied
+    if (domainTagFilter) {
+      rows = rows.filter(c => c.domain_tags && c.domain_tags.includes(domainTagFilter))
+    }
+    if (bucketFilter) rows = rows.filter(c => c.company_bucket === bucketFilter)
+    if (statusFilter) rows = rows.filter(c => c.current_status === statusFilter)
+    if (reviewFilter) rows = rows.filter(c => c.review_status === reviewFilter)
+
+    if (categoryFilter === 'hardware') rows = rows.filter(c => c.category === 'hardware')
+    else if (categoryFilter === 'non_hardware') rows = rows.filter(c => c.category === 'non_hardware')
+    else if (categoryFilter === 'unclassified') rows = rows.filter(c => c.category === null || c.category === undefined)
+
+    if (taggingMethodFilter) {
+      if (taggingMethodFilter === 'untagged') rows = rows.filter(c => c.tagging_method === null || c.tagging_method === undefined)
+      else rows = rows.filter(c => c.tagging_method === taggingMethodFilter)
+    }
+    if (confidenceMinFilter !== '') {
+      rows = rows.filter(c => (c.tagging_confidence ?? 0) >= confidenceMinFilter)
+    }
 
     if (sortBy === 'name_asc') {
       rows.sort((a, b) => a.company_name.localeCompare(b.company_name))
@@ -172,7 +197,7 @@ export default function CompaniesListPage() {
       rows.sort((a, b) => {
         const aScore = scoresByCompany[a.company_id]?.find(s => s.year === sortYear)?.company_score ?? -1
         const bScore = scoresByCompany[b.company_id]?.find(s => s.year === sortYear)?.company_score ?? -1
-        return bScore - aScore // highest first
+        return bScore - aScore
       })
     } else if (sortBy === 'function_score') {
       rows.sort((a, b) => {
@@ -180,19 +205,26 @@ export default function CompaniesListPage() {
         const bScore = functionScoreByCompany[b.company_id] ?? -1
         return bScore - aScore
       })
+    } else if (sortBy === 'tagging_confidence') {
+      rows.sort((a, b) => (b.tagging_confidence ?? -1) - (a.tagging_confidence ?? -1))
+    } else if (sortBy === 'headcount_latest') {
+      rows.sort((a, b) => (b.headcount_latest ?? -1) - (a.headcount_latest ?? -1))
     }
 
     return rows
-  }, [companies, searchQuery, industryFilter, bucketFilter, statusFilter, reviewFilter, focusFilter, sortBy, sortYear, sortFunction, scoresByCompany, functionScoreByCompany])
+  }, [companies, searchQuery, industryFilter, domainTagFilter, bucketFilter, statusFilter, reviewFilter, categoryFilter, taggingMethodFilter, confidenceMinFilter, sortBy, sortYear, sortFunction, scoresByCompany, functionScoreByCompany])
 
-  const activeFilters = [industryFilter, bucketFilter, statusFilter, reviewFilter, focusFilter].filter(Boolean).length
+  const activeFilters = [industryFilter, domainTagFilter, bucketFilter, statusFilter, reviewFilter, categoryFilter, taggingMethodFilter].filter(Boolean).length + (confidenceMinFilter !== '' ? 1 : 0)
   const clearAll = () => {
     setSearchQuery('')
     setIndustryFilter('')
+    setDomainTagFilter('')
     setBucketFilter('')
     setStatusFilter('')
     setReviewFilter('')
-    setFocusFilter('')
+    setCategoryFilter('')
+    setTaggingMethodFilter('')
+    setConfidenceMinFilter('')
   }
 
   function toggleSelect(id: string) {
@@ -204,11 +236,8 @@ export default function CompaniesListPage() {
   }
 
   function toggleSelectAll() {
-    if (selectedIds.size === filtered.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(filtered.map(c => c.company_id)))
-    }
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set())
+    else setSelectedIds(new Set(filtered.map(c => c.company_id)))
   }
 
   async function handleBulkDelete() {
@@ -224,43 +253,58 @@ export default function CompaniesListPage() {
     setBulkDeleteConfirm(false)
   }
 
-  async function handleBulkSetFocus(newFocus: CompanyFocus) {
+  // Per inventory: bulk-edit allowed on category and review_status only.
+  // NOT on industry, domain_tags, or any other field (too easy to clobber per-row data).
+  async function handleBulkSetCategory(newCategory: CompanyCategory | null) {
     if (selectedIds.size === 0) return
-    setBulkFocusing(true)
+    setBulkUpdating(true)
+    const ids = Array.from(selectedIds)
+    // Setting category=null requires also clearing primary_industry, industries[], domain_tags[]
+    // (per CHECK constraint). Setting category=hw/nhw doesn't auto-fill industry — admin still must.
+    const update: Record<string, unknown> =
+      newCategory === null
+        ? { category: null, primary_industry: null, industries: [], domain_tags: [] }
+        : { category: newCategory }
+    const { error: updateErr } = await supabase
+      .from('companies')
+      .update(update)
+      .in('company_id', ids)
+    if (updateErr) {
+      alert(`Failed to update category: ${updateErr.message}`)
+    } else {
+      setCompanies(prev => prev.map(c =>
+        selectedIds.has(c.company_id)
+          ? { ...c, category: newCategory, ...(newCategory === null ? { primary_industry: null, industries: [], domain_tags: [] } : {}) }
+          : c
+      ))
+      setSelectedIds(new Set())
+    }
+    setBulkUpdating(false)
+  }
+
+  async function handleBulkSetReviewStatus(newReview: CompanyReviewStatus) {
+    if (selectedIds.size === 0) return
+    setBulkUpdating(true)
     const ids = Array.from(selectedIds)
     const { error: updateErr } = await supabase
       .from('companies')
-      .update({ focus: newFocus })
+      .update({ review_status: newReview })
       .in('company_id', ids)
     if (updateErr) {
-      alert(`Failed to update focus: ${updateErr.message}`)
+      alert(`Failed to update review_status: ${updateErr.message}`)
     } else {
-      setCompanies(prev => prev.map(c => selectedIds.has(c.company_id) ? { ...c, focus: newFocus } : c))
+      setCompanies(prev => prev.map(c => selectedIds.has(c.company_id) ? { ...c, review_status: newReview } : c))
       setSelectedIds(new Set())
     }
-    setBulkFocusing(false)
+    setBulkUpdating(false)
   }
 
-  async function handleQuickPromote(companyId: string, newFocus: CompanyFocus) {
-    const { error: updateErr } = await supabase
-      .from('companies')
-      .update({ focus: newFocus })
-      .eq('company_id', companyId)
-    if (updateErr) {
-      alert(`Failed to promote: ${updateErr.message}`)
-      return
-    }
-    setCompanies(prev => prev.map(c => c.company_id === companyId ? { ...c, focus: newFocus } : c))
-  }
-
-  // Year range for sort-by-year dropdown — build from data
   const yearRange = useMemo(() => {
     const years = new Set<number>()
     for (const ys of yearScoresAll) years.add(ys.year)
-    return Array.from(years).sort((a, b) => b - a) // newest first
+    return Array.from(years).sort((a, b) => b - a)
   }, [yearScoresAll])
 
-  // Compact renderer for year scores in the table
   function renderYearScores(companyId: string): JSX.Element {
     const rows = scoresByCompany[companyId] || []
     if (rows.length === 0) return <span className="text-xs text-tertiary">—</span>
@@ -305,6 +349,18 @@ export default function CompaniesListPage() {
         <div className="flex items-center gap-3">
           <ThemeToggle />
           <button
+            onClick={() => router.push('/admin/companies/triage')}
+            className="px-3 py-2 text-sm border border-border rounded-lg hover:bg-background"
+          >
+            Triage queue
+          </button>
+          <button
+            onClick={() => router.push('/admin/import/companies')}
+            className="px-3 py-2 text-sm border border-border rounded-lg hover:bg-background"
+          >
+            Import
+          </button>
+          <button
             onClick={() => router.push('/admin/companies/new')}
             className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-accent-strong"
           >
@@ -313,7 +369,6 @@ export default function CompaniesListPage() {
         </div>
       </div>
 
-      {/* Search */}
       <div className="mb-4">
         <input
           type="text"
@@ -324,17 +379,52 @@ export default function CompaniesListPage() {
         />
       </div>
 
-      {/* Filters + Sort */}
       <div className="mb-6 flex flex-wrap gap-3 items-end">
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">Category</label>
+          <select
+            value={categoryFilter}
+            onChange={(e) => { setCategoryFilter(e.target.value as CategoryFilter); setIndustryFilter(''); setDomainTagFilter('') }}
+            className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            {CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">Review status</label>
+          <select
+            value={reviewFilter}
+            onChange={(e) => setReviewFilter(e.target.value as '' | CompanyReviewStatus)}
+            className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            {REVIEW_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">Industry</label>
           <select
             value={industryFilter}
             onChange={(e) => setIndustryFilter(e.target.value)}
             className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+            disabled={categoryFilter === 'unclassified'}
           >
             <option value="">All industries</option>
             {industryOptions.map(i => <option key={i} value={i}>{i}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">Domain tag</label>
+          <select
+            value={domainTagFilter}
+            onChange={(e) => setDomainTagFilter(e.target.value)}
+            className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+            disabled={categoryFilter === 'unclassified'}
+          >
+            <option value="">All tags</option>
+            {domainTagOptions.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
 
@@ -363,29 +453,33 @@ export default function CompaniesListPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-muted-foreground mb-1">Review Status</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">Tagging method</label>
           <select
-            value={reviewFilter}
-            onChange={(e) => setReviewFilter(e.target.value)}
+            value={taggingMethodFilter}
+            onChange={(e) => setTaggingMethodFilter(e.target.value)}
             className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
           >
-            <option value="">All</option>
-            <option value="scored">Scored only</option>
-            <option value="unscored">Unscored only</option>
+            <option value="">All methods</option>
+            <option value="untagged">Untagged (cron pending)</option>
+            <option value="claude">claude</option>
+            <option value="claude_dict_agree">claude_dict_agree</option>
+            <option value="claude_dict_disagree">claude_dict_disagree</option>
+            <option value="manual">manual</option>
           </select>
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-muted-foreground mb-1">Focus</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">Confidence ≥</label>
           <select
-            value={focusFilter}
-            onChange={(e) => setFocusFilter(e.target.value as FocusFilter)}
+            value={confidenceMinFilter === '' ? '' : String(confidenceMinFilter)}
+            onChange={(e) => setConfidenceMinFilter(e.target.value === '' ? '' : Number(e.target.value))}
             className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
           >
-            <option value="">All Tech (default)</option>
-            <option value="hard_tech">Hard Tech only</option>
-            <option value="unreviewed">Unreviewed only</option>
-            <option value="all">Show everything</option>
+            <option value="">Any</option>
+            <option value="0.9">≥ 0.9</option>
+            <option value="0.7">≥ 0.7</option>
+            <option value="0.5">≥ 0.5</option>
+            <option value="0.3">≥ 0.3</option>
           </select>
         </div>
 
@@ -401,6 +495,8 @@ export default function CompaniesListPage() {
               <option value="name_desc">Name (Z→A)</option>
               <option value="year_score">Year Score</option>
               <option value="function_score">Top by Function</option>
+              <option value="tagging_confidence">Confidence (high→low)</option>
+              <option value="headcount_latest">Headcount (high→low)</option>
             </select>
           </div>
 
@@ -446,7 +542,6 @@ export default function CompaniesListPage() {
         <span className="text-sm text-muted-foreground">
           Showing {filtered.length} of {companies.length} companies
         </span>
-        {/* Header "Find candidates" button — shown when filters active but no checkboxes selected */}
         {selectedIds.size === 0 && (searchQuery || activeFilters > 0) && filtered.length > 0 && (
           <button
             onClick={() => {
@@ -468,7 +563,6 @@ export default function CompaniesListPage() {
         <div className="mb-3 flex flex-wrap items-center gap-3 p-3 bg-watch/10 border border-watch/30 rounded-lg">
           <span className="text-sm text-watch font-medium">{selectedIds.size} selected</span>
 
-          {/* Find candidates from selected */}
           <button
             onClick={() => {
               const ids = Array.from(selectedIds)
@@ -483,17 +577,28 @@ export default function CompaniesListPage() {
             Find candidates at {selectedIds.size} selected
           </button>
 
-          {/* Bulk focus change */}
+          {/* Bulk-edit category (per inventory: only category + review_status allowed for bulk) */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Set focus:</span>
-            {FOCUS_OPTIONS.map(f => (
+            <span className="text-xs text-muted-foreground">Set category:</span>
+            <button onClick={() => handleBulkSetCategory('hardware')} disabled={bulkUpdating}
+              className="px-2 py-1 text-xs bg-card border border-border rounded hover:bg-background disabled:opacity-50">Hardware</button>
+            <button onClick={() => handleBulkSetCategory('non_hardware')} disabled={bulkUpdating}
+              className="px-2 py-1 text-xs bg-card border border-border rounded hover:bg-background disabled:opacity-50">Non-hw</button>
+            <button onClick={() => handleBulkSetCategory(null)} disabled={bulkUpdating}
+              className="px-2 py-1 text-xs bg-card border border-border rounded hover:bg-background disabled:opacity-50"
+              title="Clears category, primary_industry, industries[], domain_tags[] per CHECK constraint">Clear (NULL)</button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Set review:</span>
+            {REVIEW_STATUSES.map(rs => (
               <button
-                key={f.value}
-                onClick={() => handleBulkSetFocus(f.value)}
-                disabled={bulkFocusing}
+                key={rs}
+                onClick={() => handleBulkSetReviewStatus(rs)}
+                disabled={bulkUpdating}
                 className="px-2 py-1 text-xs bg-card border border-border rounded hover:bg-background disabled:opacity-50"
               >
-                {f.label}
+                {rs}
               </button>
             ))}
           </div>
@@ -521,7 +626,6 @@ export default function CompaniesListPage() {
         </div>
       )}
 
-      {/* Table */}
       <div className="bg-card rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-border">
@@ -539,12 +643,12 @@ export default function CompaniesListPage() {
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" className="text-tertiary"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Category</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Industry</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Founded</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Stage</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Size</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Bucket</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Website</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Tags</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Review</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Headcount</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Tagging</th>
               </tr>
             </thead>
             <tbody className="bg-card divide-y divide-border">
@@ -565,7 +669,6 @@ export default function CompaniesListPage() {
                         className="rounded border-border"
                       />
                     </td>
-                    {/* LinkedIn icon */}
                     <td className="px-2 py-3 w-9" onClick={(e) => e.stopPropagation()}>
                       {c.linkedin_url ? (
                         <a href={c.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-tertiary hover:text-foreground">
@@ -575,32 +678,45 @@ export default function CompaniesListPage() {
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" className="text-tertiary" style={{ opacity: 0.25 }}><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                       )}
                     </td>
-                    {/* Name + logo */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <CompanyLogo domain={guessDomain(c.company_name)} companyName={c.company_name} size={20} />
                         <span className="text-foreground font-medium">{c.company_name}</span>
+                        {c.tagging_method == null && (
+                          <span title="Awaiting auto-tagger" className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">tagging…</span>
+                        )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">{c.primary_industry_tag || '—'}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">{c.founding_year ?? '—'}</td>
-                    {/* Stage (funding) */}
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">{(c as any).funding_stage || '—'}</td>
-                    {/* Size (headcount) */}
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">{(c as any).headcount_range || '—'}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">
-                      {c.company_bucket ? c.company_bucket.replace(/_/g, ' ') : '—'}
+                    <td className="px-4 py-3 whitespace-nowrap text-sm">
+                      {c.category ? (
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs ${c.category === 'hardware' ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'}`}>
+                          {c.category === 'hardware' ? 'HW' : 'NH'}
+                        </span>
+                      ) : <span className="text-tertiary text-xs">—</span>}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm" onClick={(e) => e.stopPropagation()}>
-                      {(() => {
-                        const domain = c.website_url?.replace(/^https?:\/\//, '').replace(/\/+$/, '') || guessDomain(c.company_name)
-                        if (!domain) return <span className="text-tertiary">—</span>
-                        return (
-                          <a href={c.website_url || `https://${domain}`} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground hover:underline">
-                            {domain}
-                          </a>
-                        )
-                      })()}
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">
+                      <IndustryBadge primary={c.primary_industry} industries={c.industries || []} />
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">
+                      {c.domain_tags && c.domain_tags.length > 0 ? c.domain_tags.slice(0, 3).join(', ') + (c.domain_tags.length > 3 ? ` +${c.domain_tags.length - 3}` : '') : '—'}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs">
+                      <span className={`inline-block px-2 py-0.5 rounded ${
+                        c.review_status === 'vetted' ? 'bg-green-100 text-green-800'
+                        : c.review_status === 'excluded' ? 'bg-red-100 text-red-800'
+                        : 'bg-gray-100 text-gray-700'
+                      }`}>{c.review_status}</span>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">
+                      {c.headcount_latest ? c.headcount_latest.toLocaleString() : (c.headcount_range || '—')}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground" title={c.tagging_notes || ''}>
+                      {c.tagging_method ? (
+                        <span>
+                          <span className="font-mono">{c.tagging_method}</span>
+                          {c.tagging_confidence != null && <span className="text-tertiary ml-1">({c.tagging_confidence.toFixed(2)})</span>}
+                        </span>
+                      ) : <span className="text-tertiary">—</span>}
                     </td>
                   </tr>
                 ))

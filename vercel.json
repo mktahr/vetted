@@ -1,9 +1,3 @@
 {
-  "_comment_crons": "Cron disabled until Phase 1 schema migration ships. Re-enable when companies.tagging_method column exists. Without the column the route returns 500 every 2 minutes, polluting Vercel logs.",
-  "_disabled_crons": [
-    {
-      "path": "/api/admin/companies/tag-pending",
-      "schedule": "*/2 * * * *"
-    }
-  ]
+  "crons": []
 }

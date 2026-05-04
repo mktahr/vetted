@@ -10,7 +10,9 @@ export type ConditionTargetType = 'specific' | 'attributes'
 export interface CompanyAttributes {
   stage?: string[]
   size?: string[]
-  focus?: string[]
+  // V1 (post-migration 031): renamed from `focus` to `category`. Values are 'hardware' | 'non_hardware'.
+  // Old saved filters using `focus` with hard_tech/all_tech still parse via the migration helper.
+  category?: string[]
   foundedAfter?: number
   foundedBefore?: number
   industry?: string[]
@@ -134,7 +136,7 @@ export function migrateOldGroupState(
     return [{
       id: crypto.randomUUID(),
       scope: groupScope || 'ever',
-      target: { type: 'attributes', companyAttributes: { stage: undefined, focus: undefined, industry: undefined } },
+      target: { type: 'attributes', companyAttributes: { stage: undefined, category: undefined, industry: undefined } },
       // Groups are stored separately in the old model — we'll handle via companyGroups field
     }]
   }

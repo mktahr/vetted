@@ -29,7 +29,7 @@ export default function ConditionRowPill({ row, entityType, entityNameMap, onEdi
       const attrParts: string[] = []
       if ('industry' in attrs && (attrs as any).industry?.length) attrParts.push('Industry: ' + (attrs as any).industry.slice(0, 2).join('/'))
       if ('stage' in attrs && (attrs as any).stage?.length) attrParts.push('Stage: ' + (attrs as any).stage.join('/'))
-      if ('focus' in attrs && (attrs as any).focus?.length) attrParts.push('Focus: ' + (attrs as any).focus.join('/'))
+      if ('category' in attrs && (attrs as any).category?.length) attrParts.push('Category: ' + (attrs as any).category.join('/'))
       if ('foundedAfter' in attrs && (attrs as any).foundedAfter) attrParts.push('Founded ≥' + (attrs as any).foundedAfter)
       if ('foundedBefore' in attrs && (attrs as any).foundedBefore) attrParts.push('Founded ≤' + (attrs as any).foundedBefore)
       if ('schoolGroups' in attrs && (attrs as any).schoolGroups?.length) attrParts.push('Group: ' + (attrs as any).schoolGroups.map((g: string) => g.replace(/_/g, ' ')).join(', '))

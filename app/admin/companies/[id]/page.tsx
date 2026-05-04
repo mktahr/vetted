@@ -3,9 +3,14 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Company, CompanyBucket, CompanyStatus, CompanyFocus, CompanyYearScore, CompanyFunctionScore } from '@/app/types'
+import { Company, CompanyBucket, CompanyStatus, CompanyCategory, CompanyReviewStatus, CompanyYearScore, CompanyFunctionScore } from '@/app/types'
 import CompanyLogo, { guessDomain } from '@/app/components/CompanyLogo'
 import { COMPANY_FUNCTIONS } from '@/app/constants'
+import {
+  HARDWARE_INDUSTRIES, NON_HARDWARE_INDUSTRIES,
+  HARDWARE_DOMAIN_TAGS, NON_HARDWARE_DOMAIN_TAGS,
+  REVIEW_STATUSES, dedupeDomainTagsAgainstIndustry,
+} from '@/lib/companies/taxonomy'
 
 const BUCKET_OPTIONS: Array<{ value: CompanyBucket; label: string }> = [
   { value: 'static_mature',    label: 'Static Mature' },
@@ -21,10 +26,10 @@ const STATUS_OPTIONS: Array<{ value: CompanyStatus; label: string }> = [
   { value: 'shut_down', label: 'Shut Down' },
 ]
 
-const FOCUS_OPTIONS: Array<{ value: CompanyFocus; label: string }> = [
-  { value: 'hard_tech',  label: 'Hard Tech' },
-  { value: 'all_tech',   label: 'All Tech' },
-  { value: 'unreviewed', label: 'Unreviewed' },
+const CATEGORY_OPTIONS: Array<{ value: '' | CompanyCategory; label: string }> = [
+  { value: '',             label: '— unclassified (NULL) —' },
+  { value: 'hardware',     label: 'Hardware' },
+  { value: 'non_hardware', label: 'Non-hardware' },
 ]
 
 export default function CompanyEditPage() {
@@ -43,11 +48,16 @@ export default function CompanyEditPage() {
 
   const [form, setForm] = useState({
     company_name: '',
-    primary_industry_tag: '',
+    // V1 taxonomy
+    category: '' as '' | CompanyCategory,
+    primary_industry: '',
+    industries: [] as string[],
+    domain_tags: [] as string[],
+    review_status: 'unreviewed' as CompanyReviewStatus,
+    // Firmographics
     founding_year: '' as string,
     current_status: 'active' as CompanyStatus,
     company_bucket: '' as CompanyBucket | '',
-    focus: 'all_tech' as CompanyFocus,
     website_url: '',
     linkedin_url: '',
     funding_stage: '',
@@ -69,11 +79,14 @@ export default function CompanyEditPage() {
         setCompany(c)
         setForm({
           company_name: c.company_name || '',
-          primary_industry_tag: c.primary_industry_tag || '',
+          category: (c.category as CompanyCategory) || '',
+          primary_industry: c.primary_industry || '',
+          industries: Array.isArray(c.industries) ? c.industries : [],
+          domain_tags: Array.isArray(c.domain_tags) ? c.domain_tags : [],
+          review_status: (c.review_status as CompanyReviewStatus) || 'unreviewed',
           founding_year: c.founding_year != null ? String(c.founding_year) : '',
           current_status: c.current_status,
           company_bucket: c.company_bucket || '',
-          focus: (c.focus as CompanyFocus) || 'all_tech',
           website_url: c.website_url || '',
           linkedin_url: c.linkedin_url || '',
           funding_stage: (c as any).funding_stage || '',
@@ -105,17 +118,35 @@ export default function CompanyEditPage() {
     setSaving(true)
     setSaveMsg(null)
     try {
-      const updates: Partial<Company> = {
+      // V1 schema: when category=null, the CHECK constraint requires
+      // primary_industry=null + empty industries[] + empty domain_tags[].
+      // Also: ensure primary_industry is in industries[] (CHECK constraint).
+      const cat = form.category || null
+      let primaryIndustry: string | null = null
+      let industries: string[] = []
+      let domainTags: string[] = []
+      if (cat) {
+        primaryIndustry = form.primary_industry || null
+        industries = primaryIndustry ? Array.from(new Set([primaryIndustry, ...form.industries])) : []
+        domainTags = dedupeDomainTagsAgainstIndustry(primaryIndustry, form.domain_tags)
+      }
+      // Manual edits freeze the row from auto-tagger overwrite.
+      const updates: Record<string, unknown> = {
         company_name: form.company_name.trim(),
-        primary_industry_tag: form.primary_industry_tag.trim() || null,
+        category: cat,
+        primary_industry: primaryIndustry,
+        industries,
+        domain_tags: domainTags,
+        review_status: form.review_status,
         founding_year: form.founding_year ? parseInt(form.founding_year, 10) : null,
         current_status: form.current_status,
         company_bucket: (form.company_bucket as CompanyBucket) || null,
-        focus: form.focus,
         website_url: form.website_url.trim() || null,
         linkedin_url: form.linkedin_url.trim() || null,
         funding_stage: form.funding_stage.trim() || null,
         headcount_range: form.headcount_range.trim() || null,
+        tagging_method: 'manual',
+        tagging_confidence: 1.0,
       }
       const { error } = await supabase
         .from('companies')
@@ -318,14 +349,108 @@ export default function CompanyEditPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Industry Tag</label>
-              <input
-                type="text"
-                value={form.primary_industry_tag}
-                onChange={(e) => setForm({ ...form, primary_industry_tag: e.target.value })}
-                placeholder="e.g. FinTech, Consumer, SaaS"
-                className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Category</label>
+              <select
+                value={form.category}
+                onChange={(e) => {
+                  const newCat = e.target.value as '' | CompanyCategory
+                  // Reset industries/domain_tags when switching category (CHECK constraint)
+                  setForm({ ...form, category: newCat, primary_industry: '', industries: [], domain_tags: [] })
+                }}
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                Primary Industry
+                {form.category && <span className="text-tertiary ml-1 normal-case font-normal">(from {form.category} list)</span>}
+              </label>
+              <select
+                value={form.primary_industry}
+                onChange={(e) => {
+                  const newPrimary = e.target.value
+                  // Make sure primary is in industries[]
+                  const inds = newPrimary ? Array.from(new Set([newPrimary, ...form.industries])) : []
+                  setForm({ ...form, primary_industry: newPrimary, industries: inds })
+                }}
+                disabled={!form.category}
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+              >
+                <option value="">— pick —</option>
+                {(form.category === 'hardware' ? HARDWARE_INDUSTRIES : form.category === 'non_hardware' ? NON_HARDWARE_INDUSTRIES : []).map(i => <option key={i} value={i}>{i}</option>)}
+              </select>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                Industries (multi)
+                <span className="text-tertiary ml-1 normal-case font-normal">— add secondary industries beyond primary</span>
+              </label>
+              <div className="flex flex-wrap gap-1 p-2 border border-border rounded-lg bg-card min-h-[40px]">
+                {form.industries.map(i => (
+                  <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-secondary rounded">
+                    {i}{i === form.primary_industry && <span className="text-tertiary">(primary)</span>}
+                    {i !== form.primary_industry && (
+                      <button onClick={() => setForm({ ...form, industries: form.industries.filter(x => x !== i) })} className="ml-1 text-tertiary hover:text-foreground">×</button>
+                    )}
+                  </span>
+                ))}
+                {form.category && (
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const v = e.target.value
+                      if (v && !form.industries.includes(v)) setForm({ ...form, industries: [...form.industries, v] })
+                    }}
+                    className="text-xs bg-transparent border-none outline-none ml-1"
+                  >
+                    <option value="">+ add industry…</option>
+                    {(form.category === 'hardware' ? HARDWARE_INDUSTRIES : NON_HARDWARE_INDUSTRIES).filter(i => !form.industries.includes(i)).map(i => <option key={i} value={i}>{i}</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                Domain Tags (multi)
+                {form.primary_industry === 'AI' && <span className="text-amber-600 ml-1 normal-case font-normal">— AI tag suppressed when primary industry is AI</span>}
+              </label>
+              <div className="flex flex-wrap gap-1 p-2 border border-border rounded-lg bg-card min-h-[40px]">
+                {form.domain_tags.map(t => (
+                  <span key={t} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-secondary rounded">
+                    {t}
+                    <button onClick={() => setForm({ ...form, domain_tags: form.domain_tags.filter(x => x !== t) })} className="ml-1 text-tertiary hover:text-foreground">×</button>
+                  </span>
+                ))}
+                {form.category && (
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const v = e.target.value
+                      if (v && !form.domain_tags.includes(v)) setForm({ ...form, domain_tags: [...form.domain_tags, v] })
+                    }}
+                    className="text-xs bg-transparent border-none outline-none ml-1"
+                  >
+                    <option value="">+ add tag…</option>
+                    {(form.category === 'hardware' ? HARDWARE_DOMAIN_TAGS : NON_HARDWARE_DOMAIN_TAGS).filter(t => !form.domain_tags.includes(t)).map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Review Status</label>
+              <select
+                value={form.review_status}
+                onChange={(e) => setForm({ ...form, review_status: e.target.value as CompanyReviewStatus })}
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {REVIEW_STATUSES.map(rs => <option key={rs} value={rs}>{rs}</option>)}
+              </select>
             </div>
 
             <div>
@@ -409,22 +534,24 @@ export default function CompanyEditPage() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">
-                Focus
-                <span className="ml-1 text-tertiary font-normal normal-case">
-                  (hard_tech = hardware/defense/aerospace/robotics; all_tech = default searchable universe)
-                </span>
-              </label>
-              <select
-                value={form.focus}
-                onChange={(e) => setForm({ ...form, focus: e.target.value as CompanyFocus })}
-                className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                {FOCUS_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-              </select>
-            </div>
           </div>
+
+          {/* Tagger metadata (read-only, set by auto-tagger) */}
+          {company && company.tagging_method && (
+            <div className="mt-4 p-3 bg-background rounded-lg text-xs">
+              <div className="text-muted-foreground mb-1">Tagger metadata (auto-set; manual edits override)</div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><span className="text-tertiary">Method:</span> <span className="font-mono">{company.tagging_method}</span></div>
+                <div><span className="text-tertiary">Confidence:</span> {company.tagging_confidence != null ? company.tagging_confidence.toFixed(2) : '—'}</div>
+                {company.tagging_notes && (
+                  <div className="col-span-2 mt-1">
+                    <span className="text-tertiary">Notes:</span>
+                    <pre className="whitespace-pre-wrap text-[11px] mt-1 text-muted-foreground">{company.tagging_notes}</pre>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <button
             onClick={handleSaveCompany}
