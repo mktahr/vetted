@@ -12,6 +12,8 @@ import {
   HARDWARE_INDUSTRIES, NON_HARDWARE_INDUSTRIES,
   HARDWARE_DOMAIN_TAGS, NON_HARDWARE_DOMAIN_TAGS,
   REVIEW_STATUSES, industriesFor,
+  TAGGING_METHOD_LABELS, taggingMethodLabel,
+  FUNDING_STAGE_LABELS,
 } from '@/lib/companies/taxonomy'
 
 const BUCKET_OPTIONS: Array<{ value: CompanyBucket; label: string }> = [
@@ -462,11 +464,10 @@ export default function CompaniesListPage() {
             className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="">All methods</option>
-            <option value="untagged">Untagged (cron pending)</option>
-            <option value="claude">claude</option>
-            <option value="claude_dict_agree">claude_dict_agree</option>
-            <option value="claude_dict_disagree">claude_dict_disagree</option>
-            <option value="manual">manual</option>
+            <option value="untagged">Waiting for tagger</option>
+            {Object.entries(TAGGING_METHOD_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
           </select>
         </div>
 
@@ -648,6 +649,7 @@ export default function CompaniesListPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Category</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Industry</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Tags</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Funding</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Review</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Headcount</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Tagging</th>
@@ -655,7 +657,7 @@ export default function CompaniesListPage() {
             </thead>
             <tbody className="bg-card divide-y divide-border">
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-4 text-center text-tertiary">No companies found</td></tr>
+                <tr><td colSpan={10} className="px-4 py-4 text-center text-tertiary">No companies found</td></tr>
               ) : (
                 filtered.map(c => (
                   <tr
@@ -708,6 +710,11 @@ export default function CompaniesListPage() {
                     <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">
                       {c.domain_tags && c.domain_tags.length > 0 ? c.domain_tags.slice(0, 3).join(', ') + (c.domain_tags.length > 3 ? ` +${c.domain_tags.length - 3}` : '') : '—'}
                     </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">
+                      {c.funding_stage
+                        ? FUNDING_STAGE_LABELS[c.funding_stage as keyof typeof FUNDING_STAGE_LABELS] || c.funding_stage
+                        : '—'}
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs">
                       <span className={`inline-block px-2 py-0.5 rounded ${
                         c.review_status === 'vetted' ? 'bg-green-100 text-green-800'
@@ -721,7 +728,7 @@ export default function CompaniesListPage() {
                     <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground" title={c.tagging_notes || ''}>
                       {c.tagging_method ? (
                         <span>
-                          <span className="font-mono">{c.tagging_method}</span>
+                          {taggingMethodLabel(c.tagging_method)}
                           {c.tagging_confidence != null && <span className="text-tertiary ml-1">({c.tagging_confidence.toFixed(2)})</span>}
                         </span>
                       ) : <span className="text-tertiary">—</span>}

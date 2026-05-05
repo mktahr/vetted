@@ -19,6 +19,7 @@ import CompanyLogo, { guessDomain } from '@/app/components/CompanyLogo'
 import IndustryBadge from '@/app/components/IndustryBadge'
 import ThemeToggle from '@/app/components/ThemeToggle'
 import { fetchAllRows } from '@/lib/supabase'
+import { TAGGING_METHOD_LABELS, taggingMethodLabel } from '@/lib/companies/taxonomy'
 
 type ReasonFilter = 'all' | 'unreviewed' | 'low_confidence' | 'untagged'
 type CategoryFilter = '' | 'hardware' | 'non_hardware' | 'unclassified'
@@ -37,13 +38,10 @@ const CATEGORY_OPTIONS: Array<{ value: CategoryFilter; label: string }> = [
   { value: 'unclassified', label: 'Unclassified (NULL)' },
 ]
 
-const TAGGING_METHOD_OPTIONS = [
-  { value: '',                     label: 'All tagging methods' },
-  { value: 'untagged',              label: 'Untagged (cron pending)' },
-  { value: 'claude',                label: 'claude' },
-  { value: 'claude_dict_agree',     label: 'claude_dict_agree' },
-  { value: 'claude_dict_disagree',  label: 'claude_dict_disagree' },
-  { value: 'manual',                label: 'manual' },
+const TAGGING_METHOD_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '',         label: 'All tagging methods' },
+  { value: 'untagged', label: 'Waiting for tagger' },
+  ...Object.entries(TAGGING_METHOD_LABELS).map(([value, label]) => ({ value, label })),
 ]
 
 export default function TriagePage() {
@@ -326,7 +324,7 @@ export default function TriagePage() {
                       <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground" title={c.tagging_notes || ''}>
                         {c.tagging_method ? (
                           <span>
-                            <span className="font-mono">{c.tagging_method}</span>
+                            {taggingMethodLabel(c.tagging_method)}
                             {c.tagging_confidence != null && <span className="text-tertiary ml-1">({c.tagging_confidence.toFixed(2)})</span>}
                           </span>
                         ) : <span className="text-tertiary">—</span>}

@@ -11,6 +11,7 @@ import {
   HARDWARE_DOMAIN_TAGS, NON_HARDWARE_DOMAIN_TAGS,
   REVIEW_STATUSES, FUNDING_STAGES, FUNDING_STAGE_LABELS,
   HEADCOUNT_RANGES, COMPANY_TYPES, COMPANY_TYPE_LABELS,
+  taggingMethodLabel,
   dedupeDomainTagsAgainstIndustry,
 } from '@/lib/companies/taxonomy'
 
@@ -556,6 +557,17 @@ export default function CompanyEditPage() {
                 <option value="">— none —</option>
                 {HEADCOUNT_RANGES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
+              {company?.headcount_latest != null && (() => {
+                const at = company.headcount_latest_at ? new Date(company.headcount_latest_at) : null
+                const isStale = at && (Date.now() - at.getTime()) > 90 * 24 * 60 * 60 * 1000
+                return (
+                  <div className={`mt-1 text-[11px] ${isStale ? 'text-tertiary' : 'text-muted-foreground'}`}>
+                    Latest precise: <span className="font-mono">{company.headcount_latest.toLocaleString()}</span>
+                    {at && <> &middot; as of {at.toLocaleDateString()}</>}
+                    {isStale && <span className="ml-1 text-amber-700">(stale &gt; 90d)</span>}
+                  </div>
+                )
+              })()}
             </div>
 
             <div>
@@ -643,7 +655,10 @@ export default function CompanyEditPage() {
               )}
               {company.tagging_method ? (
                 <div className="grid grid-cols-2 gap-2">
-                  <div><span className="text-tertiary">Method:</span> <span className="font-mono">{company.tagging_method}</span></div>
+                  <div>
+                    <span className="text-tertiary">Method:</span> {taggingMethodLabel(company.tagging_method)}
+                    <span className="text-tertiary text-[10px] ml-1 font-mono">({company.tagging_method})</span>
+                  </div>
                   <div><span className="text-tertiary">Confidence:</span> {company.tagging_confidence != null ? company.tagging_confidence.toFixed(2) : '—'}</div>
                   {company.tagging_notes && (
                     <div className="col-span-2 mt-1">
@@ -653,7 +668,7 @@ export default function CompanyEditPage() {
                   )}
                 </div>
               ) : (
-                <div className="text-tertiary">Not yet tagged. Cron picks this up every 2 min, or click Tag now.</div>
+                <div className="text-tertiary">Not yet tagged. The daily cron picks this up automatically, or click Tag now.</div>
               )}
             </div>
           )}

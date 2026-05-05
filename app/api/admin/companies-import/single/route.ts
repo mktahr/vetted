@@ -19,6 +19,12 @@ import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { tagCompany } from '@/lib/companies/tagger'
 import type { TaggerInput } from '@/lib/companies/tagger/types'
+import {
+  headcountRangeFromTotal,
+  normalizeCrustHeadcountRange,
+  normalizeCrustFundingStage,
+  normalizeCrustCompanyType,
+} from '@/lib/companies/taxonomy'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -70,7 +76,7 @@ export async function POST(req: NextRequest) {
     },
     body: JSON.stringify({
       crustdata_company_ids: [body.crustdata_company_id],
-      fields: ['basic_info', 'taxonomy', 'headcount'],
+      fields: ['basic_info', 'taxonomy', 'headcount', 'funding'],
     }),
   })
   if (!enrichResp.ok) {
@@ -86,6 +92,7 @@ export async function POST(req: NextRequest) {
   const bi = cd.basic_info || {}
   const tx = cd.taxonomy || {}
   const hc = cd.headcount || {}
+  const fn = cd.funding || {}
 
   // Build TaggerInput
   const taggerInput: TaggerInput = {
@@ -110,6 +117,13 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: `Tagger exception: ${err?.message || String(err)}` }, { status: 500 })
   }
 
+  // Compute headcount_range: prefer deriving from precise total (more current
+  // than Crust's banded value); fall back to normalized banded value.
+  const headcountTotal = typeof hc.total === 'number' ? hc.total : null
+  const headcountRange =
+    headcountRangeFromTotal(headcountTotal) ??
+    normalizeCrustHeadcountRange(bi.employee_count_range)
+
   // Common field shape from the enrich response — used for both UPDATE-merge
   // and fresh-INSERT paths.
   const enrichFields = {
@@ -117,11 +131,12 @@ export async function POST(req: NextRequest) {
     professional_network_id: bi.professional_network_id || null,
     linkedin_url: bi.professional_network_url || null,
     website_url: bi.website || null,
-    company_type: bi.company_type ? String(bi.company_type).toLowerCase().split(' ')[0] : null,
+    company_type: normalizeCrustCompanyType(bi.company_type),
     founding_year: bi.year_founded ? parseInt(bi.year_founded, 10) || null : null,
-    headcount_range: bi.employee_count_range || null,
-    headcount_latest: typeof hc.total === 'number' ? hc.total : null,
-    headcount_latest_at: typeof hc.total === 'number' ? new Date().toISOString() : null,
+    headcount_range: headcountRange,
+    headcount_latest: headcountTotal,
+    headcount_latest_at: headcountTotal != null ? new Date().toISOString() : null,
+    funding_stage: normalizeCrustFundingStage(fn.last_round_type),
   }
   const taggerFields = {
     category: tagger.category,

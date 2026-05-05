@@ -78,6 +78,20 @@ export const TAGGING_METHODS = [
 ] as const
 export type TaggingMethod = typeof TAGGING_METHODS[number]
 
+// Friendly UI labels — DB stores the snake_case enum values above; the UI
+// renders these. Keep both in sync.
+export const TAGGING_METHOD_LABELS: Record<TaggingMethod, string> = {
+  claude: 'AI only',
+  claude_dict_agree: 'AI + rules agree',
+  claude_dict_disagree: 'AI + rules disagree',
+  manual: 'Admin edited',
+}
+export function taggingMethodLabel(method: string | null | undefined): string {
+  if (!method) return 'Waiting for tagger'
+  if (method in TAGGING_METHOD_LABELS) return TAGGING_METHOD_LABELS[method as TaggingMethod]
+  return method
+}
+
 // Round-2 decision #7: 3-state admin workflow status. Replaces
 // `manual_review_status` (which had unreviewed/reviewed/locked). Migration
 // maps reviewed→vetted, locked→vetted (silent, no preservation note),
@@ -202,4 +216,79 @@ export function dedupeDomainTagsAgainstIndustry(
 ): string[] {
   if (primary_industry === null) return [...tags]
   return tags.filter(t => t !== primary_industry)
+}
+
+/**
+ * Compute the headcount range bucket from a precise integer total. Used to
+ * derive a fresh range from Crust's `headcount.total` (which is more current
+ * than Crust's banded `employee_count_range`).
+ */
+export function headcountRangeFromTotal(
+  total: number | null | undefined,
+): HeadcountRange | null {
+  if (typeof total !== 'number' || !Number.isFinite(total) || total < 1) return null
+  if (total <= 10) return '1-10'
+  if (total <= 50) return '11-50'
+  if (total <= 200) return '51-200'
+  if (total <= 500) return '201-500'
+  if (total <= 1000) return '501-1000'
+  if (total <= 5000) return '1001-5000'
+  if (total <= 10000) return '5001-10000'
+  return '10000+'
+}
+
+/**
+ * Normalize Crust's banded `employee_count_range` to our enum. Crust uses
+ * `'10001+'` for the top bucket; ours is `'10000+'`. Same semantic, off-by-one
+ * label difference — translate in code rather than churning the schema.
+ * Returns null on unrecognized values (safer than letting the CHECK fail).
+ */
+export function normalizeCrustHeadcountRange(
+  value: string | null | undefined,
+): HeadcountRange | null {
+  if (!value) return null
+  const trimmed = value.trim()
+  if (trimmed === '10001+') return '10000+'
+  if ((HEADCOUNT_RANGES as readonly string[]).includes(trimmed)) {
+    return trimmed as HeadcountRange
+  }
+  return null
+}
+
+/**
+ * Map Crust's `funding.last_round_type` strings (e.g. "Series A", "Pre-Seed")
+ * to our snake_case `funding_stage` enum. Returns null for non-equity round
+ * types per V1 design (Grant / Convertible Note / Debt / Secondary / etc.).
+ */
+export function normalizeCrustFundingStage(
+  value: string | null | undefined,
+): FundingStage | null {
+  if (!value) return null
+  // Lowercase + collapse whitespace/dashes to underscores
+  const candidate = value
+    .toLowerCase()
+    .trim()
+    .replace(/[\s-]+/g, '_')
+    .replace(/_+/g, '_')
+  if ((FUNDING_STAGES as readonly string[]).includes(candidate)) {
+    return candidate as FundingStage
+  }
+  return null
+}
+
+/**
+ * Map Crust's `basic_info.company_type` strings to our snake_case enum. Crust
+ * returns values like "Privately Held", "Public Company", "Subsidiary". Returns
+ * null for types we haven't yet enumerated (Partnership, Nonprofit, Educational,
+ * Government...) — those fill in once Investigation 2 hardens the enum.
+ */
+export function normalizeCrustCompanyType(
+  value: string | null | undefined,
+): CompanyType | null {
+  if (!value) return null
+  const lower = value.toLowerCase().trim()
+  if (lower.startsWith('private')) return 'private'      // "Privately Held"
+  if (lower.startsWith('public'))  return 'public'       // "Public Company"
+  if (lower.startsWith('subsidiary')) return 'subsidiary'
+  return null
 }
