@@ -757,40 +757,41 @@ export default function CompanyEditPage() {
               </div>
             </div>
 
-            {fundingRounds.length > 0 && (() => {
-              const visible = showAllRounds ? fundingRounds : fundingRounds.slice(0, 3)
-              return (
-                <div className="bg-background rounded-lg divide-y divide-border">
-                  {visible.map((r, i) => {
-                    const allInv = r.investors || []
-                    return (
-                      <div key={i} className="p-3">
-                        <div className="flex items-center gap-3 text-sm">
-                          <span className="font-medium">{r.round_type || '(unknown round)'}</span>
-                          {r.amount_usd != null && (
-                            <span className="text-muted-foreground">{formatFundingAmount(r.amount_usd)}</span>
-                          )}
-                          {r.round_date && <span className="text-tertiary text-xs">{r.round_date}</span>}
-                        </div>
-                        {allInv.length > 0 && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {allInv.join(', ')}
+            {fundingRounds.length > 0 && (
+              <div>
+                <button
+                  onClick={() => setShowAllRounds(o => !o)}
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground py-1"
+                  aria-expanded={showAllRounds}
+                >
+                  <span style={{ display: 'inline-block', transition: 'transform 150ms', transform: showAllRounds ? 'rotate(90deg)' : 'rotate(0)' }}>›</span>
+                  All funding rounds ({fundingRounds.length})
+                </button>
+                {showAllRounds && (
+                  <div className="bg-background rounded-lg divide-y divide-border mt-2">
+                    {fundingRounds.map((r, i) => {
+                      const allInv = r.investors || []
+                      return (
+                        <div key={i} className="p-3">
+                          <div className="flex items-center gap-3 text-sm">
+                            <span className="font-medium">{r.round_type || '(unknown round)'}</span>
+                            {r.amount_usd != null && (
+                              <span className="text-muted-foreground">{formatFundingAmount(r.amount_usd)}</span>
+                            )}
+                            {r.round_date && <span className="text-tertiary text-xs">{r.round_date}</span>}
                           </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                  {fundingRounds.length > 3 && (
-                    <button
-                      onClick={() => setShowAllRounds(o => !o)}
-                      className="w-full text-xs text-muted-foreground hover:text-foreground py-2"
-                    >
-                      {showAllRounds ? 'Show fewer' : `Show ${fundingRounds.length - 3} more rounds`}
-                    </button>
-                  )}
-                </div>
-              )
-            })()}
+                          {allInv.length > 0 && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {allInv.join(', ')}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

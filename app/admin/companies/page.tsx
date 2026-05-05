@@ -773,7 +773,11 @@ export default function CompaniesListPage() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-2">
-                        <CompanyLogo domain={guessDomain(c.company_name)} companyName={c.company_name} size={20} />
+                        <CompanyLogo
+                          domain={c.website_url || guessDomain(c.company_name)}
+                          companyName={c.company_name}
+                          size={20}
+                        />
                         <span className="text-foreground font-medium">{c.company_name}</span>
                       </div>
                     </td>
