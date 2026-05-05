@@ -224,11 +224,29 @@ export default function CompanyEditPage() {
     if (!deleteConfirm) { setDeleteConfirm(true); return }
     setDeleting(true)
     try {
+      // Cascade clean-up — companies has FK references in people /
+      // person_experiences / score tables. Without ON DELETE CASCADE in the
+      // schema, we have to clear references manually before the DELETE.
+      const { error: peopleErr } = await supabase
+        .from('people')
+        .update({ current_company_id: null })
+        .eq('current_company_id', companyId)
+      if (peopleErr) throw new Error(`people: ${peopleErr.message}`)
+
+      const { error: expErr } = await supabase
+        .from('person_experiences')
+        .delete()
+        .eq('company_id', companyId)
+      if (expErr) throw new Error(`experiences: ${expErr.message}`)
+
+      await supabase.from('company_year_scores').delete().eq('company_id', companyId)
+      await supabase.from('company_function_scores').delete().eq('company_id', companyId)
+
       const { error } = await supabase
         .from('companies')
         .delete()
         .eq('company_id', companyId)
-      if (error) throw error
+      if (error) throw new Error(`company: ${error.message}`)
       router.replace('/admin/companies')
     } catch (err: any) {
       alert(`Delete failed: ${err.message}`)

@@ -246,13 +246,46 @@ export default function CompaniesListPage() {
     if (!bulkDeleteConfirm) { setBulkDeleteConfirm(true); return }
     setBulkDeleting(true)
     const ids = Array.from(selectedIds)
+    const successfulIds: string[] = []
+    const failures: Array<{ id: string; name: string; reason: string }> = []
     for (const id of ids) {
-      await supabase.from('companies').delete().eq('company_id', id)
+      const name = companies.find(c => c.company_id === id)?.company_name || id
+      // Cascade-delete dependents first. The companies table is referenced by
+      // people.current_company_id, person_experiences.company_id, and the
+      // score tables. The DB rejects DELETE on the parent without ON DELETE
+      // CASCADE, so we clean up references manually.
+      const { error: peopleErr } = await supabase
+        .from('people')
+        .update({ current_company_id: null })
+        .eq('current_company_id', id)
+      if (peopleErr) { failures.push({ id, name, reason: `people: ${peopleErr.message}` }); continue }
+
+      const { error: expErr } = await supabase
+        .from('person_experiences')
+        .delete()
+        .eq('company_id', id)
+      if (expErr) { failures.push({ id, name, reason: `experiences: ${expErr.message}` }); continue }
+
+      // Best-effort on score tables (they're unlikely to fail; ignore errors)
+      await supabase.from('company_year_scores').delete().eq('company_id', id)
+      await supabase.from('company_function_scores').delete().eq('company_id', id)
+
+      const { error: delErr } = await supabase.from('companies').delete().eq('company_id', id)
+      if (delErr) { failures.push({ id, name, reason: `company: ${delErr.message}` }); continue }
+      successfulIds.push(id)
     }
-    setCompanies(prev => prev.filter(c => !selectedIds.has(c.company_id)))
+    // Update local state from the DB truth, not optimistically
+    setCompanies(prev => prev.filter(c => !successfulIds.includes(c.company_id)))
     setSelectedIds(new Set())
     setBulkDeleting(false)
     setBulkDeleteConfirm(false)
+    if (failures.length > 0) {
+      const detail = failures.slice(0, 5).map(f => `• ${f.name}: ${f.reason}`).join('\n')
+      const more = failures.length > 5 ? `\n…and ${failures.length - 5} more` : ''
+      alert(`Deleted ${successfulIds.length} of ${ids.length}. Failures:\n${detail}${more}`)
+    } else if (successfulIds.length > 0) {
+      // Brief success — no alert, the rows just vanish
+    }
   }
 
   // Per inventory: bulk-edit allowed on category and review_status only.
