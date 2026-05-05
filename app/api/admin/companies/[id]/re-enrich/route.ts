@@ -20,7 +20,7 @@ import {
   normalizeCrustFundingStage,
   normalizeCrustCompanyType,
 } from '@/lib/companies/taxonomy'
-import { extractFundingScalars, writeFundingRounds } from '@/lib/companies/funding'
+import { extractFundingScalars, writeFundingRounds, inferMeaningfulRoundFromMilestones } from '@/lib/companies/funding'
 import {
   extractLocations,
   extractFounders,
@@ -144,7 +144,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     headcount_range: headcountRange,
     headcount_latest: headcountTotal,
     headcount_latest_at: headcountTotal != null ? new Date().toISOString() : null,
-    funding_stage: normalizeCrustFundingStage(fn.last_round_type),
+    // Prefer the most recent priced equity round (Series A-K / Seed) over
+    // Crust's literal last_round_type (often a tiny grant).
+    funding_stage:
+      normalizeCrustFundingStage(inferMeaningfulRoundFromMilestones(fn.milestones))
+      ?? normalizeCrustFundingStage(fn.last_round_type),
     ...fundingScalars,
     description: bi.description || null,
     logo_permalink: bi.logo_permalink || null,

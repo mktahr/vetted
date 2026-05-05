@@ -21,9 +21,19 @@ interface IndustryBadgeProps {
   industries: readonly string[]
   /** Smaller text variant for tight contexts */
   compact?: boolean
+  /** Header label inside the popover. Defaults to "All industries". */
+  popoverLabel?: string
+  /** Tag rendered next to the primary item. Defaults to "primary". */
+  primaryLabel?: string
 }
 
-export default function IndustryBadge({ primary, industries, compact = false }: IndustryBadgeProps) {
+export default function IndustryBadge({
+  primary,
+  industries,
+  compact = false,
+  popoverLabel = 'All industries',
+  primaryLabel = 'primary',
+}: IndustryBadgeProps) {
   const [open, setOpen] = useState(false)
   const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(null)
   const badgeRef = useRef<HTMLButtonElement | null>(null)
@@ -106,7 +116,7 @@ export default function IndustryBadge({ primary, industries, compact = false }: 
             style={{ borderBottom: '1px solid #2a2a32', backgroundColor: '#16161a' }}
           >
             <span className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--fg-tertiary)' }}>
-              All industries
+              {popoverLabel}
             </span>
             <button
               type="button"
@@ -121,7 +131,7 @@ export default function IndustryBadge({ primary, industries, compact = false }: 
           <div className="px-3 py-2 space-y-1 max-h-64 overflow-y-auto">
             <div className="text-sm" style={{ color: 'var(--fg-primary)' }}>
               <span style={{ fontWeight: 600 }}>{primary || '(none)'}</span>
-              <span className="ml-2 text-[10px] uppercase" style={{ color: 'var(--fg-tertiary)' }}>primary</span>
+              <span className="ml-2 text-[10px] uppercase" style={{ color: 'var(--fg-tertiary)' }}>{primaryLabel}</span>
             </div>
             {secondary.map(i => (
               <div key={i} className="text-sm" style={{ color: 'var(--fg-secondary)' }}>{i}</div>

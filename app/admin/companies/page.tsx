@@ -16,7 +16,7 @@ import {
   FUNDING_STAGES, FUNDING_STAGE_LABELS,
 } from '@/lib/companies/taxonomy'
 import { formatFundingAmount } from '@/lib/companies/funding'
-import { formatGrowthPct, growthSign } from '@/lib/companies/firmographics'
+import { formatGrowthPct, growthSign, compactLocation, allLocations, matchesLocation } from '@/lib/companies/firmographics'
 import { highestTier, type InvestorTier } from '@/lib/companies/investor-tiers'
 
 // Stage ordering for sort. pre_seed=1 → series_k=13. Higher = later stage.
@@ -117,6 +117,10 @@ export default function CompaniesListPage() {
 
   // Investor tier filter ('' = all, 't1' = has tier 1, 't1_or_t2' = has either)
   const [investorTierFilter, setInvestorTierFilter] = useState<'' | 't1' | 't1_or_t2'>('')
+
+  // Location filter — substring match against HQ or any office
+  const [locationQuery, setLocationQuery] = useState('')
+  const [locationScope, setLocationScope] = useState<'hq' | 'any'>('any')
 
   // company_id → highest tier its investors achieve. Computed once on load.
   const [companyHighestTier, setCompanyHighestTier] = useState<Record<string, InvestorTier | null>>({})
@@ -268,6 +272,9 @@ export default function CompaniesListPage() {
         return t === 1 || t === 2
       })
     }
+    if (locationQuery.trim()) {
+      rows = rows.filter(c => matchesLocation(c.locations as any, locationQuery, locationScope))
+    }
 
     if (sortBy === 'name_asc') {
       rows.sort((a, b) => a.company_name.localeCompare(b.company_name))
@@ -313,9 +320,9 @@ export default function CompaniesListPage() {
     }
 
     return rows
-  }, [companies, searchQuery, industryFilter, domainTagFilter, bucketFilter, statusFilter, reviewFilter, categoryFilter, taggingMethodFilter, confidenceMinFilter, fundingStageFilter, investorTierFilter, companyHighestTier, sortBy, sortYear, sortFunction, scoresByCompany, functionScoreByCompany])
+  }, [companies, searchQuery, industryFilter, domainTagFilter, bucketFilter, statusFilter, reviewFilter, categoryFilter, taggingMethodFilter, confidenceMinFilter, fundingStageFilter, investorTierFilter, companyHighestTier, locationQuery, locationScope, sortBy, sortYear, sortFunction, scoresByCompany, functionScoreByCompany])
 
-  const activeFilters = [industryFilter, domainTagFilter, bucketFilter, statusFilter, reviewFilter, categoryFilter, taggingMethodFilter, fundingStageFilter, investorTierFilter].filter(Boolean).length + (confidenceMinFilter !== '' ? 1 : 0)
+  const activeFilters = [industryFilter, domainTagFilter, bucketFilter, statusFilter, reviewFilter, categoryFilter, taggingMethodFilter, fundingStageFilter, investorTierFilter, locationQuery.trim()].filter(Boolean).length + (confidenceMinFilter !== '' ? 1 : 0)
   const clearAll = () => {
     setSearchQuery('')
     setIndustryFilter('')
@@ -328,6 +335,7 @@ export default function CompaniesListPage() {
     setConfidenceMinFilter('')
     setFundingStageFilter('')
     setInvestorTierFilter('')
+    setLocationQuery('')
   }
 
   function toggleSelect(id: string) {
@@ -605,6 +613,31 @@ export default function CompaniesListPage() {
         </div>
 
         <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1" title="Substring match against company HQ + offices. Toggle to scope HQ-only.">
+            Location
+          </label>
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={locationQuery}
+              onChange={(e) => setLocationQuery(e.target.value)}
+              placeholder="city, state, country…"
+              className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+              style={{ width: 180 }}
+            />
+            <select
+              value={locationScope}
+              onChange={(e) => setLocationScope(e.target.value as 'hq' | 'any')}
+              className="px-2 py-2 border border-border rounded-lg text-xs bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+              title="Scope of location match"
+            >
+              <option value="any">Any office</option>
+              <option value="hq">HQ only</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1" title="Show only companies whose disclosed investors include a curated tier-1 / tier-2 firm or angel.">
             Investors
           </label>
@@ -809,7 +842,7 @@ export default function CompaniesListPage() {
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" className="text-tertiary"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                 </th>
                 <SortableTh label="Name"        ascValue="name_asc"           descValue="name_desc"           defaultDir="asc"  sortBy={sortBy} setSortBy={setSortBy} />
-                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">HQ</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider" title="HQ + offices. Click +N to see all locations.">Location</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Category</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Industry</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Tags</th>
@@ -877,10 +910,23 @@ export default function CompaniesListPage() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground" title={c.hq_location_name || ''}>
-                      {c.hq_location_name
-                        ? <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block' }}>{c.hq_location_name}</span>
-                        : <span className="text-tertiary">—</span>}
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">
+                      {(() => {
+                        const locs = (c.locations as any) || null
+                        const all = allLocations(locs)
+                        const hq = locs?.headquarters || c.hq_location_name || null
+                        if (!hq && all.length === 0) return <span className="text-tertiary">—</span>
+                        // Use the multi-badge component for primary + N popover
+                        return (
+                          <IndustryBadge
+                            primary={hq ? compactLocation(hq) : null}
+                            industries={all.map(compactLocation)}
+                            popoverLabel="All locations"
+                            primaryLabel="HQ"
+                            compact
+                          />
+                        )
+                      })()}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs">
                       {c.category ? (

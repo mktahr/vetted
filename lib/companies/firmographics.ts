@@ -136,3 +136,54 @@ export function growthSign(value: number | null | undefined): 'up' | 'down' | 'f
   if (value < -1) return 'down'
   return 'flat'
 }
+
+/**
+ * Compact display form of a Crust location string. Trims to the first two
+ * comma-separated segments so "Orange, California, United States" shows as
+ * "Orange, California" in tight column layouts.
+ */
+export function compactLocation(loc: string | null | undefined): string {
+  if (!loc) return ''
+  const parts = loc.split(',').map(s => s.trim()).filter(Boolean)
+  if (parts.length <= 2) return parts.join(', ')
+  return parts.slice(0, 2).join(', ')
+}
+
+/**
+ * Build a flat array of all locations (HQ + offices) for popover display
+ * and search-filter matching. HQ is always first.
+ */
+export function allLocations(
+  locations: { headquarters: string | null; offices: string[] } | null | undefined,
+): string[] {
+  if (!locations) return []
+  const out: string[] = []
+  if (locations.headquarters) out.push(locations.headquarters)
+  for (const o of locations.offices || []) {
+    if (o && o !== locations.headquarters) out.push(o)
+  }
+  return out
+}
+
+/**
+ * Case-insensitive substring match — used by the location search filter to
+ * check if any of a company's locations contains the user's query.
+ */
+export function matchesLocation(
+  locations: { headquarters: string | null; offices: string[] } | null | undefined,
+  query: string,
+  scope: 'hq' | 'any',
+): boolean {
+  if (!locations) return false
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  if (scope === 'hq') {
+    return !!locations.headquarters && locations.headquarters.toLowerCase().includes(q)
+  }
+  // any
+  if (locations.headquarters && locations.headquarters.toLowerCase().includes(q)) return true
+  for (const o of locations.offices || []) {
+    if (o && o.toLowerCase().includes(q)) return true
+  }
+  return false
+}

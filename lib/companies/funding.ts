@@ -123,6 +123,33 @@ export function cleanRoundType(rt: string | null | undefined): string {
 }
 
 /**
+ * Walk Crust's milestones[] and return the canonical round_type string of
+ * the latest priced equity round (Series A-K / Pre-Seed / Seed). Used to
+ * populate companies.funding_stage at write time so the Stage column on
+ * the list reflects the meaningful round, not the literal most-recent
+ * (which is often a small grant or extension).
+ *
+ * Returns the raw round string (e.g. "Series G") for further normalization
+ * by normalizeCrustFundingStage(). Returns null when no priced round found.
+ */
+export function inferMeaningfulRoundFromMilestones(
+  milestones: Array<{ date?: string | null; funding_date?: string | null; round?: string | null; amount_usd?: number | null }> | null | undefined,
+): string | null {
+  if (!milestones || milestones.length === 0) return null
+  // Normalize to a comparable shape and sort newest-first
+  const sorted = [...milestones]
+    .map(m => ({
+      round_type: m.round || null,
+      round_date: m.date || m.funding_date || null,
+      amount_usd: typeof m.amount_usd === 'number' ? m.amount_usd : null,
+    }))
+    .filter(m => m.round_type)
+    .sort((a, b) => (b.round_date || '').localeCompare(a.round_date || ''))
+  const meaningful = pickLatestMeaningfulRound(sorted)
+  return meaningful ? cleanRoundType(meaningful.round_type) : null
+}
+
+/**
  * Pick the most recent priced equity round from a sorted-desc round list.
  * Used for the "Latest round" headline display — Crust's
  * `funding.last_round_type` often points to a tiny grant or extension that

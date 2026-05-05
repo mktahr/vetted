@@ -25,7 +25,7 @@ import {
   normalizeCrustFundingStage,
   normalizeCrustCompanyType,
 } from '@/lib/companies/taxonomy'
-import { extractFundingScalars, writeFundingRounds } from '@/lib/companies/funding'
+import { extractFundingScalars, writeFundingRounds, inferMeaningfulRoundFromMilestones } from '@/lib/companies/funding'
 import {
   extractLocations,
   extractFounders,
@@ -151,7 +151,11 @@ export async function POST(req: NextRequest) {
     headcount_range: headcountRange,
     headcount_latest: headcountTotal,
     headcount_latest_at: headcountTotal != null ? new Date().toISOString() : null,
-    funding_stage: normalizeCrustFundingStage(fn.last_round_type),
+    // funding_stage prefers the meaningful priced equity round (e.g. Anduril's
+    // Series G), not Crust's literal latest (which is often a tiny grant).
+    funding_stage:
+      normalizeCrustFundingStage(inferMeaningfulRoundFromMilestones(fn.milestones))
+      ?? normalizeCrustFundingStage(fn.last_round_type),
     ...fundingScalars,
     // V2: firmographics + locations + founders + growth
     description: bi.description || null,
