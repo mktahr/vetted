@@ -91,29 +91,38 @@ export default function IndustryBadge({ primary, industries, compact = false }: 
             zIndex: 9999,
             minWidth: 220,
             maxWidth: 320,
+            backgroundColor: 'var(--bg-surface)',
+            color: 'var(--fg-primary)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--r-card, 8px)',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
+            backdropFilter: 'none',
           }}
-          className="rounded-lg border border-border bg-popover text-popover-foreground shadow-xl"
         >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-            <span className="text-xs font-medium uppercase tracking-wider text-tertiary">
+          <div
+            className="flex items-center justify-between px-3 py-2"
+            style={{ borderBottom: '1px solid var(--border-subtle)' }}
+          >
+            <span className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--fg-tertiary)' }}>
               All industries
             </span>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setOpen(false) }}
-              className="text-tertiary hover:text-foreground text-sm leading-none"
+              className="text-sm leading-none"
+              style={{ color: 'var(--fg-tertiary)', background: 'none', border: 'none', cursor: 'pointer' }}
               aria-label="Close"
             >
               ×
             </button>
           </div>
           <div className="px-3 py-2 space-y-1 max-h-64 overflow-y-auto">
-            <div className="text-sm">
-              <span className="font-medium">{primary || '(none)'}</span>
-              <span className="ml-2 text-[10px] text-tertiary uppercase">primary</span>
+            <div className="text-sm" style={{ color: 'var(--fg-primary)' }}>
+              <span style={{ fontWeight: 600 }}>{primary || '(none)'}</span>
+              <span className="ml-2 text-[10px] uppercase" style={{ color: 'var(--fg-tertiary)' }}>primary</span>
             </div>
             {secondary.map(i => (
-              <div key={i} className="text-sm text-muted-foreground">{i}</div>
+              <div key={i} className="text-sm" style={{ color: 'var(--fg-secondary)' }}>{i}</div>
             ))}
           </div>
         </div>,
