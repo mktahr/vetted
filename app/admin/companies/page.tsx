@@ -13,8 +13,15 @@ import {
   HARDWARE_DOMAIN_TAGS, NON_HARDWARE_DOMAIN_TAGS,
   REVIEW_STATUSES, industriesFor,
   TAGGING_METHOD_LABELS, taggingMethodLabel,
-  FUNDING_STAGE_LABELS,
+  FUNDING_STAGES, FUNDING_STAGE_LABELS,
 } from '@/lib/companies/taxonomy'
+
+// Stage ordering for sort. pre_seed=1 → series_k=13. Higher = later stage.
+const FUNDING_STAGE_ORDER: Record<string, number> = {
+  pre_seed: 1, seed: 2,
+  series_a: 3, series_b: 4, series_c: 5, series_d: 6, series_e: 7,
+  series_f: 8, series_g: 9, series_h: 10, series_i: 11, series_j: 12, series_k: 13,
+}
 
 const BUCKET_OPTIONS: Array<{ value: CompanyBucket; label: string }> = [
   { value: 'static_mature',    label: 'Static Mature' },
@@ -46,7 +53,18 @@ const REVIEW_OPTIONS: Array<{ value: '' | CompanyReviewStatus; label: string }> 
   { value: 'excluded',   label: 'Excluded' },
 ]
 
-type SortBy = 'name_asc' | 'name_desc' | 'year_score' | 'function_score' | 'tagging_confidence' | 'headcount_latest'
+type SortBy = 'name_asc' | 'name_desc' | 'year_score' | 'function_score' | 'tagging_confidence_asc' | 'headcount_desc' | 'funding_stage_asc' | 'funding_stage_desc'
+
+const SORT_OPTIONS: Array<{ value: SortBy; label: string; help?: string }> = [
+  { value: 'name_asc',                label: 'Name (A → Z)' },
+  { value: 'name_desc',               label: 'Name (Z → A)' },
+  { value: 'headcount_desc',          label: 'Headcount (large → small)' },
+  { value: 'funding_stage_asc',       label: 'Funding stage (early → late)', help: 'Pre-seed/seed first; Series K last; companies without a stored stage at the bottom.' },
+  { value: 'funding_stage_desc',      label: 'Funding stage (late → early)' },
+  { value: 'tagging_confidence_asc',  label: 'Tagger confidence (low → high)', help: 'Useful for finding rows that need a manual review.' },
+  { value: 'year_score',              label: 'Manual quality (year)',         help: 'Manually set 1–5 quality rating per company per year. Used for candidate scoring.' },
+  { value: 'function_score',          label: 'Manual quality (function)',      help: 'Manually set 1–3 quality rating for non-engineering functions.' },
+]
 
 export default function CompaniesListPage() {
   const router = useRouter()
@@ -69,6 +87,7 @@ export default function CompaniesListPage() {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('')
   const [taggingMethodFilter, setTaggingMethodFilter] = useState('')
   const [confidenceMinFilter, setConfidenceMinFilter] = useState<number | ''>('')
+  const [fundingStageFilter, setFundingStageFilter] = useState('')
   const [bulkUpdating, setBulkUpdating] = useState(false)
 
   // Sort
@@ -190,6 +209,9 @@ export default function CompaniesListPage() {
     if (confidenceMinFilter !== '') {
       rows = rows.filter(c => (c.tagging_confidence ?? 0) >= confidenceMinFilter)
     }
+    if (fundingStageFilter) {
+      rows = rows.filter(c => c.funding_stage === fundingStageFilter)
+    }
 
     if (sortBy === 'name_asc') {
       rows.sort((a, b) => a.company_name.localeCompare(b.company_name))
@@ -207,16 +229,27 @@ export default function CompaniesListPage() {
         const bScore = functionScoreByCompany[b.company_id] ?? -1
         return bScore - aScore
       })
-    } else if (sortBy === 'tagging_confidence') {
-      rows.sort((a, b) => (b.tagging_confidence ?? -1) - (a.tagging_confidence ?? -1))
-    } else if (sortBy === 'headcount_latest') {
+    } else if (sortBy === 'tagging_confidence_asc') {
+      // Lowest confidence first — useful for finding rows to QA
+      rows.sort((a, b) => (a.tagging_confidence ?? Infinity) - (b.tagging_confidence ?? Infinity))
+    } else if (sortBy === 'headcount_desc') {
       rows.sort((a, b) => (b.headcount_latest ?? -1) - (a.headcount_latest ?? -1))
+    } else if (sortBy === 'funding_stage_asc' || sortBy === 'funding_stage_desc') {
+      const direction = sortBy === 'funding_stage_asc' ? 1 : -1
+      rows.sort((a, b) => {
+        const av = a.funding_stage ? FUNDING_STAGE_ORDER[a.funding_stage] ?? 0 : 0
+        const bv = b.funding_stage ? FUNDING_STAGE_ORDER[b.funding_stage] ?? 0 : 0
+        if (av === 0 && bv === 0) return a.company_name.localeCompare(b.company_name)
+        if (av === 0) return 1   // null funding stage always to the bottom
+        if (bv === 0) return -1
+        return direction * (av - bv)
+      })
     }
 
     return rows
-  }, [companies, searchQuery, industryFilter, domainTagFilter, bucketFilter, statusFilter, reviewFilter, categoryFilter, taggingMethodFilter, confidenceMinFilter, sortBy, sortYear, sortFunction, scoresByCompany, functionScoreByCompany])
+  }, [companies, searchQuery, industryFilter, domainTagFilter, bucketFilter, statusFilter, reviewFilter, categoryFilter, taggingMethodFilter, confidenceMinFilter, fundingStageFilter, sortBy, sortYear, sortFunction, scoresByCompany, functionScoreByCompany])
 
-  const activeFilters = [industryFilter, domainTagFilter, bucketFilter, statusFilter, reviewFilter, categoryFilter, taggingMethodFilter].filter(Boolean).length + (confidenceMinFilter !== '' ? 1 : 0)
+  const activeFilters = [industryFilter, domainTagFilter, bucketFilter, statusFilter, reviewFilter, categoryFilter, taggingMethodFilter, fundingStageFilter].filter(Boolean).length + (confidenceMinFilter !== '' ? 1 : 0)
   const clearAll = () => {
     setSearchQuery('')
     setIndustryFilter('')
@@ -227,6 +260,7 @@ export default function CompaniesListPage() {
     setCategoryFilter('')
     setTaggingMethodFilter('')
     setConfidenceMinFilter('')
+    setFundingStageFilter('')
   }
 
   function toggleSelect(id: string) {
@@ -490,11 +524,27 @@ export default function CompaniesListPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-muted-foreground mb-1">Tagging method</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">Funding stage</label>
+          <select
+            value={fundingStageFilter}
+            onChange={(e) => setFundingStageFilter(e.target.value)}
+            className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <option value="">All stages</option>
+            {FUNDING_STAGES.map(s => (
+              <option key={s} value={s}>{FUNDING_STAGE_LABELS[s]}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1" title="Filter rows by their auto-tagger pipeline (admin / QA use). Most filters use Category or Review status instead.">
+            Tagging method
+          </label>
           <select
             value={taggingMethodFilter}
             onChange={(e) => setTaggingMethodFilter(e.target.value)}
-            className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+            className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary text-muted-foreground"
           >
             <option value="">All methods</option>
             <option value="untagged">Waiting for tagger</option>
@@ -505,7 +555,7 @@ export default function CompaniesListPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-muted-foreground mb-1">Confidence ≥</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1" title="Show only rows where the auto-tagger was at least this confident.">Confidence ≥</label>
           <select
             value={confidenceMinFilter === '' ? '' : String(confidenceMinFilter)}
             onChange={(e) => setConfidenceMinFilter(e.target.value === '' ? '' : Number(e.target.value))}
@@ -526,13 +576,11 @@ export default function CompaniesListPage() {
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortBy)}
               className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+              title={SORT_OPTIONS.find(o => o.value === sortBy)?.help || ''}
             >
-              <option value="name_asc">Name (A→Z)</option>
-              <option value="name_desc">Name (Z→A)</option>
-              <option value="year_score">Year Score</option>
-              <option value="function_score">Top by Function</option>
-              <option value="tagging_confidence">Confidence (high→low)</option>
-              <option value="headcount_latest">Headcount (high→low)</option>
+              {SORT_OPTIONS.map(o => (
+                <option key={o.value} value={o.value} title={o.help}>{o.label}</option>
+              ))}
             </select>
           </div>
 
@@ -719,23 +767,18 @@ export default function CompaniesListPage() {
                       <div className="flex items-center gap-2">
                         <CompanyLogo domain={guessDomain(c.company_name)} companyName={c.company_name} size={20} />
                         <span className="text-foreground font-medium">{c.company_name}</span>
-                        {c.tagging_method == null && (
-                          <span title="Awaiting auto-tagger" className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">tagging…</span>
-                        )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm">
+                    <td className="px-4 py-3 whitespace-nowrap text-xs">
                       {c.category ? (
                         <span
-                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs ${
-                            c.category === 'hardware' ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'
-                          }`}
+                          className="inline-flex items-center gap-1.5 text-muted-foreground"
                           title={c.category === 'hardware' ? 'Hardware' : 'Non-hardware'}
                         >
-                          <span className={`inline-block w-1.5 h-1.5 rounded-full ${c.category === 'hardware' ? 'bg-emerald-600' : 'bg-sky-600'}`} aria-hidden />
+                          <span className={`inline-block w-1.5 h-1.5 rounded-full ${c.category === 'hardware' ? 'bg-emerald-500' : 'bg-sky-500'}`} aria-hidden />
                           {c.category === 'hardware' ? 'Hardware' : 'Non-hw'}
                         </span>
-                      ) : <span className="text-tertiary text-xs">—</span>}
+                      ) : <span className="text-tertiary">—</span>}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">
                       <IndustryBadge primary={c.primary_industry} industries={c.industries || []} />
@@ -753,11 +796,14 @@ export default function CompaniesListPage() {
                         : '—'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs">
-                      <span className={`inline-block px-2 py-0.5 rounded ${
-                        c.review_status === 'vetted' ? 'bg-green-100 text-green-800'
-                        : c.review_status === 'excluded' ? 'bg-red-100 text-red-800'
-                        : 'bg-gray-100 text-gray-700'
-                      }`}>{c.review_status}</span>
+                      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                        <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                          c.review_status === 'vetted' ? 'bg-green-500'
+                          : c.review_status === 'excluded' ? 'bg-red-500'
+                          : 'bg-gray-400'
+                        }`} aria-hidden />
+                        {c.review_status}
+                      </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">
                       {c.headcount_latest ? c.headcount_latest.toLocaleString() : (c.headcount_range || '—')}
