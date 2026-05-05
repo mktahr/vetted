@@ -18,8 +18,24 @@ interface CrustMilestone {
   funding_date?: string | null
   amount_usd?: number | null
   round?: string | null
-  investors?: string[] | null
-  lead_investors?: string[] | null
+  // Inconsistent on Crust's side: milestones[].investors is a comma-separated
+  // STRING, while top-level funding.investors is an array. Type as `unknown`
+  // and coerce via toInvestorArray() below.
+  investors?: unknown
+  lead_investors?: unknown
+}
+
+function toInvestorArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return (value as unknown[])
+      .filter((v): v is string => typeof v === 'string')
+      .map(s => s.trim())
+      .filter(Boolean)
+  }
+  if (typeof value === 'string') {
+    return value.split(',').map(s => s.trim()).filter(Boolean)
+  }
+  return []
 }
 
 interface CrustFunding {
@@ -74,8 +90,8 @@ export async function writeFundingRounds(
       round_type: m.round || null,
       round_date: m.date || m.funding_date || null,
       amount_usd: typeof m.amount_usd === 'number' ? Math.round(m.amount_usd) : null,
-      investors: Array.isArray(m.investors) ? m.investors.filter(Boolean) : [],
-      lead_investors: Array.isArray(m.lead_investors) ? m.lead_investors.filter(Boolean) : [],
+      investors: toInvestorArray(m.investors),
+      lead_investors: toInvestorArray(m.lead_investors),
       source: 'crust',
       fetched_at: new Date().toISOString(),
     }))

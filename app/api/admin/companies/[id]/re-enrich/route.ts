@@ -61,10 +61,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!co.crustdata_company_id) {
     return Response.json({ error: 'crustdata_company_id required for re-enrich (run "Tag now" first to discover it)' }, { status: 400 })
   }
-  // Don't overwrite manual rows.
-  if (co.tagging_method === 'manual') {
-    return Response.json({ error: 'row was manually edited; re-enrich would overwrite (delete tagging_method=manual first to allow)' }, { status: 409 })
-  }
+  // Manual rows: refresh firmographics + funding only, preserve admin's
+  // tagger fields (category / primary_industry / industries / domain_tags /
+  // tagging_method / tagging_confidence / tagging_notes). Skip the tagger
+  // call entirely — saves Anthropic spend and avoids surprise overwrites.
+  const isManual = co.tagging_method === 'manual'
 
   // Enrich
   const enrichResp = await fetch('https://api.crustdata.com/company/enrich', {
@@ -93,22 +94,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const hc = cd.headcount || {}
   const fn = cd.funding || {}
 
-  const input: TaggerInput = {
-    name: bi.name || '',
-    professional_network_industry: tx.professional_network_industry || null,
-    industries: Array.isArray(bi.industries) ? bi.industries : [],
-    categories: Array.isArray(tx.categories) ? tx.categories : [],
-    description: bi.description || null,
-    year_founded: bi.year_founded || null,
-    employee_count_range: bi.employee_count_range || null,
-    company_type: bi.company_type || null,
-  }
-
-  let tagger: Awaited<ReturnType<typeof tagCompany>>
-  try {
-    tagger = await tagCompany(input)
-  } catch (err: any) {
-    return Response.json({ error: `Tagger exception: ${err?.message || String(err)}` }, { status: 500 })
+  // Run tagger only when we'll actually use its output (i.e., not manual)
+  let tagger: Awaited<ReturnType<typeof tagCompany>> | null = null
+  if (!isManual) {
+    const input: TaggerInput = {
+      name: bi.name || '',
+      professional_network_industry: tx.professional_network_industry || null,
+      industries: Array.isArray(bi.industries) ? bi.industries : [],
+      categories: Array.isArray(tx.categories) ? tx.categories : [],
+      description: bi.description || null,
+      year_founded: bi.year_founded || null,
+      employee_count_range: bi.employee_count_range || null,
+      company_type: bi.company_type || null,
+    }
+    try {
+      tagger = await tagCompany(input)
+    } catch (err: any) {
+      return Response.json({ error: `Tagger exception: ${err?.message || String(err)}` }, { status: 500 })
+    }
   }
 
   const headcountTotal = typeof hc.total === 'number' ? hc.total : null
@@ -117,6 +120,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     normalizeCrustHeadcountRange(bi.employee_count_range)
   const fundingScalars = extractFundingScalars(fn)
 
+  // Always-refreshed firmographics + funding scalars
   const updates: Record<string, any> = {
     company_name: bi.name || undefined,
     professional_network_id: bi.professional_network_id || null,
@@ -129,19 +133,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     headcount_latest_at: headcountTotal != null ? new Date().toISOString() : null,
     funding_stage: normalizeCrustFundingStage(fn.last_round_type),
     ...fundingScalars,
-    category: tagger.category,
-    primary_industry: tagger.primary_industry,
-    industries: tagger.industries,
-    domain_tags: tagger.domain_tags,
-    tagging_method: tagger.method,
-    tagging_confidence: tagger.confidence,
-    tagging_notes: JSON.stringify({
-      summary: tagger.reasoning.slice(0, 500),
-      dict_verdict: tagger.dict_verdict,
-      claude_verdict: tagger.claude_verdict,
-      agreement: tagger.agreement,
-    }),
     updated_at: new Date().toISOString(),
+  }
+  // Tagger fields refreshed only when not manual (preserves admin curation)
+  if (tagger) {
+    Object.assign(updates, {
+      category: tagger.category,
+      primary_industry: tagger.primary_industry,
+      industries: tagger.industries,
+      domain_tags: tagger.domain_tags,
+      tagging_method: tagger.method,
+      tagging_confidence: tagger.confidence,
+      tagging_notes: JSON.stringify({
+        summary: tagger.reasoning.slice(0, 500),
+        dict_verdict: tagger.dict_verdict,
+        claude_verdict: tagger.claude_verdict,
+        agreement: tagger.agreement,
+      }),
+    })
   }
   // Drop undefined company_name (don't blank it on missing enrich data)
   if (updates.company_name === undefined) delete updates.company_name
@@ -155,7 +164,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Refresh funding rounds from the latest enrich data
   await writeFundingRounds(supabase, params.id, fn)
 
-  if (spendRow) {
+  // Only count toward daily spend when the tagger actually ran
+  if (tagger && spendRow) {
     await supabase
       .from('companies_tag_spend_log')
       .update({
@@ -164,7 +174,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         updated_at: new Date().toISOString(),
       })
       .eq('log_date', today)
-  } else {
+  } else if (tagger) {
     await supabase
       .from('companies_tag_spend_log')
       .insert({
@@ -176,7 +186,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   return Response.json({
     ok: true,
-    tagger: {
+    is_manual: isManual,
+    tagger: tagger ? {
       category: tagger.category,
       primary_industry: tagger.primary_industry,
       industries: tagger.industries,
@@ -184,7 +195,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       confidence: tagger.confidence,
       method: tagger.method,
       agreement: tagger.agreement,
-    },
+    } : null,
     headcount_latest: typeof hc.total === 'number' ? hc.total : null,
   })
 }

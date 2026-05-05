@@ -672,14 +672,22 @@ export default function CompanyEditPage() {
                       {tagging ? 'Tagging…' : 'Tag now'}
                     </button>
                   )}
-                  {company.crustdata_company_id != null && company.review_status === 'vetted' && company.tagging_method !== 'manual' && (
+                  {company.crustdata_company_id != null && (
                     <button
                       onClick={handleReEnrich}
                       disabled={reEnriching}
                       className="px-2 py-1 text-xs border border-amber-300 rounded bg-amber-50 text-amber-900 hover:bg-amber-100 disabled:opacity-50"
-                      title="Re-pull from Crust enrich (2 credits) and re-tag. Overwrites firmographics + tagger fields."
+                      title={
+                        company.tagging_method === 'manual'
+                          ? 'Refresh firmographics + funding from Crust. Tagger fields stay as you set them (manual override preserved).'
+                          : 'Re-pull from Crust enrich (2 credits) and re-tag. Overwrites firmographics + tagger fields.'
+                      }
                     >
-                      {reEnriching ? 'Re-enriching…' : 'Re-enrich from Crust'}
+                      {reEnriching
+                        ? 'Re-enriching…'
+                        : company.tagging_method === 'manual'
+                        ? 'Refresh firmographics + funding'
+                        : 'Re-enrich from Crust'}
                     </button>
                   )}
                 </div>
