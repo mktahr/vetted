@@ -713,6 +713,10 @@ export default function CompaniesListPage() {
                     <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">
                       {c.funding_stage
                         ? FUNDING_STAGE_LABELS[c.funding_stage as keyof typeof FUNDING_STAGE_LABELS] || c.funding_stage
+                        : c.company_type === 'public'
+                        ? <span className="italic text-tertiary">Public</span>
+                        : c.company_type === 'subsidiary'
+                        ? <span className="italic text-tertiary">Subsidiary</span>
                         : '—'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs">
