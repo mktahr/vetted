@@ -15,6 +15,7 @@ import {
   dedupeDomainTagsAgainstIndustry,
 } from '@/lib/companies/taxonomy'
 import { formatFundingAmount } from '@/lib/companies/funding'
+import { formatGrowthPct, growthSign } from '@/lib/companies/firmographics'
 
 const BUCKET_OPTIONS: Array<{ value: CompanyBucket; label: string }> = [
   { value: 'static_mature',    label: 'Static Mature' },
@@ -320,6 +321,39 @@ export default function CompanyEditPage() {
     await upsertYearScore(y, s)
   }
 
+  async function handleFillMissingYears() {
+    if (!company?.founding_year) {
+      alert('No founding year set on this company. Set Founding Year first.')
+      return
+    }
+    const currentYear = new Date().getUTCFullYear()
+    const existing = new Set(yearScores.map(ys => ys.year))
+    const toInsert: Array<{ company_id: string; year: number; company_score: number }> = []
+    for (let y = company.founding_year; y <= currentYear; y++) {
+      if (!existing.has(y)) {
+        toInsert.push({ company_id: companyId, year: y, company_score: 3 })
+      }
+    }
+    if (toInsert.length === 0) {
+      setSaveMsg({ text: 'All years already filled', ok: true })
+      setTimeout(() => setSaveMsg(null), 2000)
+      return
+    }
+    const { error } = await supabase.from('company_year_scores').insert(toInsert)
+    if (error) {
+      setSaveMsg({ text: `Fill failed: ${error.message}`, ok: false })
+      setTimeout(() => setSaveMsg(null), 3000)
+      return
+    }
+    // Refresh local state
+    setYearScores(prev =>
+      [...prev, ...toInsert.map(r => ({ company_id: r.company_id, year: r.year, company_score: r.company_score }))]
+        .sort((a, b) => b.year - a.year),
+    )
+    setSaveMsg({ text: `Added ${toInsert.length} year${toInsert.length === 1 ? '' : 's'} (default score 3)`, ok: true })
+    setTimeout(() => setSaveMsg(null), 2500)
+  }
+
   async function upsertFunctionScore(fn: string, score: number) {
     const { error } = await supabase
       .from('company_function_scores')
@@ -401,7 +435,7 @@ export default function CompanyEditPage() {
       <div className="bg-card rounded-lg shadow-lg p-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <CompanyLogo domain={domain} companyName={company.company_name} size={40} />
+            <CompanyLogo domain={domain} companyName={company.company_name} logoUrl={company.logo_permalink} size={40} />
             <div>
               <h1 className="text-3xl font-bold">{company.company_name}</h1>
               <div className="flex items-center gap-3 mt-1 text-sm">
@@ -424,6 +458,52 @@ export default function CompanyEditPage() {
             </span>
           )}
         </div>
+
+        {/* Description (from Crust enrich, when present) */}
+        {company?.description && (
+          <div className="mb-6 p-4 bg-background rounded-lg border-l-2 border-accent">
+            <p className="text-sm text-muted-foreground leading-relaxed">{company.description}</p>
+          </div>
+        )}
+
+        {/* HQ + offices (when known) */}
+        {(company?.locations?.headquarters || (company?.locations?.offices?.length ?? 0) > 0) && (
+          <div className="mb-6 flex flex-wrap gap-x-6 gap-y-2 text-xs">
+            {company?.locations?.headquarters && (
+              <div>
+                <span className="text-tertiary uppercase tracking-wider mr-2">HQ</span>
+                <span className="text-foreground font-medium">{company.locations.headquarters}</span>
+              </div>
+            )}
+            {(company?.locations?.offices?.length ?? 0) > 0 && (
+              <div>
+                <span className="text-tertiary uppercase tracking-wider mr-2">Offices</span>
+                <span className="text-muted-foreground">{company!.locations!.offices.join(' · ')}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Founders pane (when known) */}
+        {(company?.founders?.length ?? 0) > 0 && (
+          <div className="mb-6">
+            <p className="text-xs text-tertiary uppercase tracking-wider mb-2">Founders</p>
+            <div className="flex flex-wrap gap-2">
+              {(company?.founders || []).map((f, i) => (
+                <a
+                  key={i}
+                  href={f.professional_network_url || '#'}
+                  target={f.professional_network_url ? '_blank' : undefined}
+                  rel="noopener noreferrer"
+                  className={`inline-flex items-center gap-1 px-2 py-1 text-xs bg-background border border-border rounded ${f.professional_network_url ? 'hover:bg-card cursor-pointer' : 'cursor-default'}`}
+                >
+                  <span className="font-medium">{f.name || '(unnamed)'}</span>
+                  {f.title && <span className="text-tertiary">· {f.title}</span>}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Company fields */}
         <div className="mb-8">
@@ -602,6 +682,26 @@ export default function CompanyEditPage() {
                   </div>
                 )
               })()}
+              {/* Growth metrics from Crust */}
+              {(company?.headcount_growth_3m_pct != null
+                || company?.headcount_growth_6m_pct != null
+                || company?.headcount_growth_12m_pct != null) && (
+                <div className="mt-2 flex gap-3 text-[11px]">
+                  {(['3m', '6m', '12m'] as const).map(window => {
+                    const v = window === '3m' ? company.headcount_growth_3m_pct
+                      : window === '6m' ? company.headcount_growth_6m_pct
+                      : company.headcount_growth_12m_pct
+                    const sign = growthSign(v)
+                    const color = sign === 'up' ? 'text-green-600' : sign === 'down' ? 'text-red-600' : 'text-muted-foreground'
+                    return (
+                      <span key={window}>
+                        <span className="text-tertiary">{window}:</span>{' '}
+                        <span className={`font-mono ${color}`}>{formatGrowthPct(v)}</span>
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
             <div>
@@ -741,19 +841,25 @@ export default function CompanyEditPage() {
               </div>
               <div>
                 <p className="text-xs text-tertiary uppercase tracking-wider">Latest round</p>
-                <p className="text-sm mt-1">
-                  {company?.last_funding_round_type ? (
-                    <>
-                      {company.last_funding_round_type}
-                      {company.last_funding_amount_usd != null && (
-                        <span className="text-muted-foreground ml-1">· {formatFundingAmount(company.last_funding_amount_usd)}</span>
-                      )}
-                      {company.last_funding_date && (
-                        <span className="text-tertiary ml-1">· {company.last_funding_date}</span>
-                      )}
-                    </>
-                  ) : <span className="text-tertiary">—</span>}
-                </p>
+                {company?.last_funding_round_type ? (
+                  <>
+                    <p className="text-lg font-semibold mt-1">
+                      {/* Friendly label when it matches our enum, otherwise the raw Crust string */}
+                      {(() => {
+                        const raw = company.last_funding_round_type
+                        const friendly = (FUNDING_STAGE_LABELS as any)[raw]
+                        return friendly || raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+                      })()}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {company.last_funding_amount_usd != null && formatFundingAmount(company.last_funding_amount_usd)}
+                      {company.last_funding_amount_usd != null && company.last_funding_date && ' · '}
+                      {company.last_funding_date}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-lg text-tertiary mt-1">—</p>
+                )}
               </div>
             </div>
 
@@ -797,7 +903,25 @@ export default function CompanyEditPage() {
 
         {/* Year scores */}
         <div className="mb-8 border-t pt-6">
-          <h2 className="text-lg font-semibold mb-3">Year Scores</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold">Year Scores</h2>
+            {company?.founding_year && (() => {
+              const currentYear = new Date().getUTCFullYear()
+              const existing = new Set(yearScores.map(ys => ys.year))
+              let missing = 0
+              for (let y = company.founding_year; y <= currentYear; y++) if (!existing.has(y)) missing++
+              if (missing === 0) return null
+              return (
+                <button
+                  onClick={handleFillMissingYears}
+                  className="px-3 py-1 text-xs border border-border rounded bg-card hover:bg-background"
+                  title={`Founding year ${company.founding_year} → current. Default score 3 for ${missing} missing year${missing === 1 ? '' : 's'}.`}
+                >
+                  Fill {missing} missing year{missing === 1 ? '' : 's'}
+                </button>
+              )
+            })()}
+          </div>
           <p className="text-xs text-tertiary mb-3">Scale: 1 = weak, 2 = mixed, 3 = solid, 4 = excellent, 5 = elite</p>
 
           {yearScores.length === 0 ? (

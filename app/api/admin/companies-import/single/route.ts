@@ -26,6 +26,13 @@ import {
   normalizeCrustCompanyType,
 } from '@/lib/companies/taxonomy'
 import { extractFundingScalars, writeFundingRounds } from '@/lib/companies/funding'
+import {
+  extractLocations,
+  extractFounders,
+  extractHeadcountGrowth,
+  extractHeadcountTimeseries,
+} from '@/lib/companies/firmographics'
+import { ensureYearScores } from '@/lib/companies/year-scores'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -77,7 +84,7 @@ export async function POST(req: NextRequest) {
     },
     body: JSON.stringify({
       crustdata_company_ids: [body.crustdata_company_id],
-      fields: ['basic_info', 'taxonomy', 'headcount', 'funding'],
+      fields: ['basic_info', 'taxonomy', 'headcount', 'funding', 'locations', 'people'],
     }),
   })
   if (!enrichResp.ok) {
@@ -94,6 +101,8 @@ export async function POST(req: NextRequest) {
   const tx = cd.taxonomy || {}
   const hc = cd.headcount || {}
   const fn = cd.funding || {}
+  const loc = cd.locations || {}
+  const pp = cd.people || {}
 
   // Build TaggerInput
   const taggerInput: TaggerInput = {
@@ -125,6 +134,10 @@ export async function POST(req: NextRequest) {
     headcountRangeFromTotal(headcountTotal) ??
     normalizeCrustHeadcountRange(bi.employee_count_range)
   const fundingScalars = extractFundingScalars(fn)
+  const locations = extractLocations(loc)
+  const founders = extractFounders(pp)
+  const growth = extractHeadcountGrowth(hc)
+  const timeseries = extractHeadcountTimeseries(hc)
 
   // Common field shape from the enrich response — used for both UPDATE-merge
   // and fresh-INSERT paths.
@@ -140,6 +153,16 @@ export async function POST(req: NextRequest) {
     headcount_latest_at: headcountTotal != null ? new Date().toISOString() : null,
     funding_stage: normalizeCrustFundingStage(fn.last_round_type),
     ...fundingScalars,
+    // V2: firmographics + locations + founders + growth
+    description: bi.description || null,
+    logo_permalink: bi.logo_permalink || null,
+    hq_location_name: locations.headquarters,
+    locations,
+    founders,
+    headcount_growth_3m_pct: growth.growth_3m_pct,
+    headcount_growth_6m_pct: growth.growth_6m_pct,
+    headcount_growth_12m_pct: growth.growth_12m_pct,
+    headcount_timeseries: timeseries,
   }
   const taggerFields = {
     category: tagger.category,
@@ -191,6 +214,11 @@ export async function POST(req: NextRequest) {
       }
       // Write/refresh funding rounds — fire-and-forget; failures don't block the response
       await writeFundingRounds(supabase, byUrl.company_id, fn)
+      // Auto-fill year scores from founding_year → current_year if missing
+      const fy = enrichFields.founding_year
+      if (fy) {
+        await ensureYearScores(supabase, byUrl.company_id, fy, new Date().getUTCFullYear())
+      }
       return Response.json({
         company_id: byUrl.company_id,
         created: false,
@@ -256,6 +284,10 @@ export async function POST(req: NextRequest) {
 
   // Write rounds for the freshly-inserted company
   await writeFundingRounds(supabase, inserted!.company_id, fn)
+  // Auto-fill year scores from founding_year → current_year
+  if (enrichFields.founding_year) {
+    await ensureYearScores(supabase, inserted!.company_id, enrichFields.founding_year, new Date().getUTCFullYear())
+  }
 
   return Response.json({
     company_id: inserted!.company_id,

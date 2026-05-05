@@ -5,24 +5,46 @@ import { useState } from 'react'
 interface CompanyLogoProps {
   domain: string | null | undefined
   companyName: string | null | undefined
+  /** Preferred source: a hosted logo URL (e.g., Crust's logo_permalink). When
+   *  present, used directly instead of guessing a domain for logo.dev. */
+  logoUrl?: string | null
   size?: number
   shape?: 'square' | 'circle'
   className?: string
 }
 
 /**
- * Renders a company/school logo from logo.dev, falling back to a generic
- * initial-letter placeholder when no domain is available or the
- * image fails to load. Use shape='circle' for schools.
+ * Renders a company/school logo. Source priority:
+ *   1. logoUrl (e.g. Crust's logo_permalink) — canonical, never wrong
+ *   2. logo.dev keyed by domain (best-effort guess)
+ *   3. Initial-letter placeholder
+ *
+ * Use shape='circle' for schools.
  */
-export default function CompanyLogo({ domain, companyName, size = 24, shape = 'square', className = '' }: CompanyLogoProps) {
+export default function CompanyLogo({ domain, companyName, logoUrl, size = 24, shape = 'square', className = '' }: CompanyLogoProps) {
   const [failed, setFailed] = useState(false)
   const token = process.env.NEXT_PUBLIC_LOGO_DEV_API_KEY
 
   const initial = companyName ? companyName[0].toUpperCase() : '—'
   const borderRadius = shape === 'circle' ? '50%' : '4px'
 
-  // If we have a domain and the key, try logo.dev
+  // Direct hosted URL wins. Falls through to logo.dev if it 404s.
+  if (logoUrl && !failed) {
+    return (
+      <img
+        src={logoUrl}
+        alt={companyName || ''}
+        width={size}
+        height={size}
+        className={`flex-shrink-0 ${className}`}
+        style={{ borderRadius, objectFit: 'cover' }}
+        onError={() => setFailed(true)}
+        loading="lazy"
+      />
+    )
+  }
+
+  // logo.dev fallback if we have a domain and a key
   if (domain && token && !failed) {
     const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/+$/, '')
     const src = `https://img.logo.dev/${cleanDomain}?token=${token}&size=${size * 2}`

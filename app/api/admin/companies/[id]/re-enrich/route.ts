@@ -21,6 +21,13 @@ import {
   normalizeCrustCompanyType,
 } from '@/lib/companies/taxonomy'
 import { extractFundingScalars, writeFundingRounds } from '@/lib/companies/funding'
+import {
+  extractLocations,
+  extractFounders,
+  extractHeadcountGrowth,
+  extractHeadcountTimeseries,
+} from '@/lib/companies/firmographics'
+import { ensureYearScores } from '@/lib/companies/year-scores'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -77,7 +84,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     },
     body: JSON.stringify({
       crustdata_company_ids: [co.crustdata_company_id],
-      fields: ['basic_info', 'taxonomy', 'headcount', 'funding'],
+      fields: ['basic_info', 'taxonomy', 'headcount', 'funding', 'locations', 'people'],
     }),
   })
   if (!enrichResp.ok) {
@@ -93,6 +100,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const tx = cd.taxonomy || {}
   const hc = cd.headcount || {}
   const fn = cd.funding || {}
+  const loc = cd.locations || {}
+  const pp = cd.people || {}
 
   // Run tagger only when we'll actually use its output (i.e., not manual)
   let tagger: Awaited<ReturnType<typeof tagCompany>> | null = null
@@ -119,6 +128,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     headcountRangeFromTotal(headcountTotal) ??
     normalizeCrustHeadcountRange(bi.employee_count_range)
   const fundingScalars = extractFundingScalars(fn)
+  const locations = extractLocations(loc)
+  const founders = extractFounders(pp)
+  const growth = extractHeadcountGrowth(hc)
+  const timeseries = extractHeadcountTimeseries(hc)
 
   // Always-refreshed firmographics + funding scalars
   const updates: Record<string, any> = {
@@ -133,6 +146,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     headcount_latest_at: headcountTotal != null ? new Date().toISOString() : null,
     funding_stage: normalizeCrustFundingStage(fn.last_round_type),
     ...fundingScalars,
+    description: bi.description || null,
+    logo_permalink: bi.logo_permalink || null,
+    hq_location_name: locations.headquarters,
+    locations,
+    founders,
+    headcount_growth_3m_pct: growth.growth_3m_pct,
+    headcount_growth_6m_pct: growth.growth_6m_pct,
+    headcount_growth_12m_pct: growth.growth_12m_pct,
+    headcount_timeseries: timeseries,
     updated_at: new Date().toISOString(),
   }
   // Tagger fields refreshed only when not manual (preserves admin curation)
@@ -163,6 +185,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // Refresh funding rounds from the latest enrich data
   await writeFundingRounds(supabase, params.id, fn)
+  // Auto-fill year scores if founding_year known and rows are missing
+  if (updates.founding_year) {
+    await ensureYearScores(supabase, params.id, updates.founding_year, new Date().getUTCFullYear())
+  }
 
   // Only count toward daily spend when the tagger actually ran
   if (tagger && spendRow) {

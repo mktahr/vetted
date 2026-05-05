@@ -16,6 +16,7 @@ import {
   FUNDING_STAGES, FUNDING_STAGE_LABELS,
 } from '@/lib/companies/taxonomy'
 import { formatFundingAmount } from '@/lib/companies/funding'
+import { formatGrowthPct, growthSign } from '@/lib/companies/firmographics'
 
 // Stage ordering for sort. pre_seed=1 → series_k=13. Higher = later stage.
 const FUNDING_STAGE_ORDER: Record<string, number> = {
@@ -54,12 +55,22 @@ const REVIEW_OPTIONS: Array<{ value: '' | CompanyReviewStatus; label: string }> 
   { value: 'excluded',   label: 'Excluded' },
 ]
 
-type SortBy = 'name_asc' | 'name_desc' | 'year_score' | 'function_score' | 'tagging_confidence_asc' | 'headcount_desc' | 'funding_stage_asc' | 'funding_stage_desc' | 'total_funding_desc' | 'total_funding_asc'
+type SortBy =
+  | 'name_asc' | 'name_desc'
+  | 'year_score' | 'function_score'
+  | 'tagging_confidence_asc'
+  | 'headcount_desc' | 'headcount_asc'
+  | 'funding_stage_asc' | 'funding_stage_desc'
+  | 'total_funding_desc' | 'total_funding_asc'
+  | 'founding_year_desc' | 'founding_year_asc'
 
 const SORT_OPTIONS: Array<{ value: SortBy; label: string; help?: string }> = [
   { value: 'name_asc',                label: 'Name (A → Z)' },
   { value: 'name_desc',               label: 'Name (Z → A)' },
   { value: 'headcount_desc',          label: 'Headcount (large → small)' },
+  { value: 'headcount_asc',           label: 'Headcount (small → large)' },
+  { value: 'founding_year_desc',      label: 'Founded (newest → oldest)' },
+  { value: 'founding_year_asc',       label: 'Founded (oldest → newest)' },
   { value: 'total_funding_desc',      label: 'Total raised (high → low)',     help: 'Companies without a stored total at the bottom.' },
   { value: 'total_funding_asc',       label: 'Total raised (low → high)' },
   { value: 'funding_stage_asc',       label: 'Funding stage (early → late)',  help: 'Pre-seed/seed first; Series K last; companies without a stored stage at the bottom.' },
@@ -68,6 +79,8 @@ const SORT_OPTIONS: Array<{ value: SortBy; label: string; help?: string }> = [
   { value: 'year_score',              label: 'Manual quality (year)',          help: 'Manually set 1–5 quality rating per company per year. Used for candidate scoring.' },
   { value: 'function_score',          label: 'Manual quality (function)',      help: 'Manually set 1–3 quality rating for non-engineering functions.' },
 ]
+
+type GrowthWindow = '3m' | '6m' | '12m'
 
 export default function CompaniesListPage() {
   const router = useRouter()
@@ -97,6 +110,9 @@ export default function CompaniesListPage() {
   const [sortBy, setSortBy] = useState<SortBy>('name_asc')
   const [sortYear, setSortYear] = useState<number>(new Date().getFullYear())
   const [sortFunction, setSortFunction] = useState<string>('')
+
+  // Headcount-growth column window toggle (3m / 6m / 12m)
+  const [growthWindow, setGrowthWindow] = useState<GrowthWindow>('12m')
 
   // Load everything
   useEffect(() => {
@@ -237,6 +253,12 @@ export default function CompaniesListPage() {
       rows.sort((a, b) => (a.tagging_confidence ?? Infinity) - (b.tagging_confidence ?? Infinity))
     } else if (sortBy === 'headcount_desc') {
       rows.sort((a, b) => (b.headcount_latest ?? -1) - (a.headcount_latest ?? -1))
+    } else if (sortBy === 'headcount_asc') {
+      rows.sort((a, b) => (a.headcount_latest ?? Infinity) - (b.headcount_latest ?? Infinity))
+    } else if (sortBy === 'founding_year_desc') {
+      rows.sort((a, b) => (b.founding_year ?? -1) - (a.founding_year ?? -1))
+    } else if (sortBy === 'founding_year_asc') {
+      rows.sort((a, b) => (a.founding_year ?? Infinity) - (b.founding_year ?? Infinity))
     } else if (sortBy === 'total_funding_desc') {
       rows.sort((a, b) => (b.total_funding_usd ?? -1) - (a.total_funding_usd ?? -1))
     } else if (sortBy === 'total_funding_asc') {
@@ -733,20 +755,38 @@ export default function CompaniesListPage() {
                 <th className="px-2 py-3 w-9" title="LinkedIn">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" className="text-tertiary"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Name</th>
+                <SortableTh label="Name"        ascValue="name_asc"           descValue="name_desc"           defaultDir="asc"  sortBy={sortBy} setSortBy={setSortBy} />
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">HQ</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Category</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Industry</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Tags</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Stage</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider" title="Total raised across all disclosed rounds">Total raised</th>
+                <SortableTh label="Stage"       ascValue="funding_stage_asc"  descValue="funding_stage_desc"  defaultDir="asc"  sortBy={sortBy} setSortBy={setSortBy} />
+                <SortableTh label="Total raised" ascValue="total_funding_asc"  descValue="total_funding_desc"  defaultDir="desc" sortBy={sortBy} setSortBy={setSortBy} />
+                <SortableTh label="Founded"     ascValue="founding_year_asc"  descValue="founding_year_desc"  defaultDir="desc" sortBy={sortBy} setSortBy={setSortBy} />
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Review</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Headcount</th>
+                <SortableTh label="Headcount"   ascValue="headcount_asc"      descValue="headcount_desc"      defaultDir="desc" sortBy={sortBy} setSortBy={setSortBy} />
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">
+                  <div className="flex items-center gap-2">
+                    <span>Growth</span>
+                    <select
+                      value={growthWindow}
+                      onChange={(e) => setGrowthWindow(e.target.value as GrowthWindow)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-[10px] uppercase tracking-wider px-1 py-0.5 border border-border rounded bg-card"
+                      title="Toggle growth window"
+                    >
+                      <option value="3m">3m</option>
+                      <option value="6m">6m</option>
+                      <option value="12m">12m</option>
+                    </select>
+                  </div>
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Tagging</th>
               </tr>
             </thead>
             <tbody className="bg-card divide-y divide-border">
               {filtered.length === 0 ? (
-                <tr><td colSpan={11} className="px-4 py-4 text-center text-tertiary">No companies found</td></tr>
+                <tr><td colSpan={13} className="px-4 py-4 text-center text-tertiary">No companies found</td></tr>
               ) : (
                 filtered.map(c => (
                   <tr
@@ -776,10 +816,18 @@ export default function CompaniesListPage() {
                         <CompanyLogo
                           domain={c.website_url || guessDomain(c.company_name)}
                           companyName={c.company_name}
+                          logoUrl={c.logo_permalink}
                           size={20}
                         />
-                        <span className="text-foreground font-medium">{c.company_name}</span>
+                        <span className="text-foreground font-medium" style={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block' }} title={c.company_name}>
+                          {c.company_name}
+                        </span>
                       </div>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground" title={c.hq_location_name || ''}>
+                      {c.hq_location_name
+                        ? <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block' }}>{c.hq_location_name}</span>
+                        : <span className="text-tertiary">—</span>}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs">
                       {c.category ? (
@@ -796,7 +844,14 @@ export default function CompaniesListPage() {
                       <IndustryBadge primary={c.primary_industry} industries={c.industries || []} />
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">
-                      {c.domain_tags && c.domain_tags.length > 0 ? c.domain_tags.slice(0, 3).join(', ') + (c.domain_tags.length > 3 ? ` +${c.domain_tags.length - 3}` : '') : '—'}
+                      {/* Tags compact: primary tag + +N popover (mirrors IndustryBadge style) */}
+                      {c.domain_tags && c.domain_tags.length > 0 ? (
+                        <IndustryBadge
+                          primary={c.domain_tags[0]}
+                          industries={c.domain_tags as readonly string[]}
+                          compact
+                        />
+                      ) : <span className="text-tertiary">—</span>}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">
                       {c.funding_stage
@@ -810,6 +865,9 @@ export default function CompaniesListPage() {
                     <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground" title={c.total_funding_usd ? `$${c.total_funding_usd.toLocaleString()}` : ''}>
                       {formatFundingAmount(c.total_funding_usd)}
                     </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">
+                      {c.founding_year || '—'}
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs">
                       <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                         <span className={`inline-block w-1.5 h-1.5 rounded-full ${
@@ -822,6 +880,16 @@ export default function CompaniesListPage() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">
                       {c.headcount_latest ? c.headcount_latest.toLocaleString() : (c.headcount_range || '—')}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs">
+                      {(() => {
+                        const v = growthWindow === '3m' ? c.headcount_growth_3m_pct
+                          : growthWindow === '6m' ? c.headcount_growth_6m_pct
+                          : c.headcount_growth_12m_pct
+                        const sign = growthSign(v)
+                        const color = sign === 'up' ? 'text-green-600' : sign === 'down' ? 'text-red-600' : 'text-muted-foreground'
+                        return <span className={`font-mono ${color}`}>{formatGrowthPct(v)}</span>
+                      })()}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground" title={c.tagging_notes || ''}>
                       {c.tagging_method ? (
@@ -839,5 +907,43 @@ export default function CompaniesListPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Header that toggles its column's sort direction on click.
+// First click sets the column's "default" direction; subsequent click flips.
+function SortableTh({
+  label,
+  ascValue,
+  descValue,
+  defaultDir,
+  sortBy,
+  setSortBy,
+}: {
+  label: string
+  ascValue: SortBy
+  descValue: SortBy
+  defaultDir: 'asc' | 'desc'
+  sortBy: SortBy
+  setSortBy: (v: SortBy) => void
+}) {
+  const isActive = sortBy === ascValue || sortBy === descValue
+  const isAsc = sortBy === ascValue
+  const arrow = !isActive ? '' : isAsc ? '↑' : '↓'
+  const onClick = () => {
+    if (!isActive) setSortBy(defaultDir === 'asc' ? ascValue : descValue)
+    else setSortBy(isAsc ? descValue : ascValue)
+  }
+  return (
+    <th
+      onClick={onClick}
+      className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider cursor-pointer select-none hover:text-foreground"
+      title={`Sort by ${label}`}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {arrow && <span className="text-foreground">{arrow}</span>}
+      </span>
+    </th>
   )
 }

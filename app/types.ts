@@ -169,6 +169,19 @@ export interface Company {
   last_funding_amount_usd: number | null
   last_funding_date: string | null
   last_funding_round_type: string | null
+  // V2 firmographics + locations + founders + growth
+  description: string | null
+  logo_permalink: string | null
+  locations: { headquarters: string | null; offices: string[] } | null
+  founders: Array<{
+    name?: string
+    title?: string
+    professional_network_url?: string
+  }> | null
+  headcount_growth_3m_pct: number | null
+  headcount_growth_6m_pct: number | null
+  headcount_growth_12m_pct: number | null
+  headcount_timeseries: Array<{ date: string; count: number }> | null
   // Tagger metadata
   tagging_method: CompanyTaggingMethod | null
   tagging_confidence: number | null
