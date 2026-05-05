@@ -8,6 +8,7 @@ import CompanyLogo, { guessDomain } from '@/app/components/CompanyLogo'
 import { COMPANY_FUNCTIONS } from '@/app/constants'
 import ThemeToggle from '@/app/components/ThemeToggle'
 import IndustryBadge from '@/app/components/IndustryBadge'
+import AddToListMenu from '@/app/components/AddToListMenu'
 import {
   HARDWARE_INDUSTRIES, NON_HARDWARE_INDUSTRIES,
   HARDWARE_DOMAIN_TAGS, NON_HARDWARE_DOMAIN_TAGS,
@@ -234,7 +235,19 @@ export default function CompaniesListPage() {
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
-      rows = rows.filter(c => c.company_name.toLowerCase().includes(q))
+      rows = rows.filter(c => {
+        // Match across name + industry + tags + location + description so
+        // typing "drones" finds Anduril, "fintech" finds Stripe, etc.
+        if (c.company_name?.toLowerCase().includes(q)) return true
+        if (c.primary_industry?.toLowerCase().includes(q)) return true
+        if (c.industries?.some(i => i.toLowerCase().includes(q))) return true
+        if (c.domain_tags?.some(t => t.toLowerCase().includes(q))) return true
+        if (c.hq_location_name?.toLowerCase().includes(q)) return true
+        if (c.locations?.offices?.some((o: string) => o.toLowerCase().includes(q))) return true
+        if (c.description?.toLowerCase().includes(q)) return true
+        if (c.legacy_primary_industry_tag?.toLowerCase().includes(q)) return true
+        return false
+      })
     }
     if (industryFilter) {
       // Match against V1 industries[] OR legacy_primary_industry_tag (display compat)
@@ -493,6 +506,13 @@ export default function CompaniesListPage() {
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <button
+            onClick={() => router.push('/lists')}
+            className="px-3 py-1.5 text-sm font-medium border border-border rounded-md bg-card text-foreground hover:bg-background transition"
+            title="Browse your saved lists"
+          >
+            Lists
+          </button>
+          <button
             onClick={() => router.push('/admin/companies/triage')}
             className="px-3 py-1.5 text-sm font-medium border border-border rounded-md bg-card text-foreground hover:bg-background transition"
             title="Companies needing review (unreviewed, low confidence, untagged)"
@@ -518,7 +538,7 @@ export default function CompaniesListPage() {
       <div className="mb-4">
         <input
           type="text"
-          placeholder="Search by name..."
+          placeholder="Search name, industry, tag, location, description…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full px-4 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
@@ -868,11 +888,13 @@ export default function CompaniesListPage() {
                   </div>
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Tagging</th>
+                <th className="px-4 py-3 w-1" />
+
               </tr>
             </thead>
             <tbody className="bg-card divide-y divide-border">
               {filtered.length === 0 ? (
-                <tr><td colSpan={13} className="px-4 py-4 text-center text-tertiary">No companies found</td></tr>
+                <tr><td colSpan={14} className="px-4 py-4 text-center text-tertiary">No companies found</td></tr>
               ) : (
                 filtered.map(c => (
                   <tr
@@ -997,6 +1019,9 @@ export default function CompaniesListPage() {
                           {c.tagging_confidence != null && <span className="text-tertiary ml-1">({c.tagging_confidence.toFixed(2)})</span>}
                         </span>
                       ) : <span className="text-tertiary">—</span>}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <AddToListMenu itemId={c.company_id} kind="company" itemLabel={c.company_name} />
                     </td>
                   </tr>
                 ))

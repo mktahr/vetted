@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, fetchAllRows } from '@/lib/supabase'
 import { Person, SortField, SortDirection, CandidateBucket } from '../types'
 import ProfileDrawer, { DrawerExperience, DrawerEducation, DrawerSignal } from './ProfileDrawer'
+import AddToListMenu from './AddToListMenu'
 import { MultiSelectOption } from './MultiSelect'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from './CompanyLogo'
 import type { ConditionRow } from './condition-rows/types'
@@ -1052,6 +1053,7 @@ export default function ProfileTable() {
                       {h:'Cur Ten',field:'current_tenure' as SortField},
                       {h:'Avg Ten',field:'avg_tenure' as SortField},
                       {h:'Location',field:null},
+                      {h:'',field:null},
                     ].map(({h,field}) => (
                       <th key={h} onClick={field ? () => handleSort(field) : undefined}
                         style={{ ...eyebrow, cursor: field ? 'pointer' : 'default' }}>
@@ -1149,6 +1151,10 @@ export default function ProfileTable() {
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', color: 'var(--fg-secondary)' }}>{(() => { const v = avgTenureIncludeCurrent ? person.tenure.avgTenureIncCurrentYears : person.tenure.avgTenureYears; return v != null ? v + 'y' : '—' })()}</td>
                       {/* Location */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)' }}>{person.location_name || '—'}</td>
+                      {/* Add to list */}
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                        <AddToListMenu itemId={person.person_id} kind="candidate" itemLabel={person.full_name || ''} />
+                      </td>
                     </tr>
                   )})}
                 </tbody>

@@ -475,13 +475,6 @@ export default function CompanyEditPage() {
           )}
         </div>
 
-        {/* Description (from Crust enrich, when present) */}
-        {company?.description && (
-          <div className="mb-6 p-4 bg-background rounded-lg border-l-2 border-accent">
-            <p className="text-sm text-muted-foreground leading-relaxed">{company.description}</p>
-          </div>
-        )}
-
         {/* HQ + offices (when known) */}
         {(company?.locations?.headquarters || (company?.locations?.offices?.length ?? 0) > 0) && (
           <div className="mb-6 flex flex-wrap gap-x-6 gap-y-2 text-xs">
