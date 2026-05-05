@@ -114,6 +114,38 @@ export async function writeFundingRounds(
 }
 
 /**
+ * Strip Crust's " - <Company Name>" suffix that appears on milestone round
+ * types (e.g. "Series G - Anduril Industries" → "Series G").
+ */
+export function cleanRoundType(rt: string | null | undefined): string {
+  if (!rt) return ''
+  return rt.split(' - ')[0].trim()
+}
+
+/**
+ * Pick the most recent priced equity round from a sorted-desc round list.
+ * Used for the "Latest round" headline display — Crust's
+ * `funding.last_round_type` often points to a tiny grant or extension that
+ * postdates the meaningful round (e.g. Anduril shows a $150K XPRIZE grant
+ * after a $2.5B Series G). The recruiter wants Series G, not the grant.
+ *
+ * Matches: Series A-K, Pre-Seed, Seed, Seed Round.
+ * Falls back to the most recent round of any type when no priced equity
+ * round is found.
+ */
+export function pickLatestMeaningfulRound<T extends { round_type: string | null }>(
+  rounds: T[],
+): T | null {
+  if (!rounds || rounds.length === 0) return null
+  const meaningful = /^(series\s+[a-k](?:\s|$|-|,)|pre[\s-]?seed|seed(?:\s+round)?(?:\s|$|-|,))/i
+  for (const r of rounds) {
+    if (r.round_type && meaningful.test(r.round_type)) return r
+  }
+  // No priced equity round found — fall back to most recent of anything
+  return rounds[0]
+}
+
+/**
  * Compact display formatter for funding amounts.
  * 6_375_670_000 → "$6.4B"
  * 402_000_000   → "$402M"

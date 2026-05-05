@@ -17,6 +17,7 @@ import {
 } from '@/lib/companies/taxonomy'
 import { formatFundingAmount } from '@/lib/companies/funding'
 import { formatGrowthPct, growthSign } from '@/lib/companies/firmographics'
+import { highestTier, type InvestorTier } from '@/lib/companies/investor-tiers'
 
 // Stage ordering for sort. pre_seed=1 → series_k=13. Higher = later stage.
 const FUNDING_STAGE_ORDER: Record<string, number> = {
@@ -114,6 +115,12 @@ export default function CompaniesListPage() {
   // Headcount-growth column window toggle (3m / 6m / 12m)
   const [growthWindow, setGrowthWindow] = useState<GrowthWindow>('12m')
 
+  // Investor tier filter ('' = all, 't1' = has tier 1, 't1_or_t2' = has either)
+  const [investorTierFilter, setInvestorTierFilter] = useState<'' | 't1' | 't1_or_t2'>('')
+
+  // company_id → highest tier its investors achieve. Computed once on load.
+  const [companyHighestTier, setCompanyHighestTier] = useState<Record<string, InvestorTier | null>>({})
+
   // Load everything
   useEffect(() => {
     async function fetchAll() {
@@ -144,6 +151,28 @@ export default function CompaniesListPage() {
           .from('company_function_scores')
           .select('company_id, function_normalized, year, function_score')
         setFunctionScoresAll(fs || [])
+
+        // Load investor tier map + all funding rounds, then compute the
+        // highest tier any investor of each company achieves. Used for the
+        // "Has Tier 1 investor" filter.
+        const [{ data: tierRows }, { data: roundRows }] = await Promise.all([
+          supabase.from('investor_tiers').select('investor_name, tier'),
+          supabase.from('company_funding_rounds').select('company_id, investors'),
+        ])
+        const tierMap = new Map<string, InvestorTier>()
+        for (const t of (tierRows || []) as any[]) tierMap.set(t.investor_name, t.tier as InvestorTier)
+        const perCompanyInvestors: Record<string, Set<string>> = {}
+        for (const r of (roundRows || []) as Array<{ company_id: string; investors: string[] | null }>) {
+          if (!perCompanyInvestors[r.company_id]) perCompanyInvestors[r.company_id] = new Set()
+          for (const name of r.investors || []) {
+            if (typeof name === 'string' && name.trim()) perCompanyInvestors[r.company_id].add(name.trim())
+          }
+        }
+        const map: Record<string, InvestorTier | null> = {}
+        for (const cid of Object.keys(perCompanyInvestors)) {
+          map[cid] = highestTier(tierMap, Array.from(perCompanyInvestors[cid]))
+        }
+        setCompanyHighestTier(map)
       } catch (err: any) {
         setError(err?.message || 'Failed to load companies.')
       } finally {
@@ -231,6 +260,14 @@ export default function CompaniesListPage() {
     if (fundingStageFilter) {
       rows = rows.filter(c => c.funding_stage === fundingStageFilter)
     }
+    if (investorTierFilter === 't1') {
+      rows = rows.filter(c => companyHighestTier[c.company_id] === 1)
+    } else if (investorTierFilter === 't1_or_t2') {
+      rows = rows.filter(c => {
+        const t = companyHighestTier[c.company_id]
+        return t === 1 || t === 2
+      })
+    }
 
     if (sortBy === 'name_asc') {
       rows.sort((a, b) => a.company_name.localeCompare(b.company_name))
@@ -276,9 +313,9 @@ export default function CompaniesListPage() {
     }
 
     return rows
-  }, [companies, searchQuery, industryFilter, domainTagFilter, bucketFilter, statusFilter, reviewFilter, categoryFilter, taggingMethodFilter, confidenceMinFilter, fundingStageFilter, sortBy, sortYear, sortFunction, scoresByCompany, functionScoreByCompany])
+  }, [companies, searchQuery, industryFilter, domainTagFilter, bucketFilter, statusFilter, reviewFilter, categoryFilter, taggingMethodFilter, confidenceMinFilter, fundingStageFilter, investorTierFilter, companyHighestTier, sortBy, sortYear, sortFunction, scoresByCompany, functionScoreByCompany])
 
-  const activeFilters = [industryFilter, domainTagFilter, bucketFilter, statusFilter, reviewFilter, categoryFilter, taggingMethodFilter, fundingStageFilter].filter(Boolean).length + (confidenceMinFilter !== '' ? 1 : 0)
+  const activeFilters = [industryFilter, domainTagFilter, bucketFilter, statusFilter, reviewFilter, categoryFilter, taggingMethodFilter, fundingStageFilter, investorTierFilter].filter(Boolean).length + (confidenceMinFilter !== '' ? 1 : 0)
   const clearAll = () => {
     setSearchQuery('')
     setIndustryFilter('')
@@ -290,6 +327,7 @@ export default function CompaniesListPage() {
     setTaggingMethodFilter('')
     setConfidenceMinFilter('')
     setFundingStageFilter('')
+    setInvestorTierFilter('')
   }
 
   function toggleSelect(id: string) {
@@ -563,6 +601,21 @@ export default function CompaniesListPage() {
             {FUNDING_STAGES.map(s => (
               <option key={s} value={s}>{FUNDING_STAGE_LABELS[s]}</option>
             ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1" title="Show only companies whose disclosed investors include a curated tier-1 / tier-2 firm or angel.">
+            Investors
+          </label>
+          <select
+            value={investorTierFilter}
+            onChange={(e) => setInvestorTierFilter(e.target.value as '' | 't1' | 't1_or_t2')}
+            className="px-3 py-2 border border-border rounded-lg text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <option value="">All companies</option>
+            <option value="t1">★ Tier 1 backers</option>
+            <option value="t1_or_t2">Tier 1 or 2 backers</option>
           </select>
         </div>
 

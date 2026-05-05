@@ -14,8 +14,13 @@ import {
   taggingMethodLabel,
   dedupeDomainTagsAgainstIndustry,
 } from '@/lib/companies/taxonomy'
-import { formatFundingAmount } from '@/lib/companies/funding'
+import { formatFundingAmount, cleanRoundType, pickLatestMeaningfulRound } from '@/lib/companies/funding'
 import { formatGrowthPct, growthSign } from '@/lib/companies/firmographics'
+import {
+  pickNotableInvestors,
+  flattenInvestors,
+  type InvestorTier,
+} from '@/lib/companies/investor-tiers'
 
 const BUCKET_OPTIONS: Array<{ value: CompanyBucket; label: string }> = [
   { value: 'static_mature',    label: 'Static Mature' },
@@ -83,6 +88,7 @@ export default function CompanyEditPage() {
     lead_investors: string[]
   }>>([])
   const [showAllRounds, setShowAllRounds] = useState(false)
+  const [tierMap, setTierMap] = useState<Map<string, InvestorTier>>(new Map())
 
   useEffect(() => {
     async function fetchAll() {
@@ -130,6 +136,16 @@ export default function CompanyEditPage() {
           .eq('company_id', companyId)
           .order('round_date', { ascending: false, nullsFirst: false })
         setFundingRounds((rounds || []) as any)
+
+        // Load investor tier map (small, ~70 rows)
+        const { data: tiers } = await supabase
+          .from('investor_tiers')
+          .select('investor_name, tier')
+        const tm = new Map<string, InvestorTier>()
+        for (const t of (tiers || []) as any[]) {
+          tm.set(t.investor_name, t.tier as InvestorTier)
+        }
+        setTierMap(tm)
       } catch (err: any) {
         console.error('Error fetching company:', err)
       } finally {
@@ -830,6 +846,36 @@ export default function CompanyEditPage() {
             <h2 className="text-lg font-semibold mb-3">Funding</h2>
             <p className="text-xs text-tertiary mb-3">From Crust enrich. Re-enrich to refresh.</p>
 
+            {/* Notable investors — highlights tier-1 / tier-2 backers across all rounds */}
+            {(() => {
+              const flat = flattenInvestors(fundingRounds)
+              const notable = pickNotableInvestors(tierMap, flat, { maxTier: 2 })
+              if (notable.length === 0) return null
+              return (
+                <div className="mb-4 p-3 bg-accent/5 border border-accent/20 rounded-lg">
+                  <p className="text-xs text-tertiary uppercase tracking-wider mb-2">
+                    Notable investors
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {notable.map(({ name, tier }) => (
+                      <span
+                        key={name}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${
+                          tier === 1
+                            ? 'bg-accent/20 text-accent border border-accent/40 font-medium'
+                            : 'bg-card border border-border text-muted-foreground'
+                        }`}
+                        title={tier === 1 ? 'Tier 1 investor' : 'Tier 2 investor'}
+                      >
+                        {tier === 1 && <span aria-hidden>★</span>}
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <p className="text-xs text-tertiary uppercase tracking-wider">Total raised</p>
@@ -841,25 +887,43 @@ export default function CompanyEditPage() {
               </div>
               <div>
                 <p className="text-xs text-tertiary uppercase tracking-wider">Latest round</p>
-                {company?.last_funding_round_type ? (
-                  <>
-                    <p className="text-lg font-semibold mt-1">
-                      {/* Friendly label when it matches our enum, otherwise the raw Crust string */}
-                      {(() => {
-                        const raw = company.last_funding_round_type
-                        const friendly = (FUNDING_STAGE_LABELS as any)[raw]
-                        return friendly || raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-                      })()}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {company.last_funding_amount_usd != null && formatFundingAmount(company.last_funding_amount_usd)}
-                      {company.last_funding_amount_usd != null && company.last_funding_date && ' · '}
-                      {company.last_funding_date}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-lg text-tertiary mt-1">—</p>
-                )}
+                {(() => {
+                  // Prefer the most recent priced equity round (Series A-K, Seed)
+                  // over generic Grant / Venture / series_unknown rounds.
+                  const meaningful = pickLatestMeaningfulRound(fundingRounds)
+                  if (meaningful) {
+                    const label = cleanRoundType(meaningful.round_type)
+                    const friendly = label
+                      ? (FUNDING_STAGE_LABELS as any)[label.toLowerCase().replace(/\s+/g, '_')] || label
+                      : null
+                    return (
+                      <>
+                        <p className="text-lg font-semibold mt-1">{friendly || '—'}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {meaningful.amount_usd != null && formatFundingAmount(meaningful.amount_usd)}
+                          {meaningful.amount_usd != null && meaningful.round_date && ' · '}
+                          {meaningful.round_date}
+                        </p>
+                      </>
+                    )
+                  }
+                  // No rounds at all — fall back to scalar (or em-dash)
+                  if (company?.last_funding_round_type) {
+                    return (
+                      <>
+                        <p className="text-lg font-semibold mt-1">
+                          {company.last_funding_round_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {company.last_funding_amount_usd != null && formatFundingAmount(company.last_funding_amount_usd)}
+                          {company.last_funding_amount_usd != null && company.last_funding_date && ' · '}
+                          {company.last_funding_date}
+                        </p>
+                      </>
+                    )
+                  }
+                  return <p className="text-lg text-tertiary mt-1">—</p>
+                })()}
               </div>
             </div>
 
@@ -880,7 +944,7 @@ export default function CompanyEditPage() {
                       return (
                         <div key={i} className="p-3">
                           <div className="flex items-center gap-3 text-sm">
-                            <span className="font-medium">{r.round_type || '(unknown round)'}</span>
+                            <span className="font-medium">{cleanRoundType(r.round_type) || '(unknown round)'}</span>
                             {r.amount_usd != null && (
                               <span className="text-muted-foreground">{formatFundingAmount(r.amount_usd)}</span>
                             )}
@@ -888,7 +952,18 @@ export default function CompanyEditPage() {
                           </div>
                           {allInv.length > 0 && (
                             <div className="text-xs text-muted-foreground mt-1">
-                              {allInv.join(', ')}
+                              {allInv.map((name, idx) => {
+                                const t = tierMap.get(name)
+                                return (
+                                  <span key={idx}>
+                                    {idx > 0 && ', '}
+                                    <span className={t === 1 ? 'text-accent font-medium' : t === 2 ? 'text-foreground' : ''}>
+                                      {t === 1 && <span aria-hidden className="text-[9px] mr-0.5">★</span>}
+                                      {name}
+                                    </span>
+                                  </span>
+                                )
+                              })}
                             </div>
                           )}
                         </div>
