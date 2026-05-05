@@ -91,17 +91,19 @@ export default function IndustryBadge({ primary, industries, compact = false }: 
             zIndex: 9999,
             minWidth: 220,
             maxWidth: 320,
-            backgroundColor: 'var(--bg-surface)',
+            // Lifted color + thicker outline to clearly separate from the
+            // table content underneath.
+            backgroundColor: '#1f1f24',
             color: 'var(--fg-primary)',
-            border: '1px solid var(--border-default)',
-            borderRadius: 'var(--r-card, 8px)',
-            boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
+            border: '1px solid #3a3a42',
+            borderRadius: 8,
+            boxShadow: '0 16px 40px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04) inset',
             backdropFilter: 'none',
           }}
         >
           <div
             className="flex items-center justify-between px-3 py-2"
-            style={{ borderBottom: '1px solid var(--border-subtle)' }}
+            style={{ borderBottom: '1px solid #2a2a32', backgroundColor: '#16161a' }}
           >
             <span className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--fg-tertiary)' }}>
               All industries
