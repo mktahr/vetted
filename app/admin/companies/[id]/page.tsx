@@ -14,6 +14,7 @@ import {
   taggingMethodLabel,
   dedupeDomainTagsAgainstIndustry,
 } from '@/lib/companies/taxonomy'
+import { formatFundingAmount } from '@/lib/companies/funding'
 
 const BUCKET_OPTIONS: Array<{ value: CompanyBucket; label: string }> = [
   { value: 'static_mature',    label: 'Static Mature' },
@@ -73,6 +74,14 @@ export default function CompanyEditPage() {
   const [tagging, setTagging] = useState(false)
   const [reEnriching, setReEnriching] = useState(false)
   const [tagMsg, setTagMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  const [fundingRounds, setFundingRounds] = useState<Array<{
+    round_type: string | null
+    round_date: string | null
+    amount_usd: number | null
+    investors: string[]
+    lead_investors: string[]
+  }>>([])
+  const [showAllRounds, setShowAllRounds] = useState(false)
 
   useEffect(() => {
     async function fetchAll() {
@@ -113,6 +122,13 @@ export default function CompanyEditPage() {
           .select('company_id, function_normalized, year, function_score')
           .eq('company_id', companyId)
         setFunctionScores(fs || [])
+
+        const { data: rounds } = await supabase
+          .from('company_funding_rounds')
+          .select('round_type, round_date, amount_usd, investors, lead_investors')
+          .eq('company_id', companyId)
+          .order('round_date', { ascending: false, nullsFirst: false })
+        setFundingRounds((rounds || []) as any)
       } catch (err: any) {
         console.error('Error fetching company:', err)
       } finally {
@@ -699,6 +715,76 @@ export default function CompanyEditPage() {
             {saving ? 'Saving...' : 'Save Details'}
           </button>
         </div>
+
+        {/* Funding & investors (read-only; populated by Crust enrich) */}
+        {(company?.total_funding_usd != null || company?.last_funding_amount_usd != null || fundingRounds.length > 0) && (
+          <div className="mb-8 border-t pt-6">
+            <h2 className="text-lg font-semibold mb-3">Funding</h2>
+            <p className="text-xs text-tertiary mb-3">From Crust enrich. Re-enrich to refresh.</p>
+
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <p className="text-xs text-tertiary uppercase tracking-wider">Total raised</p>
+                <p className="text-lg font-semibold mt-1">
+                  {company?.total_funding_usd
+                    ? formatFundingAmount(company.total_funding_usd)
+                    : <span className="text-tertiary text-sm font-normal">—</span>}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-tertiary uppercase tracking-wider">Latest round</p>
+                <p className="text-sm mt-1">
+                  {company?.last_funding_round_type ? (
+                    <>
+                      {company.last_funding_round_type}
+                      {company.last_funding_amount_usd != null && (
+                        <span className="text-muted-foreground ml-1">· {formatFundingAmount(company.last_funding_amount_usd)}</span>
+                      )}
+                      {company.last_funding_date && (
+                        <span className="text-tertiary ml-1">· {company.last_funding_date}</span>
+                      )}
+                    </>
+                  ) : <span className="text-tertiary">—</span>}
+                </p>
+              </div>
+            </div>
+
+            {fundingRounds.length > 0 && (() => {
+              const visible = showAllRounds ? fundingRounds : fundingRounds.slice(0, 3)
+              return (
+                <div className="bg-background rounded-lg divide-y divide-border">
+                  {visible.map((r, i) => {
+                    const allInv = r.investors || []
+                    return (
+                      <div key={i} className="p-3">
+                        <div className="flex items-center gap-3 text-sm">
+                          <span className="font-medium">{r.round_type || '(unknown round)'}</span>
+                          {r.amount_usd != null && (
+                            <span className="text-muted-foreground">{formatFundingAmount(r.amount_usd)}</span>
+                          )}
+                          {r.round_date && <span className="text-tertiary text-xs">{r.round_date}</span>}
+                        </div>
+                        {allInv.length > 0 && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {allInv.join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                  {fundingRounds.length > 3 && (
+                    <button
+                      onClick={() => setShowAllRounds(o => !o)}
+                      className="w-full text-xs text-muted-foreground hover:text-foreground py-2"
+                    >
+                      {showAllRounds ? 'Show fewer' : `Show ${fundingRounds.length - 3} more rounds`}
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
+          </div>
+        )}
 
         {/* Year scores */}
         <div className="mb-8 border-t pt-6">

@@ -165,6 +165,10 @@ export interface Company {
   hq_location_name: string | null
   // Funding
   funding_stage: string | null
+  total_funding_usd: number | null
+  last_funding_amount_usd: number | null
+  last_funding_date: string | null
+  last_funding_round_type: string | null
   // Tagger metadata
   tagging_method: CompanyTaggingMethod | null
   tagging_confidence: number | null

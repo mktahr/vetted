@@ -25,6 +25,7 @@ import {
   normalizeCrustFundingStage,
   normalizeCrustCompanyType,
 } from '@/lib/companies/taxonomy'
+import { extractFundingScalars, writeFundingRounds } from '@/lib/companies/funding'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -123,6 +124,7 @@ export async function POST(req: NextRequest) {
   const headcountRange =
     headcountRangeFromTotal(headcountTotal) ??
     normalizeCrustHeadcountRange(bi.employee_count_range)
+  const fundingScalars = extractFundingScalars(fn)
 
   // Common field shape from the enrich response — used for both UPDATE-merge
   // and fresh-INSERT paths.
@@ -137,6 +139,7 @@ export async function POST(req: NextRequest) {
     headcount_latest: headcountTotal,
     headcount_latest_at: headcountTotal != null ? new Date().toISOString() : null,
     funding_stage: normalizeCrustFundingStage(fn.last_round_type),
+    ...fundingScalars,
   }
   const taggerFields = {
     category: tagger.category,
@@ -186,6 +189,8 @@ export async function POST(req: NextRequest) {
       if (updateErr) {
         return Response.json({ error: `Merge update failed: ${updateErr.message}` }, { status: 500 })
       }
+      // Write/refresh funding rounds — fire-and-forget; failures don't block the response
+      await writeFundingRounds(supabase, byUrl.company_id, fn)
       return Response.json({
         company_id: byUrl.company_id,
         created: false,
@@ -248,6 +253,9 @@ export async function POST(req: NextRequest) {
     }
     return Response.json({ error: `Insert failed: ${insertErr.message}` }, { status: 500 })
   }
+
+  // Write rounds for the freshly-inserted company
+  await writeFundingRounds(supabase, inserted!.company_id, fn)
 
   return Response.json({
     company_id: inserted!.company_id,

@@ -15,6 +15,7 @@ import {
   TAGGING_METHOD_LABELS, taggingMethodLabel,
   FUNDING_STAGES, FUNDING_STAGE_LABELS,
 } from '@/lib/companies/taxonomy'
+import { formatFundingAmount } from '@/lib/companies/funding'
 
 // Stage ordering for sort. pre_seed=1 → series_k=13. Higher = later stage.
 const FUNDING_STAGE_ORDER: Record<string, number> = {
@@ -53,16 +54,18 @@ const REVIEW_OPTIONS: Array<{ value: '' | CompanyReviewStatus; label: string }> 
   { value: 'excluded',   label: 'Excluded' },
 ]
 
-type SortBy = 'name_asc' | 'name_desc' | 'year_score' | 'function_score' | 'tagging_confidence_asc' | 'headcount_desc' | 'funding_stage_asc' | 'funding_stage_desc'
+type SortBy = 'name_asc' | 'name_desc' | 'year_score' | 'function_score' | 'tagging_confidence_asc' | 'headcount_desc' | 'funding_stage_asc' | 'funding_stage_desc' | 'total_funding_desc' | 'total_funding_asc'
 
 const SORT_OPTIONS: Array<{ value: SortBy; label: string; help?: string }> = [
   { value: 'name_asc',                label: 'Name (A → Z)' },
   { value: 'name_desc',               label: 'Name (Z → A)' },
   { value: 'headcount_desc',          label: 'Headcount (large → small)' },
-  { value: 'funding_stage_asc',       label: 'Funding stage (early → late)', help: 'Pre-seed/seed first; Series K last; companies without a stored stage at the bottom.' },
+  { value: 'total_funding_desc',      label: 'Total raised (high → low)',     help: 'Companies without a stored total at the bottom.' },
+  { value: 'total_funding_asc',       label: 'Total raised (low → high)' },
+  { value: 'funding_stage_asc',       label: 'Funding stage (early → late)',  help: 'Pre-seed/seed first; Series K last; companies without a stored stage at the bottom.' },
   { value: 'funding_stage_desc',      label: 'Funding stage (late → early)' },
   { value: 'tagging_confidence_asc',  label: 'Tagger confidence (low → high)', help: 'Useful for finding rows that need a manual review.' },
-  { value: 'year_score',              label: 'Manual quality (year)',         help: 'Manually set 1–5 quality rating per company per year. Used for candidate scoring.' },
+  { value: 'year_score',              label: 'Manual quality (year)',          help: 'Manually set 1–5 quality rating per company per year. Used for candidate scoring.' },
   { value: 'function_score',          label: 'Manual quality (function)',      help: 'Manually set 1–3 quality rating for non-engineering functions.' },
 ]
 
@@ -234,6 +237,10 @@ export default function CompaniesListPage() {
       rows.sort((a, b) => (a.tagging_confidence ?? Infinity) - (b.tagging_confidence ?? Infinity))
     } else if (sortBy === 'headcount_desc') {
       rows.sort((a, b) => (b.headcount_latest ?? -1) - (a.headcount_latest ?? -1))
+    } else if (sortBy === 'total_funding_desc') {
+      rows.sort((a, b) => (b.total_funding_usd ?? -1) - (a.total_funding_usd ?? -1))
+    } else if (sortBy === 'total_funding_asc') {
+      rows.sort((a, b) => (a.total_funding_usd ?? Infinity) - (b.total_funding_usd ?? Infinity))
     } else if (sortBy === 'funding_stage_asc' || sortBy === 'funding_stage_desc') {
       const direction = sortBy === 'funding_stage_asc' ? 1 : -1
       rows.sort((a, b) => {
@@ -730,7 +737,8 @@ export default function CompaniesListPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Category</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Industry</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Tags</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Funding</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Stage</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider" title="Total raised across all disclosed rounds">Total raised</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Review</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Headcount</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-tertiary uppercase tracking-wider">Tagging</th>
@@ -738,7 +746,7 @@ export default function CompaniesListPage() {
             </thead>
             <tbody className="bg-card divide-y divide-border">
               {filtered.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-4 text-center text-tertiary">No companies found</td></tr>
+                <tr><td colSpan={11} className="px-4 py-4 text-center text-tertiary">No companies found</td></tr>
               ) : (
                 filtered.map(c => (
                   <tr
@@ -794,6 +802,9 @@ export default function CompaniesListPage() {
                         : c.company_type === 'subsidiary'
                         ? <span className="italic text-tertiary">Subsidiary</span>
                         : '—'}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground" title={c.total_funding_usd ? `$${c.total_funding_usd.toLocaleString()}` : ''}>
+                      {formatFundingAmount(c.total_funding_usd)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs">
                       <span className="inline-flex items-center gap-1.5 text-muted-foreground">

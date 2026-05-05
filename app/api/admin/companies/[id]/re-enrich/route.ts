@@ -20,6 +20,7 @@ import {
   normalizeCrustFundingStage,
   normalizeCrustCompanyType,
 } from '@/lib/companies/taxonomy'
+import { extractFundingScalars, writeFundingRounds } from '@/lib/companies/funding'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -114,6 +115,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const headcountRange =
     headcountRangeFromTotal(headcountTotal) ??
     normalizeCrustHeadcountRange(bi.employee_count_range)
+  const fundingScalars = extractFundingScalars(fn)
 
   const updates: Record<string, any> = {
     company_name: bi.name || undefined,
@@ -126,6 +128,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     headcount_latest: headcountTotal,
     headcount_latest_at: headcountTotal != null ? new Date().toISOString() : null,
     funding_stage: normalizeCrustFundingStage(fn.last_round_type),
+    ...fundingScalars,
     category: tagger.category,
     primary_industry: tagger.primary_industry,
     industries: tagger.industries,
@@ -148,6 +151,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     .update(updates)
     .eq('company_id', params.id)
   if (writeErr) return Response.json({ error: `Write failed: ${writeErr.message}` }, { status: 500 })
+
+  // Refresh funding rounds from the latest enrich data
+  await writeFundingRounds(supabase, params.id, fn)
 
   if (spendRow) {
     await supabase
