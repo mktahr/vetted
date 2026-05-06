@@ -985,7 +985,8 @@ export default function ProfileTable() {
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ padding: '16px 24px' }}>
-          <TopNav title="Vetted Database" />
+          {/* Page title — global nav is rendered at layout level */}
+          <h1 className="text-3xl font-bold tracking-tight mb-4">Vetted Database</h1>
 
           {/* Search */}
           <input type="text" placeholder="Search by name, company, title, or location..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}

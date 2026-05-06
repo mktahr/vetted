@@ -211,7 +211,7 @@ export default function ListDetailPage() {
   if (error || !meta) {
     return (
       <div style={{ padding: 24, color: 'var(--fg-primary)', background: 'var(--bg-canvas)', minHeight: '100vh', fontFamily: 'var(--font-sans)' }}>
-        <TopNav backHref="/lists" backLabel="← All lists" />
+        <a href="/lists" className="text-sm text-muted-foreground hover:text-foreground">← All lists</a>
         <p className="mt-3 text-red-500">{error || 'List not found'}</p>
       </div>
     )
@@ -219,21 +219,25 @@ export default function ListDetailPage() {
 
   return (
     <div style={{ padding: 24, background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
-      <TopNav
-        backHref="/lists"
-        backLabel="← All lists"
-        title={
-          editName == null
-            ? (
-                <span className="cursor-text" onClick={() => setEditName(meta.name)}>
-                  {meta.name}
-                  <span className="ml-3 align-middle px-2 py-0.5 text-xs rounded bg-card border border-border text-tertiary uppercase">{meta.kind}</span>
-                </span>
-              )
-            : meta.name
-        }
-        subtitle={`${items.length} item${items.length === 1 ? '' : 's'}`}
-      />
+      <div className="mb-6">
+        <a href="/lists" className="text-sm text-muted-foreground hover:text-foreground inline-block mb-2">← All lists</a>
+        {editName == null ? (
+          <h1 className="text-3xl font-bold tracking-tight cursor-text" onClick={() => setEditName(meta.name)}>
+            {meta.name}
+            <span className="ml-3 align-middle px-2 py-0.5 text-xs rounded bg-card border border-border text-tertiary uppercase">{meta.kind}</span>
+          </h1>
+        ) : (
+          <input
+            autoFocus
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onBlur={handleRename}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setEditName(null) }}
+            className="text-3xl font-bold tracking-tight bg-transparent border-b border-border focus:outline-none focus:border-accent w-full"
+          />
+        )}
+        <p className="text-sm text-muted-foreground mt-1">{items.length} item{items.length === 1 ? '' : 's'}</p>
+      </div>
 
       {/* Bulk action toolbar (visible when rows selected) */}
       {selectedIds.size > 0 && (
@@ -256,20 +260,6 @@ export default function ListDetailPage() {
           <button onClick={() => setSelectedIds(new Set())} className="text-sm text-tertiary hover:text-muted-foreground">
             Cancel
           </button>
-        </div>
-      )}
-
-      {/* Inline rename input — only when actively editing */}
-      {editName != null && (
-        <div className="mb-3">
-          <input
-            autoFocus
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            onBlur={handleRename}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setEditName(null) }}
-            className="text-2xl font-bold bg-transparent border-b border-border focus:outline-none focus:border-accent w-full"
-          />
         </div>
       )}
 

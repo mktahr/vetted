@@ -498,26 +498,25 @@ export default function CompaniesListPage() {
 
   return (
     <div style={{ padding: 24, background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
-      <TopNav
-        title="Companies"
-        rightActions={
-          <>
-            <button
-              onClick={() => router.push('/admin/companies/triage')}
-              className="px-3 py-1.5 text-sm font-medium border border-border rounded-md bg-card text-foreground hover:bg-background transition"
-              title="Companies needing review (unreviewed, low confidence, untagged)"
-            >
-              Triage
-            </button>
-            <button
-              onClick={() => router.push('/admin/companies/new')}
-              className="px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-white hover:bg-accent-strong transition"
-            >
-              + Add company
-            </button>
-          </>
-        }
-      />
+      {/* Page title row — global nav is at layout level */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold tracking-tight">Companies</h1>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => router.push('/admin/companies/triage')}
+            className="px-3 py-1.5 text-sm font-medium border border-border rounded-md bg-card text-foreground hover:bg-background transition"
+            title="Companies needing review (unreviewed, low confidence, untagged)"
+          >
+            Triage
+          </button>
+          <button
+            onClick={() => router.push('/admin/companies/new')}
+            className="px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-white hover:bg-accent-strong transition"
+          >
+            + Add company
+          </button>
+        </div>
+      </div>
 
       <div className="mb-4">
         <input

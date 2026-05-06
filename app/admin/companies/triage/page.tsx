@@ -197,17 +197,14 @@ export default function TriagePage() {
 
   return (
     <div style={{ padding: 24, background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
-      <TopNav
-        title="Triage queue"
-        backHref="/admin/companies"
-        backLabel="← Back to companies"
-        subtitle={
-          <>
-            {totalQueue} compan{totalQueue === 1 ? 'y' : 'ies'} need attention
-            {skippedIds.size > 0 && <span className="text-tertiary"> · {skippedIds.size} skipped this session</span>}
-          </>
-        }
-      />
+      <div className="mb-6">
+        <a href="/admin/companies" className="text-sm text-muted-foreground hover:text-foreground inline-block mb-2">← Back to companies</a>
+        <h1 className="text-3xl font-bold tracking-tight">Triage queue</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          {totalQueue} compan{totalQueue === 1 ? 'y' : 'ies'} need attention
+          {skippedIds.size > 0 && <span className="text-tertiary"> · {skippedIds.size} skipped this session</span>}
+        </p>
+      </div>
 
       <div className="mb-6 flex flex-wrap gap-3 items-end">
         <div>

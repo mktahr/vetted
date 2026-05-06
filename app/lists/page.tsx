@@ -61,10 +61,10 @@ export default function ListsPage() {
 
   return (
     <div style={{ padding: 24, background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
-      <TopNav
-        title="Lists"
-        subtitle={<>Bookmarks of candidates and companies. Add items via the &ldquo;+&rdquo; button on any row.</>}
-      />
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold tracking-tight">Lists</h1>
+        <p className="text-sm text-muted-foreground mt-1">Bookmarks of candidates and companies. Add items via the &ldquo;+&rdquo; button on any row.</p>
+      </div>
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 rounded text-sm">{error}</div>

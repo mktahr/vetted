@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import './design-system.css'
+import GlobalNav from './components/GlobalNav'
 
 export const metadata: Metadata = {
   title: 'Vetted - Recruiting Database',
@@ -14,7 +15,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" data-theme="dark" data-accent="ember">
-      <body>{children}</body>
+      <body>
+        <GlobalNav />
+        {children}
+      </body>
     </html>
   )
 }

@@ -78,7 +78,10 @@ export default function NewCompanyPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 700, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
-      <TopNav title="Add company" backHref="/admin/companies" backLabel="← Back to companies" />
+      <div className="mb-6">
+        <a href="/admin/companies" className="text-sm text-muted-foreground hover:text-foreground inline-block mb-2">← Back to companies</a>
+        <h1 className="text-3xl font-bold tracking-tight">Add company</h1>
+      </div>
 
       <div className="bg-card rounded-lg shadow-lg p-8">
 
