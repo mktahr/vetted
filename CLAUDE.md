@@ -110,23 +110,74 @@ Four separate outputs:
 
 ---
 
-## Company Focus Field
+## Companies V1 Taxonomy (Post-Migration 031)
 
-Added in migration 016. Every company has a `focus` column (enum `company_focus_type`) with three values:
+Migration 031 replaced the old `focus` (`hard_tech`/`all_tech`/`unreviewed`) and `manual_review_status` columns with two **independent** dimensions: `category` (what kind of company) and `review_status` (workflow state). The old binary "is this hard tech" flag is gone — companies now have a richer taxonomy backed by Crust + Claude tagger.
 
-| Value | Meaning |
-|---|---|
-| `hard_tech` | Hardware, deep tech, aerospace, defense, robotics, autonomy — the hard-tech product focus |
-| `all_tech` | **Default.** The full searchable universe — includes `hard_tech` companies plus SaaS/FinTech/etc. Recruiter default view. |
-| `unreviewed` | Auto-created via ingest, not yet triaged by admin. Appears in admin triage queue only. |
+### Two independent dimensions
 
-**Scoping semantics** — important for filter queries:
+| Column | Purpose | Values |
+|---|---|---|
+| `category` | What kind of company. Drives industry validation. | `hardware`, `non_hardware`, `NULL` (unclassified) |
+| `review_status` | Triage workflow state. | `vetted`, `unreviewed`, `excluded` |
 
-- A filter for `hard_tech` matches **only** `focus = 'hard_tech'`.
-- A filter for `all_tech` matches `focus IN ('hard_tech', 'all_tech')` — hard_tech companies ARE part of the all_tech universe.
-- `unreviewed` is explicitly excluded from both default views; recruiter searches never surface unreviewed companies.
+**Migration of legacy values:** `focus='hard_tech' → category='hardware'`, `focus='all_tech' → category='non_hardware'`, `focus='unreviewed' → category=NULL`. Workflow state moved from `manual_review_status` (reviewed/locked → vetted; unreviewed → unreviewed). The `manual_review_status` enum was dropped.
 
-**Write path** — all promotion to `hard_tech` is manual via the admin UI. Ingest auto-creates new companies with `focus = 'unreviewed'`. Backfill on migration 016 set the focus to `unreviewed` for any pre-existing company that had never been triaged (manual_review_status = 'unreviewed' AND no bucket AND no industry).
+### New taxonomy columns on `companies`
+
+- `category` (TEXT, nullable, CHECK in (`hardware`, `non_hardware`))
+- `primary_industry` (TEXT, nullable) — single value picked from the category-specific industry list (see [lib/companies/taxonomy.ts](lib/companies/taxonomy.ts))
+- `industries` (TEXT[], default `{}`) — multi-industry support; primary is required to appear in this array
+- `domain_tags` (TEXT[], default `{}`) — orthogonal multi-select tags (e.g. `AI`, `Climate`, `Defense`) within a category
+- `crustdata_company_id` (BIGINT UNIQUE), `professional_network_id` (TEXT) — external IDs for cross-system identity
+- `company_type` (TEXT, no CHECK yet) — final enum deferred to a later investigation
+- `tagging_method` / `tagging_confidence` / `tagging_notes` — provenance from the Claude tagger
+- `headcount_latest` + `headcount_latest_at` — denormalized snapshot for sorting
+- `review_status` (TEXT, CHECK in (`vetted`, `unreviewed`, `excluded`))
+
+### Critical constraint: category gates industries
+
+A company with `category=NULL` MUST have `primary_industry=NULL`, `industries={}`, and `domain_tags={}`. Inserts/updates that violate this will be rejected by application code. See [app/admin/companies/new/page.tsx:52-56](app/admin/companies/new/page.tsx#L52) for the canonical pattern.
+
+### Filter scope: candidate search defaults to "all"
+
+Per Matt's Option C decision (2026-05-04): both `categoryScope` and `reviewStatusScope` default to `'all'` in the candidate filter sidebar so the V1 schema migration does NOT silently filter the recruiter view. Admin can opt into stricter scopes (e.g. `vetted-only`) explicitly. See [app/components/FilterSidebar.tsx:14-21](app/components/FilterSidebar.tsx#L14).
+
+### No bulk backfill
+
+Existing 1,500+ companies stay at `category=NULL` after 031. They get classified as the auto-tagger cron processes them (see "Auto-Tagging Cron" section).
+
+### Legacy columns
+
+`primary_industry_tag` → renamed to `legacy_primary_industry_tag` (preserved, not actively used). `sub_industry_1/2/3` → `legacy_*`. The old `company_focus_type` enum was dropped.
+
+---
+
+## Auto-Tagging Cron + Spend Cap (Post-Migration 032)
+
+A nightly cron classifies companies with `category=NULL` and `tagging_method=NULL` using Claude Haiku 4.5. Each tagged company gets `category`, `primary_industry`, `industries[]`, `domain_tags[]` filled in and `tagging_method='claude_haiku'`.
+
+### Spend cap
+
+`companies_tag_spend_log` is a per-day rollup (`log_date` PK). Each `tagCompany()` call increments `total_companies_tagged` and adds `EST_CENTS_PER_TAG=1` (rounded up from ~$0.005 actual). When `estimated_anthropic_cents >= MAX_DAILY_ANTHROPIC_CENTS` (default 1000 = $10/day) the cron throttles for the rest of the UTC day.
+
+At the cap the cron processes ~1,000 companies/day. Adjust env var if real spend differs.
+
+### Routes
+
+- **Cron**: `vercel.json` schedules a daily route that calls `[app/api/admin/companies/tag-pending/route.ts](app/api/admin/companies/tag-pending/route.ts)`. Was disabled before 031 shipped (see commit 9a7c9dd) and re-enabled after.
+- **On-demand**: `[app/api/admin/companies/[id]/tag/route.ts](app/api/admin/companies/[id]/tag/route.ts)` — "Tag now" button on the company detail page. Also writes to the spend log.
+- **Re-enrich**: `[app/api/admin/companies/[id]/re-enrich/route.ts](app/api/admin/companies/[id]/re-enrich/route.ts)` — refreshes Crust firmographics + funding for one company without touching the tagger output.
+
+### Tagger module
+
+Lives at [lib/companies/tagger/](lib/companies/tagger/). Files: `claude.ts` (LLM call), `dictionary.ts` (industry/tag vocabulary used in the prompt), `index.ts`, `types.ts`.
+
+---
+
+## Triage Page
+
+`/admin/companies/triage` lists companies with `review_status='unreviewed'`, sorted by `created_at` desc. Provides quick actions: mark vetted, mark excluded, edit, or open the company detail page. Used by Matt to clear the queue after auto-tagging or after Crust ingest creates new stub companies.
 
 ---
 
@@ -440,7 +491,7 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 
 ---
 
-## Database: Final Schema State (after migrations 001–030)
+## Database: Final Schema State (after migrations 001–039)
 
 **Migration ledger** (full per-migration descriptions live in `supabase/migrations/*.sql` headers):
 - 001 — Phase 1 normalized schema + enums
@@ -449,10 +500,10 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 - 004 — school_aliases + people derived columns + companies.founding_year
 - 005 — 6-value seniority enum + seniority_rules table (later expanded to 9 active in 006)
 - 006–015 — incremental signal/specialty/seniority/title-level work (see migration headers)
-- 016 — `company_focus_type` enum + `companies.focus` + clearance_level on people
+- 016 — `company_focus_type` enum + `companies.focus` + clearance_level on people *(focus replaced in 031)*
 - 017 — role_dictionary (26) + role_specialty_map + ~165 new specialties
 - 018 — RLS policies on role tables
-- 019 — `companies.funding_stage` + `companies.headcount_range` (text columns, currently un-used)
+- 019 — `companies.funding_stage` + `companies.headcount_range` (text columns)
 - 020–021 — specialty signal columns + 130k-row signal seeds
 - 022–025 — signals_schema, signal_dictionary tier/group/competition + seeds
 - 026 — education text fields on `person_education`
@@ -460,6 +511,15 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 - 028 — `raw_ingest_events` archive (see "Raw Ingest Archive" section)
 - 029 — `crust_import_log` audit table (see "Crust Import Audit Log" section)
 - 030 — `person_experiences.is_primary_current` + partial index (see "Primary-Current Disambiguation" section)
+- 031 — Companies V1 taxonomy: `category` + `primary_industry` + `industries[]` + `domain_tags[]` + `review_status` + tagger provenance (see "Companies V1 Taxonomy" section)
+- 032 — `companies_tag_spend_log` for daily cron cap (see "Auto-Tagging Cron + Spend Cap" section)
+- 033 — funding scalars on companies + `company_funding_rounds` table (see "Funding & Investors" section)
+- 034 — disable RLS on admin tables created in 032/033 (Supabase auto-enables; pattern repeated several times — see Development Rules)
+- 035 — firmographics: description, logo_permalink, locations JSONB, founders JSONB, headcount growth %s + timeseries (see "Firmographics" section)
+- 036 — `investor_tiers` table + tier 1/tier 2 seed from curated CSV (see "Investor Tiers" section)
+- 037 — disable RLS on `investor_tiers`
+- 038 — `lists` + `list_items` + `saved_searches` + `hidden_items` (see "Lists, Saved Searches, Hidden Items" section)
+- 039 — disable RLS on the four tables from 038
 
 The "Normalized tables" / "Dictionary tables" lists below describe the post-migration state. They name the most-used columns; consult the actual schema for exhaustive column lists.
 
@@ -516,45 +576,60 @@ The "Normalized tables" / "Dictionary tables" lists below describe the post-migr
 │   ├── 07-person-enrich.md                      ← /person/enrich (cached / IN-DB) + add-on cost model
 │   ├── 08-person-autocomplete.md                ← /person/search/autocomplete (FREE)
 │   └── 09-person-live-enrich.md                 ← /person/professional_network/enrich/live (5 credits, real-time scrape)
-├── supabase/migrations/                         ← see "Database: Final Schema State" for full migration set 001–030
+├── supabase/migrations/                         ← see "Database: Final Schema State" for full migration set 001–039
 │
 ├── app/                                         ← Next.js 14 App Router
 │   ├── page.tsx                                 ← "/" renders ProfileTable
-│   ├── layout.tsx
+│   ├── layout.tsx                               ← renders <GlobalNav /> + {children}
 │   ├── types.ts                                 ← Person, Experience, Education, Company, BucketAssignment, etc.
+│   ├── design-system.css                        ← color/scale/spacing tokens; ⚠ global a + a:hover rules — see "Global Nav" section
 │   ├── components/
+│   │   ├── GlobalNav.tsx                        ← persistent app bar (rendered once in layout.tsx); inline-styled nav links + portaled Import dropdown
 │   │   ├── ProfileTable.tsx                     ← main people table + faceted filters + search + bucket chips
 │   │   ├── ProfileDrawer.tsx                    ← row-click side drawer with bucket + score reasoning
 │   │   ├── FilterSidebar.tsx                    ← sidebar filter pane shared with /search-builder
-│   │   ├── CompanyLogo.tsx                      ← logo.dev badge or initial-letter placeholder
+│   │   ├── CompanyLogo.tsx                      ← logo_permalink (Crust) → logo.dev → initial-letter placeholder
+│   │   ├── AddToListMenu.tsx                    ← portal-rendered "+ list" popover with checkboxes + inline create
+│   │   ├── ThemeToggle.tsx                      ← light/dark/ember toggle
+│   │   ├── MultiSelect.tsx                      ← shared multi-select widget used across filter UIs
 │   │   └── condition-rows/                      ← compound where-they-worked / where-they-studied filter UI
-│   ├── profile/[id]/page.tsx                    ← "/profile/[id]" detail page
+│   ├── profile/[id]/page.tsx                    ← "/profile/[id]" detail page (max-width 900)
 │   ├── search-builder/page.tsx                  ← "/search-builder" — full-page filter UI sharing FilterSidebar
+│   ├── lists/
+│   │   ├── page.tsx                             ← "/lists" — browse all lists, two columns (candidate / company)
+│   │   └── [id]/page.tsx                        ← list detail with multi-select + bulk actions
 │   ├── admin/
 │   │   ├── companies/
-│   │   │   ├── page.tsx                         ← "/admin/companies" list + filters + sort + bulk-edit focus
-│   │   │   ├── [id]/page.tsx                    ← edit company + per-year scores + per-function scores
-│   │   │   └── new/page.tsx                     ← create company form
-│   │   ├── import/                              ← "/admin/import" — Crust v2 filter-builder UI
-│   │   │   ├── page.tsx                         ← sidebar filter builder + preview-then-confirm + NDJSON progress
-│   │   │   └── components/
-│   │   │       ├── AutocompleteSelect.tsx       ← server-side typeahead dropdown (calls /autocomplete)
-│   │   │       ├── CompanyMultiSelect.tsx       ← chips with per-row scope (current/past/ever)
-│   │   │       ├── RangeInput.tsx               ← min/max number-pair input
-│   │   │       └── InfoTooltip.tsx              ← portal-rendered hover tooltip with collision detection
+│   │   │   ├── page.tsx                         ← "/admin/companies" list + filters + sort + bulk-edit
+│   │   │   ├── [id]/page.tsx                    ← edit company + funding + investors + firmographics + per-year scores
+│   │   │   ├── new/page.tsx                     ← create company form (V1 taxonomy: category gates industries)
+│   │   │   └── triage/page.tsx                  ← "/admin/companies/triage" — review_status='unreviewed' queue
+│   │   ├── import/
+│   │   │   ├── page.tsx                         ← "/admin/import" — Crust v2 candidate filter-builder + NDJSON streaming
+│   │   │   ├── companies/page.tsx               ← "/admin/import/companies" — single-company import with Crust identify + enrich
+│   │   │   └── components/                      ← AutocompleteSelect / CompanyMultiSelect / RangeInput / InfoTooltip
 │   │   └── seed/page.tsx                        ← "/admin/seed" — 3 hardcoded test payloads for smoke tests
 │   └── api/
 │       ├── ingest/route.ts                      ← POST /api/ingest (Chrome ext + admin/import target; raw archive + upsert + score)
 │       ├── people/[id]/{route.ts,narrative/route.ts}  ← person detail + AI narrative (Claude Haiku)
 │       └── admin/
-│           ├── crust-import/                    ← Crust v2 import endpoints
-│           │   ├── preview/route.ts             ← POST /api/admin/crust-import/preview (sample + total_count, JSON)
-│           │   ├── run/route.ts                 ← POST /api/admin/crust-import/run (streaming NDJSON full import)
-│           │   └── autocomplete/route.ts        ← POST /api/admin/crust-import/autocomplete (free Crust autocomplete proxy)
-│           └── rescore-all/route.ts             ← admin-only batch re-score endpoint
+│           ├── crust-import/                    ← Crust v2 candidate import endpoints
+│           │   ├── preview/route.ts             ← POST /api/admin/crust-import/preview
+│           │   ├── run/route.ts                 ← POST /api/admin/crust-import/run (streaming NDJSON)
+│           │   └── autocomplete/route.ts        ← free Crust autocomplete proxy
+│           ├── companies-import/                ← Crust company import (single-row)
+│           │   ├── identify/route.ts            ← POST — entity resolution via /company/identify (FREE)
+│           │   ├── single/route.ts              ← POST — full single-company import: identify + enrich + tag + write
+│           │   └── autocomplete/route.ts        ← free Crust company-autocomplete proxy
+│           ├── companies/
+│           │   ├── tag-pending/route.ts         ← cron entry point — tag up to N companies/day (spend-capped)
+│           │   └── [id]/
+│           │       ├── tag/route.ts             ← "Tag now" button on company detail
+│           │       └── re-enrich/route.ts       ← refresh Crust firmographics + funding without re-tagging
+│           └── rescore-all/route.ts             ← admin-only batch re-score endpoint for candidates
 │
 ├── lib/
-│   ├── supabase.ts                              ← browser Supabase client (anon key) + fetchAllRows() pagination helper
+│   ├── supabase.ts                              ← browser Supabase client + fetchAllRows() pagination helper
 │   ├── normalize/                               ← title / degree / employment / seniority / specialty resolvers
 │   ├── scoring/                                 ← scoreCandidate(), writeBucketAssignment(), computeAndWriteDerivedFields()
 │   ├── tenure/                                  ← FT classification + company-stretch tenure (see "Tenure Helper" below)
@@ -562,9 +637,22 @@ The "Normalized tables" / "Dictionary tables" lists below describe the post-migr
 │   ├── signals/                                 ← processCandidateSignals() (publications, fellowships, etc. — empty data, weights wired)
 │   ├── ai/
 │   │   └── narrative.ts                         ← Claude Haiku 4.5 narrative summary (direct fetch, ANTHROPIC_API_KEY)
+│   ├── companies/
+│   │   ├── taxonomy.ts                          ← V1 category/industry/domain-tag vocabulary (HARDWARE_INDUSTRIES, NON_HARDWARE_INDUSTRIES, etc.)
+│   │   ├── tagger/                              ← Claude Haiku company auto-tagger
+│   │   │   ├── claude.ts                        ← LLM call (single-shot classification)
+│   │   │   ├── dictionary.ts                    ← industry/tag vocabulary used in the prompt
+│   │   │   ├── index.ts                         ← tagCompany(): increment spend log + write to companies
+│   │   │   └── types.ts
+│   │   ├── funding.ts                           ← pickLatestMeaningfulRound() + toInvestorArray() + Crust funding mappers
+│   │   ├── firmographics.ts                     ← parsers + writers for description/logo/locations/founders/headcount
+│   │   ├── investor-tiers.ts                    ← getNotableInvestors() + companyHasTier() helpers (reads investor_tiers)
+│   │   └── year-scores.ts                       ← founding_year auto-fill helper
+│   ├── lists/
+│   │   └── api.ts                               ← fetchLists/addToList/removeFromList/createList/renameList/deleteList/listsContaining
 │   ├── crust/                                   ← Crust v2 API client + filter builder + audit log
 │   │   ├── types.ts                             ← UIFilterState + AUTOCOMPLETE_FIELDS map + EMPTY/INITIAL_FILTERS + HARD_VOLUME_CAP
-│   │   ├── api.ts                               ← v2 API client (fetchPersonSearch, fetchAutocomplete) + Bearer auth
+│   │   ├── api.ts                               ← v2 API client (fetchPersonSearch, fetchAutocomplete, identify, enrich) + Bearer auth
 │   │   ├── build-filter.ts                      ← UIFilterState → Crust filter body translator + summarizeFilters()
 │   │   └── log.ts                               ← writeCrustLog() to crust_import_log (migration 029) + estimateCredits()
 │   ├── locations/                               ← static US states + top-50 cities for location typeahead
@@ -849,6 +937,26 @@ A curl response of HTTP 200 is NOT proof a page works. Next.js often prerenders 
 
 **Before declaring "preview deploy works":** load the URL in an actual incognito browser window. Verify the data renders, no error fallback shows, and the React tree mounts cleanly. If you can't access a browser, ask the user to verify before claiming success.
 
+### End-of-session docs update — MUST DO
+
+Before wrapping a session that shipped any feature, migration, or architectural change, update CLAUDE.md so the next Claude session starts with accurate ground truth. Bump the migration ledger, add/revise the relevant section, update the File Layout if new files were added, and prune anything now wrong. See the "End-of-session docs update" section near the bottom of this file for the specific trigger pattern.
+
+A stale CLAUDE.md is worse than a short one — future sessions read it as authoritative.
+
+### Supabase RLS auto-enables on `CREATE TABLE`
+
+When you create a table — even with `DISABLE ROW LEVEL SECURITY` in the same migration / transaction — Supabase re-enables RLS afterward. The fix pattern (hit on 034, 037, 039, plus earlier) is a SEPARATE follow-up migration containing only `ALTER TABLE … DISABLE ROW LEVEL SECURITY` for the new tables. Don't try to do it inline; it doesn't stick.
+
+If a migration creates admin tables and you forget the follow-up, your reads will silently return empty result sets even with the service-role key (because RLS-on + no policies = no rows visible).
+
+### Don't propose options the user has explicitly rejected
+
+When an approach fails or needs revision, do NOT silently fall back to an option the user already turned down earlier in the same workstream. Reread the conversation, identify the rejected option, and find a third path. (Incident: 2026-05-05, candidate name hover — user rejected underline in favor of subtle accent; when accent failed I retreated to underline.)
+
+### Open questions get a recommendation, not an action
+
+When the user asks "is X better than Y?" / "should we do Z?", they want reasoning + a recommendation in text, NOT an immediate code change. Pulling the trigger pre-empts the conversation. Wait for explicit "do it" / "go ahead" before executing. (Incident: 2026-05-05, profile page max-width — user asked an open question, I bumped the value without giving a recommendation first.)
+
 ### TDZ from forward-referenced const inside synchronous closure (incident: 2026-04-29)
 
 This bug class is invisible to TypeScript, the build, lint, dev mode, AND curl tests of production. It only manifests when JavaScript actually executes the closure on the client.
@@ -1017,3 +1125,161 @@ Two separate lines in the classification metadata grid:
 - **"Highest seniority"** — `people.highest_seniority_reached` (only shown when different from current)
 
 A candidate can be an IC in their current role but have reached Lead IC at a previous company.
+
+---
+
+## Funding & Investors (Post-Migration 033)
+
+Captures company funding totals and per-round investor data from Crust enrich.
+
+### Scalars on `companies`
+
+- `total_funding_usd` — Crust's `funding.total_investment_usd`
+- `last_funding_amount_usd` — Crust's `funding.last_round_amount_usd`
+- `last_funding_date` — Crust's `funding.last_fundraise_date`
+- `last_funding_round_type` — Crust's raw `funding.last_round_type` string
+
+`funding_stage` (snake_case enum: `pre_seed`/`seed`/`series_a..k`) was added in 019 and stays for filtering. It is set from a meaningful-round detection helper (NOT from `last_round_type` directly — see "Latest meaningful round" below).
+
+### Table: `company_funding_rounds`
+
+One row per round per company. ON DELETE CASCADE with `companies`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | UUID PK | |
+| `company_id` | UUID FK | |
+| `round_type` | TEXT | Crust's raw string ("Series A", "Venture Round", "series_unknown", etc.) |
+| `round_date` | DATE | |
+| `amount_usd` | NUMERIC | |
+| `investors` | TEXT[] | All investors that participated |
+| `lead_investors` | TEXT[] | GIN-indexed for "search by investor" |
+
+### Latest meaningful round
+
+Crust's `funding.last_round_type` is literally the most recent round, which is often a tiny grant or extension (e.g. "Grant"). For UI display and `funding_stage` we want the **latest meaningful priced round**.
+
+`pickLatestMeaningfulRound()` in [lib/companies/funding.ts](lib/companies/funding.ts) iterates milestones in reverse chronological order and returns the first match against `/^(series\s+[a-k]|pre.?seed|seed)/i`. Anduril, for example, has a Series G as its meaningful latest round even though the literal `last_round_type` was "Grant".
+
+### Investors-as-comma-string quirk
+
+Crust returns investors in milestones as a comma-separated string (NOT an array). `toInvestorArray()` in [lib/companies/funding.ts](lib/companies/funding.ts) splits and trims. This was a real bug — first commit of Bundle B initially showed all rounds as having one investor named "X, Y, Z".
+
+---
+
+## Firmographics: Locations, Founders, Headcount Growth (Post-Migration 035)
+
+Crust's enrich response carries richer company data than the basic search response. 035 captures it.
+
+### Columns added to `companies`
+
+- `description` (TEXT) — Crust's `basic_info.description`. Free-form, not always populated.
+- `logo_permalink` (TEXT) — Crust's S3 logo URL. Used by `CompanyLogo` as the preferred source over logo.dev (resolves the Arc/Arc Boats ambiguity).
+- `locations` (JSONB) — `{ headquarters: string|null, offices: string[] }`. Office strings are stripped of the leading ", " Crust returns.
+- `founders` (JSONB) — array of `{ name, title, professional_network_url, ... }` (raw Crust shape).
+- `headcount_growth_3m` / `_6m` / `_12m` (NUMERIC(7,2)) — percentage growth windows from `headcount.growth_percent`.
+- `headcount_timeseries` (JSONB) — array of `{ date, count }` for the headcount chart on the company detail page.
+
+### Auto-fill year scores from founding_year
+
+When a company's `founding_year` is set (Crust returns it via enrich), the company list sort by "founded date" works directly. Year scores are still seeded manually but the founding_year fill is automatic via the firmographics path. See [lib/companies/year-scores.ts](lib/companies/year-scores.ts) for the helper.
+
+### Helpers
+
+[lib/companies/firmographics.ts](lib/companies/firmographics.ts) has the parsers + writers; called from the import single-row endpoint and the re-enrich endpoint.
+
+---
+
+## Investor Tiers (Post-Migration 036)
+
+Curated list of notable investors used to (a) highlight "Notable Investors" callouts on the company detail page and (b) filter the companies list by "has tier 1 investor".
+
+### Table: `investor_tiers`
+
+| Column | Notes |
+|---|---|
+| `investor_name` | TEXT PK (matched against `investors[]` and `lead_investors[]` in `company_funding_rounds`) |
+| `tier` | INT (1 = top, 2 = strong; tier 3+ reserved) |
+| `notes` | TEXT, optional |
+
+### Tier mapping (from Matt's CSV, 2026-05-05)
+
+- **CSV tier 0 + tier 1 → DB tier 1** (top-tier: Sequoia, a16z, Founders Fund, Benchmark, Accel, KP, GC, …)
+- **CSV tier 2 → DB tier 2** (strong: YC, Battery, Insight, Pear VC, GV, …)
+
+Investor names in the seed are normalized to Crust's canonical form (e.g. "Andreessen Horowitz" not "Andreessen Horowitz (a16z)") so the match works without an alias table.
+
+### Helpers
+
+[lib/companies/investor-tiers.ts](lib/companies/investor-tiers.ts) exports `getNotableInvestors(companyId)` and `companyHasTier(companyId, tier)`. Used by the company detail page Notable Investors callout and the companies-list `tier` filter.
+
+---
+
+## Lists, Saved Searches, Hidden Items (Post-Migration 038)
+
+User-curated bookmarks + saved filter state. Today all rows are `owner_id='admin'` (single-user); the schema is multi-user-ready (`owner_id` is part of every UNIQUE constraint).
+
+### Tables
+
+| Table | Purpose |
+|---|---|
+| `lists` | Named bookmark collections. `kind` ∈ (`candidate`, `company`). |
+| `list_items` | Polymorphic membership. `item_id` references `people.person_id` OR `companies.company_id` based on the parent list's `kind`. |
+| `saved_searches` | Re-runnable filter state per kind (filter JSON + name). |
+| `hidden_items` | Per-owner hidden candidates/companies — they don't reappear in default search results. |
+
+### Polymorphism without FK enforcement
+
+`list_items.item_id` is UUID with no FK constraint — the parent list's `kind` is the discriminator. The application is responsible for inserting valid IDs. This was a deliberate trade: a single membership table is much simpler than two parallel tables, and the integrity risk is low because all writes go through [lib/lists/api.ts](lib/lists/api.ts).
+
+### API surface
+
+[lib/lists/api.ts](lib/lists/api.ts) exports: `fetchLists(kind)`, `addToList(listId, itemId)`, `removeFromList(...)`, `createList(...)`, `renameList(...)`, `deleteList(...)`, `listsContaining(itemId)`. Hardcoded `OWNER_ID = 'admin'`.
+
+### UI
+
+- `[app/lists/page.tsx](app/lists/page.tsx)` — browse all lists, two columns (candidate | company)
+- `[app/lists/[id]/page.tsx](app/lists/[id]/page.tsx)` — list detail with multi-select + bulk actions ("Find candidates at N selected" for company lists, "Remove N from list")
+- `[app/components/AddToListMenu.tsx](app/components/AddToListMenu.tsx)` — portal-rendered popover with existing-list checkboxes + inline "create new list" input. Triggered from a compact "+" icon next to each row's LinkedIn icon in the candidate/company tables.
+
+Saved Searches and Hidden Items are **schema-only as of 2026-05-06** — UI not yet built.
+
+### RLS
+
+Disabled in 039. Supabase auto-enables RLS on `CREATE TABLE`, even when the migration includes `DISABLE ROW LEVEL SECURITY` in the same transaction. The fix pattern (now hit four times — 034, 037, 039, plus older) is a separate follow-up migration with just `ALTER TABLE … DISABLE ROW LEVEL SECURITY`. See "Development Rules" for the rule.
+
+---
+
+## Global Nav (2026-05-05 Refactor)
+
+Persistent app bar rendered ONCE at the layout level, in [app/layout.tsx](app/layout.tsx). Replaces the per-page `TopNav` component (which had been duplicated across many pages).
+
+### Component: `[app/components/GlobalNav.tsx](app/components/GlobalNav.tsx)`
+
+Layout: `[V Vetted brand → /]   [Candidates] [Companies] [Lists] [Import▾]   [theme]`
+
+- Sticky at top with `position: sticky; top: 0; z-index: 50`.
+- Active state determined by pathname matching: `/` and `/profile/*` → Candidates; `/admin/companies/*` → Companies; `/lists/*` → Lists; `/admin/import/*` → Import.
+- Import is a dropdown with "Import candidates" and "Import companies" — portaled to `document.body` (`createPortal`) so the sticky-header stacking context can't clip it.
+- Active nav button styling: `bg-card text-foreground font-medium border border-border` (chip look). Inactive: subtle muted-foreground that hovers to fg-primary.
+
+### Inline-style override on the global `a:hover` rule
+
+[app/design-system.css:377](app/design-system.css#L377) defines `a:hover { color: var(--accent-strong); }` globally. That rule's specificity (element + pseudo = 0,1,1) **beats** Tailwind's `hover:text-foreground` (class + pseudo = 0,1,0 — wait, actually it's class which is 0,1,0; the global wins). To prevent every nav link from going orange on hover, the GlobalNav nav buttons are rendered as inline-styled components (`NavLinkButton`, `NavTriggerButton`, `ImportMenuItem`). Inline styles win specificity outright.
+
+The eventual cleanup is to change the global rule to `a { color: inherit }` so links stop carrying the brand color by default — tracked in backlog. Until then, anything inside the nav must use inline styles for color.
+
+---
+
+## End-of-session docs update — read this before closing a session
+
+Before closing a session that shipped a feature, migration, or architectural change, **update CLAUDE.md so the next Claude has accurate ground truth.** Specifically:
+
+- Bump the migration ledger if migrations were added.
+- Add or revise the relevant section (or create one if a new system was introduced).
+- Update the File Layout if files were added.
+- Prune anything that's now wrong.
+
+A stale CLAUDE.md is worse than a short one — future sessions read it as authoritative and either reinvent existing systems or break them.
+
+The trigger pattern: when the user says "we're good for tonight" / "let's wrap up" / "ship and we're done", do the docs sweep BEFORE stopping. Don't wait to be asked.
