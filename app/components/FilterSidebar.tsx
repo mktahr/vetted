@@ -120,7 +120,7 @@ export default function FilterSidebar(props: FilterSidebarProps) {
 
   return (
     <div style={{ width: 300, flexShrink: 0, borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', overflowY: 'auto' }}>
-      <div style={{ padding: 16 }}>
+      <div style={{ padding: 16, paddingBottom: 240 }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <span style={{ fontSize: 'var(--fs-13)', fontWeight: 'var(--fw-semibold)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)' }}>Filters</span>
