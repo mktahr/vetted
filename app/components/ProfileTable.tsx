@@ -988,6 +988,7 @@ export default function ProfileTable() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <h1 style={{ fontSize: 'var(--fs-22)', fontWeight: 'var(--fw-semibold)', letterSpacing: '-0.01em' }}>Vetted Database</h1>
             <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 'var(--fs-13)' }}>
+              <a href="/lists" style={{ color: 'var(--fg-secondary)', textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.color = 'var(--fg-primary)')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--fg-secondary)')}>Lists →</a>
               <a href="/admin/import" style={{ color: 'var(--fg-secondary)', textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.color = 'var(--fg-primary)')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--fg-secondary)')}>Import →</a>
               <a href="/admin/companies" style={{ color: 'var(--fg-secondary)', textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.color = 'var(--fg-primary)')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--fg-secondary)')}>Companies →</a>
               <ThemeToggle />
@@ -1047,13 +1048,13 @@ export default function ProfileTable() {
                     <th style={{ ...eyebrow, width: 36, padding: '8px 4px' }} title="LinkedIn">
                       <svg viewBox="0 0 24 24" width="14" height="14" fill="var(--fg-tertiary)"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                     </th>
+                    <th style={{ ...eyebrow, width: 28, padding: '8px 4px' }} title="Add to list" />
                     {[
                       {h:'Name',field:null},{h:'Company',field:null},{h:'Title',field:null},{h:'Specialty',field:null},{h:'School',field:null},
                       {h:'Yrs',field:'years_experience_estimate' as SortField},
                       {h:'Cur Ten',field:'current_tenure' as SortField},
                       {h:'Avg Ten',field:'avg_tenure' as SortField},
                       {h:'Location',field:null},
-                      {h:'',field:null},
                     ].map(({h,field}) => (
                       <th key={h} onClick={field ? () => handleSort(field) : undefined}
                         style={{ ...eyebrow, cursor: field ? 'pointer' : 'default' }}>
@@ -1093,6 +1094,10 @@ export default function ProfileTable() {
                         ) : (
                           <svg viewBox="0 0 24 24" width="14" height="14" fill="var(--fg-tertiary)" style={{ opacity: 0.25 }}><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                         )}
+                      </td>
+                      {/* Add to list */}
+                      <td style={{ padding: '8px 4px', width: 28 }} onClick={e => e.stopPropagation()}>
+                        <AddToListMenu itemId={person.person_id} kind="candidate" itemLabel={person.full_name || ''} triggerLabel="+" className="text-tertiary hover:text-foreground" />
                       </td>
                       {/* Name */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
@@ -1151,10 +1156,6 @@ export default function ProfileTable() {
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', color: 'var(--fg-secondary)' }}>{(() => { const v = avgTenureIncludeCurrent ? person.tenure.avgTenureIncCurrentYears : person.tenure.avgTenureYears; return v != null ? v + 'y' : '—' })()}</td>
                       {/* Location */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)' }}>{person.location_name || '—'}</td>
-                      {/* Add to list */}
-                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
-                        <AddToListMenu itemId={person.person_id} kind="candidate" itemLabel={person.full_name || ''} />
-                      </td>
                     </tr>
                   )})}
                 </tbody>
