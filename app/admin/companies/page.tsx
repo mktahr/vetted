@@ -6,8 +6,8 @@ import { supabase } from '@/lib/supabase'
 import { Company, CompanyBucket, CompanyStatus, CompanyCategory, CompanyReviewStatus, CompanyYearScore, CompanyFunctionScore } from '@/app/types'
 import CompanyLogo, { guessDomain } from '@/app/components/CompanyLogo'
 import { COMPANY_FUNCTIONS } from '@/app/constants'
-import ThemeToggle from '@/app/components/ThemeToggle'
 import IndustryBadge from '@/app/components/IndustryBadge'
+import TopNav from '@/app/components/TopNav'
 import AddToListMenu from '@/app/components/AddToListMenu'
 import {
   HARDWARE_INDUSTRIES, NON_HARDWARE_INDUSTRIES,
@@ -498,42 +498,26 @@ export default function CompaniesListPage() {
 
   return (
     <div style={{ padding: 24, background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <a href="/" className="text-sm text-muted-foreground hover:text-foreground">← Back to people</a>
-          <h1 className="text-3xl font-bold mt-2">Companies</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <button
-            onClick={() => router.push('/lists')}
-            className="px-3 py-1.5 text-sm font-medium border border-border rounded-md bg-card text-foreground hover:bg-background transition"
-            title="Browse your saved lists"
-          >
-            Lists
-          </button>
-          <button
-            onClick={() => router.push('/admin/companies/triage')}
-            className="px-3 py-1.5 text-sm font-medium border border-border rounded-md bg-card text-foreground hover:bg-background transition"
-            title="Companies needing review (unreviewed, low confidence, untagged)"
-          >
-            Triage
-          </button>
-          <button
-            onClick={() => router.push('/admin/import/companies')}
-            className="px-3 py-1.5 text-sm font-medium border border-border rounded-md bg-card text-foreground hover:bg-background transition"
-            title="Pull companies from Crust"
-          >
-            Import
-          </button>
-          <button
-            onClick={() => router.push('/admin/companies/new')}
-            className="px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-white hover:bg-accent-strong transition"
-          >
-            + Add company
-          </button>
-        </div>
-      </div>
+      <TopNav
+        title="Companies"
+        rightActions={
+          <>
+            <button
+              onClick={() => router.push('/admin/companies/triage')}
+              className="px-3 py-1.5 text-sm font-medium border border-border rounded-md bg-card text-foreground hover:bg-background transition"
+              title="Companies needing review (unreviewed, low confidence, untagged)"
+            >
+              Triage
+            </button>
+            <button
+              onClick={() => router.push('/admin/companies/new')}
+              className="px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-white hover:bg-accent-strong transition"
+            >
+              + Add company
+            </button>
+          </>
+        }
+      />
 
       <div className="mb-4">
         <input

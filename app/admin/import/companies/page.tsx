@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import ThemeToggle from '@/app/components/ThemeToggle'
+import TopNav from '@/app/components/TopNav'
 
 type InputMode = 'name' | 'linkedin_url' | 'domain'
 
@@ -185,16 +185,12 @@ export default function CompaniesImportPage() {
 
   return (
     <div style={{ padding: 24, background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <a href="/admin/companies" className="text-sm text-muted-foreground hover:text-foreground">← Back to companies</a>
-          <h1 className="text-3xl font-bold mt-2">Import companies</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Find a canonical Crust entity and pull it into the database with auto-tagging.
-          </p>
-        </div>
-        <ThemeToggle />
-      </div>
+      <TopNav
+        title="Import companies"
+        backHref="/admin/companies"
+        backLabel="← Back to companies"
+        subtitle="Find a canonical Crust entity and pull it into the database with auto-tagging."
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 

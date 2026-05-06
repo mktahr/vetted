@@ -9,6 +9,7 @@ import { supabase, fetchAllRows } from '@/lib/supabase'
 import { Person, SortField, SortDirection, CandidateBucket } from '../types'
 import ProfileDrawer, { DrawerExperience, DrawerEducation, DrawerSignal } from './ProfileDrawer'
 import AddToListMenu from './AddToListMenu'
+import TopNav from './TopNav'
 import { MultiSelectOption } from './MultiSelect'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from './CompanyLogo'
 import type { ConditionRow } from './condition-rows/types'
@@ -984,16 +985,7 @@ export default function ProfileTable() {
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ padding: '16px 24px' }}>
-          {/* Top bar */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <h1 style={{ fontSize: 'var(--fs-22)', fontWeight: 'var(--fw-semibold)', letterSpacing: '-0.01em' }}>Vetted Database</h1>
-            <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 'var(--fs-13)' }}>
-              <a href="/lists" style={{ color: 'var(--fg-secondary)', textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.color = 'var(--fg-primary)')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--fg-secondary)')}>Lists →</a>
-              <a href="/admin/import" style={{ color: 'var(--fg-secondary)', textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.color = 'var(--fg-primary)')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--fg-secondary)')}>Import →</a>
-              <a href="/admin/companies" style={{ color: 'var(--fg-secondary)', textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.color = 'var(--fg-primary)')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--fg-secondary)')}>Companies →</a>
-              <ThemeToggle />
-            </div>
-          </div>
+          <TopNav title="Vetted Database" />
 
           {/* Search */}
           <input type="text" placeholder="Search by name, company, title, or location..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}

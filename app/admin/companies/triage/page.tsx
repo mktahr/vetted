@@ -17,7 +17,7 @@ import { supabase } from '@/lib/supabase'
 import { Company, CompanyCategory, CompanyReviewStatus } from '@/app/types'
 import CompanyLogo, { guessDomain } from '@/app/components/CompanyLogo'
 import IndustryBadge from '@/app/components/IndustryBadge'
-import ThemeToggle from '@/app/components/ThemeToggle'
+import TopNav from '@/app/components/TopNav'
 import { fetchAllRows } from '@/lib/supabase'
 import { TAGGING_METHOD_LABELS, taggingMethodLabel } from '@/lib/companies/taxonomy'
 
@@ -197,17 +197,17 @@ export default function TriagePage() {
 
   return (
     <div style={{ padding: 24, background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <a href="/admin/companies" className="text-sm text-muted-foreground hover:text-foreground">← Back to companies</a>
-          <h1 className="text-3xl font-bold mt-2">Triage queue</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+      <TopNav
+        title="Triage queue"
+        backHref="/admin/companies"
+        backLabel="← Back to companies"
+        subtitle={
+          <>
             {totalQueue} compan{totalQueue === 1 ? 'y' : 'ies'} need attention
             {skippedIds.size > 0 && <span className="text-tertiary"> · {skippedIds.size} skipped this session</span>}
-          </p>
-        </div>
-        <ThemeToggle />
-      </div>
+          </>
+        }
+      />
 
       <div className="mb-6 flex flex-wrap gap-3 items-end">
         <div>

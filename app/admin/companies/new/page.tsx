@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { CompanyBucket, CompanyStatus, CompanyCategory, CompanyReviewStatus } from '@/app/types'
+import TopNav from '@/app/components/TopNav'
 import { HARDWARE_INDUSTRIES, NON_HARDWARE_INDUSTRIES, REVIEW_STATUSES } from '@/lib/companies/taxonomy'
 
 const BUCKET_OPTIONS: Array<{ value: CompanyBucket; label: string }> = [
@@ -77,15 +78,9 @@ export default function NewCompanyPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 700, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
-      <button
-        onClick={() => router.push('/admin/companies')}
-        className="mb-6 text-muted-foreground hover:text-foreground"
-      >
-        ← Back to companies
-      </button>
+      <TopNav title="Add company" backHref="/admin/companies" backLabel="← Back to companies" />
 
       <div className="bg-card rounded-lg shadow-lg p-8">
-        <h1 className="text-3xl font-bold mb-6">Add Company</h1>
 
         {error && (
           <div className="mb-4 bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-sm text-destructive">
