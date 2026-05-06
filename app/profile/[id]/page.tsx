@@ -266,7 +266,7 @@ export default function ProfilePage() {
   const companyName = cleanCompanyName(person.current_company_name)
 
   return (
-    <div style={{ padding: 24, maxWidth: 900, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
+    <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto', background: 'var(--bg-canvas)', color: 'var(--fg-primary)', fontFamily: 'var(--font-sans)', minHeight: '100vh' }}>
       <div className="mb-6 flex items-center justify-between">
         <button
           onClick={() => router.push('/')}

@@ -1096,7 +1096,7 @@ export default function ProfileTable() {
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
                         <button onClick={e => { e.stopPropagation(); router.push(`/profile/${person.person_id}`) }}
                           style={{ color: isSelected ? 'var(--accent)' : 'var(--fg-primary)', fontWeight: 'var(--fw-medium)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-13)', transition: 'color 150ms var(--ease)' }}
-                          onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+                          onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent-300)')}
                           onMouseLeave={e => { if (!isSelected) e.currentTarget.style.color = 'var(--fg-primary)' }}>
                           {person.full_name || 'N/A'}
                         </button>
