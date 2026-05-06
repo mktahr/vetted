@@ -1095,9 +1095,14 @@ export default function ProfileTable() {
                       {/* Name */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
                         <button onClick={e => { e.stopPropagation(); router.push(`/profile/${person.person_id}`) }}
-                          style={{ color: isSelected ? 'var(--accent)' : 'var(--fg-primary)', fontWeight: 'var(--fw-medium)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-13)', transition: 'color 150ms var(--ease)' }}
-                          onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent-300)')}
-                          onMouseLeave={e => { if (!isSelected) e.currentTarget.style.color = 'var(--fg-primary)' }}>
+                          style={{ color: isSelected ? 'var(--accent)' : 'var(--fg-primary)', fontWeight: 'var(--fw-medium)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-13)', textDecoration: 'none' }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.textDecoration = 'underline'
+                            e.currentTarget.style.textDecorationColor = 'var(--fg-secondary)'
+                            e.currentTarget.style.textUnderlineOffset = '3px'
+                            e.currentTarget.style.textDecorationThickness = '1px'
+                          }}
+                          onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none' }}>
                           {person.full_name || 'N/A'}
                         </button>
                       </td>
