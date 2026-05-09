@@ -481,10 +481,12 @@ export default function ProfileTable() {
         setSignalsByPerson(sigMap)
 
         // Signal filter options: category-level + individual signals
-        const SIGNAL_CATEGORY_ORDER = ['founder','military','fellowship','scholarship','academic_distinction','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
+        const SIGNAL_CATEGORY_ORDER = ['founder','military','national_lab','fellowship','scholarship','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
         const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
-          founder:'Founder', military:'Military', fellowship:'Fellowship', scholarship:'Scholarship',
-          academic_distinction:'Academic', competition:'Competition', hackathon:'Hackathon',
+          founder:'Founder', military:'Military', national_lab:'National Lab',
+          fellowship:'Fellowship', scholarship:'Scholarship',
+          academic_distinction:'Academic', olympiad:'Olympiad',
+          competition:'Competition', hackathon:'Hackathon',
           athletics:'Athletics', engineering_team:'Eng. Team', student_leadership:'Leadership', greek_life:'Greek Life',
         }
         // Collect unique categories that have signals on any person
