@@ -491,7 +491,7 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 
 ---
 
-## Database: Final Schema State (after migrations 001–039)
+## Database: Final Schema State (after migrations 001–047)
 
 **Migration ledger** (full per-migration descriptions live in `supabase/migrations/*.sql` headers):
 - 001 — Phase 1 normalized schema + enums
@@ -520,6 +520,14 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 - 037 — disable RLS on `investor_tiers`
 - 038 — `lists` + `list_items` + `saved_searches` + `hidden_items` (see "Lists, Saved Searches, Hidden Items" section)
 - 039 — disable RLS on the four tables from 038
+- 040 — competitions + teams + team_competition_map + team_domain_tag_dictionary + person_signals.team_role_tier/_text; signal_dictionary CHECK extended with `olympiad` and `national_lab` (see "Competitions, Teams, Hard-Tech Signals" section)
+- 041 — disable RLS on the four tables from 040
+- 042 — reclassify 23 existing `engineering_team` rows to `category='competition'`; ACM ICPC DO-block auto-handle (delete or rename based on `person_signals` count)
+- 043 — seed signal_dictionary with `olympiad` (17), `national_lab` (24), and military/patent/publication tags (12; 3 clearance rows dropped — clearance lives on `people.clearance_level`)
+- 044 — seed signal_dictionary with hackathons (24), conferences/journals (49), fellowships (45 UPSERT MERGE)
+- 045 — 10 new `competition` signal_dictionary rows + 21 `competitions` rows seeded (CTE-based slug→signal_id resolution; fails loud on NULL signal_id)
+- 046 — marker only; data load via `scripts/import-teams.mjs` (141 teams + 142 team_competition_map rows + 17 domain tags)
+- 047 — extended `person_signals_active` view with team + competition metadata via LATERAL subquery (no row multiplication when a team competes in multiple competitions)
 
 The "Normalized tables" / "Dictionary tables" lists below describe the post-migration state. They name the most-used columns; consult the actual schema for exhaustive column lists.
 
@@ -576,7 +584,17 @@ The "Normalized tables" / "Dictionary tables" lists below describe the post-migr
 │   ├── 07-person-enrich.md                      ← /person/enrich (cached / IN-DB) + add-on cost model
 │   ├── 08-person-autocomplete.md                ← /person/search/autocomplete (FREE)
 │   └── 09-person-live-enrich.md                 ← /person/professional_network/enrich/live (5 credits, real-time scrape)
-├── supabase/migrations/                         ← see "Database: Final Schema State" for full migration set 001–039
+├── supabase/migrations/                         ← see "Database: Final Schema State" for full migration set 001–047
+├── supabase/seeds/                              ← CSV source-of-truth for migration 043, 044, 045 data + import-teams.mjs
+│   ├── README.md                                ← run order + diagnostics + idempotency notes
+│   ├── olympiads_signals.csv                    ← 17 rows → signal_dictionary category='olympiad'
+│   ├── national_labs_signals.csv                ← 24 rows → signal_dictionary category='national_lab'
+│   ├── tags_signals.csv                         ← 12 rows (4 ROTC + 6 veteran + 1 patent + 1 publication)
+│   ├── hackathons_signals.csv                   ← 24 rows → signal_dictionary category='hackathon'
+│   ├── conferences_signals.csv                  ← 49 rows → signal_dictionary category='publication'
+│   ├── fellowships_signals.csv                  ← 45 rows → signal_dictionary category='fellowship' (UPSERT MERGE)
+│   ├── vetted_competitions.csv                  ← 21 rows → competitions table + signal_dictionary
+│   └── vetted_teams.csv                         ← 142 rows → 141 teams + 142 team_competition_map + 17 domain tags
 │
 ├── app/                                         ← Next.js 14 App Router
 │   ├── page.tsx                                 ← "/" renders ProfileTable
@@ -673,6 +691,8 @@ The "Normalized tables" / "Dictionary tables" lists below describe the post-migr
     ├── backfill-company-linkedin-urls.mjs       ← mines raw_ingest_events to fill companies.linkedin_url where NULL (3.6% → 9.8% on prod)
     ├── score-all.mjs                            ← recompute derived fields + score every person; use --unscored-only to skip already-scored
     ├── score-test-profiles.mjs                  ← runs scorer against Priya/Marcus/Jennifer test profiles w/ breakdown
+    ├── import-teams.mjs                         ← reads supabase/seeds/vetted_teams.csv; idempotent UPSERT to teams + team_competition_map + signal_dictionary; --dry-run flag prints unmatched schools
+    ├── seed-national-labs-company-group.mjs     ← links 24 national lab companies (when present in companies table) to a "US National Labs" company_groups row; re-runnable as new lab companies land
     └── verify-company-scores.mjs                ← read-only — print score distribution across companies
 ```
 
@@ -872,6 +892,9 @@ Not scoped to a build phase yet. Ordered roughly by dependency / impact.
 - **Executive scoring weights.** Dedicated weight profile that deprioritizes `education` and `degree_relevance` and heavily weights `company_quality_recent`, `company_quality_average`, and role scope. Kicks in when `highest_seniority_reached = 'executive'` or when the scoring stage is `senior_career` AND current title matches the executive rule set.
 - **`isStudentTitle` regex at ingest derive-current step ([app/api/ingest/route.ts](app/api/ingest/route.ts)) only matches title patterns (`intern|internship|co-op|student`). Crust v2 sometimes returns `employment_type='Internship'` on roles with non-student titles like "Flight Test Engineering" — those slip through the filter. Cross-check `employment_type='internship'` once that signal is consistently populated in v2 responses. Mitigated for now by `is_primary_current` being checked first (Crust's `is_default` flag wins over heuristics).**
 - **Concurrent-ingest race on `companies` name-only inserts.** [`upsertCompany`](app/api/ingest/route.ts) (post-`company-mapper-enrich-minimal` merge) handles the `linkedin_url` UNIQUE collision via 23505 re-resolve, but two ingests of a never-seen-before company *without* a LinkedIn URL (e.g. concurrent Chrome extension scrapes) can still create duplicate rows because `companies.company_name` has no UNIQUE constraint. Low impact today — extension throughput is single-user, and Crust import always has a `linkedin_url` to dedupe by. Fix would be a case-insensitive UNIQUE on `company_name` (or a generated `company_name_lower` column) — not safe to add without first deduping existing case-variant duplicates.
+- **Schools dedup expanded scope (post-migration 047 import).** The schools-dedup backlog now includes 37 schools added during the competitions/teams migration to resolve unmatched team imports. Some of these *may* duplicate existing canonical rows under different naming (e.g. `Pennsylvania State University` might co-exist with `Penn State University`; `Texas A&M University` with `Texas A&M`; `Virginia Polytechnic Institute and State University` with `Virginia Tech`). A dedup pass needs to identify and merge any duplicates that exist. Until then `teams.school_id` may point at the newly-inserted row rather than a pre-existing canonical row for those schools.
+- **Team role tier 2 + 3 extractor.** V1 of the team-role extractor only populates `team_role_tier=4` (Captain/Chief/President/Founder) and `team_role_tier=1` (everyone else). Tiers 2 (Engineer/Specialist) and 3 (Dept/Subsystem Lead) stay NULL until a future PR extends the regex set. The `team_role_text` column preserves source text so the future extractor can re-classify without re-fetching from `raw_ingest_events`.
+- **National Labs company group seed not yet run.** `scripts/seed-national-labs-company-group.mjs` is staged but hasn't been executed against prod. Re-run periodically as Crust ingest adds national lab companies to the `companies` table. The signal_dictionary `national_lab` category (24 rows) already provides text-based detection; this script just adds clean filter-UX via `company_groups` when the companies are FK-linkable.
 
 ### Vetted Companies V1 — vocabulary gaps surfaced during eval
 
@@ -1268,6 +1291,156 @@ Layout: `[V Vetted brand → /]   [Candidates] [Companies] [Lists] [Import▾]  
 [app/design-system.css:377](app/design-system.css#L377) defines `a:hover { color: var(--accent-strong); }` globally. That rule's specificity (element + pseudo = 0,1,1) **beats** Tailwind's `hover:text-foreground` (class + pseudo = 0,1,0 — wait, actually it's class which is 0,1,0; the global wins). To prevent every nav link from going orange on hover, the GlobalNav nav buttons are rendered as inline-styled components (`NavLinkButton`, `NavTriggerButton`, `ImportMenuItem`). Inline styles win specificity outright.
 
 The eventual cleanup is to change the global rule to `a { color: inherit }` so links stop carrying the brand color by default — tracked in backlog. Until then, anything inside the nav must use inline styles for color.
+
+---
+
+## Competitions, Teams, Hard-Tech Signals (Post-Migrations 040–047)
+
+V1 of hard-tech university competition + team signals. The bones: an existing extractor (`extractPatterns.ts`) already scans candidate text against `signal_dictionary.aliases[]` and writes `person_signals` rows. This work extends that pipeline with two architectural additions and two new categories — no new extractor needed.
+
+### Two new `signal_dictionary` categories
+
+| Category | Added in | Rows | Detection target |
+|---|---|---|---|
+| `olympiad` | 043 | 17 (USAMO/USACO/Putnam/IPhO/ISEF/Davidson Fellows + more) | `activities_honors`, `education_description`, `experience_description` |
+| `national_lab` | 043 | 24 (JPL/Lincoln Lab/JHU APL/LLNL/AFRL/DARPA + more) | `title`, `company_name` — matches against `person_experiences.title_raw` / `company_name_raw` |
+
+Both required adding to the CHECK constraint on `signal_dictionary.category` (migration 040). Required corresponding UI updates in `ProfileTable.tsx`, `ProfileDrawer.tsx`, and `search-builder/page.tsx` to add them to `SIGNAL_CATEGORY_ORDER` + `SIGNAL_CATEGORY_LABELS` — without those edits the signals exist but don't render in filter chip groups.
+
+### `engineering_team` category semantic shift (migration 042 reclassification)
+
+**Before this migration set:** category `engineering_team` held 24 generic *league* signals seeded in migration 025 — e.g., `Formula SAE`, `Baja SAE`, `RoboSub`, `Mars Rover Team`. The category name was imprecise — these were leagues, not specific teams.
+
+**After 042:** 23 of those rows reclassified to category `competition`. The 24th (`ACM ICPC`) deleted (DELETE path fired since 0 `person_signals` referenced it; migration 044 re-created the canonical `ICPC` row under category `hackathon`).
+
+**After 046 import:** category `engineering_team` now holds **141 specific team rows** (`Cornell Racing`, `USCRPL`, `MRover`, etc.) — one per team, with aliases for detection. So `engineering_team` semantic = "this candidate was a member of this specific team."
+
+### `competitions` table (sidecar to signal_dictionary)
+
+```
+competitions
+├─ signal_id UUID PK FK → signal_dictionary(id)   -- one row per league
+├─ competition_slug TEXT UNIQUE   -- 'fsae_ic', 'irec', 'urc', 'robosub', ...
+├─ tier_int SMALLINT (1-3)        -- 3 = elite, 1 = standard
+├─ governing_org TEXT             -- 'SAE International', 'NASA', etc.
+├─ domain_primary TEXT            -- 'automotive', 'rocketry', 'robotics_marine'
+├─ common_role_titles TEXT[]      -- ['Team Captain', 'Chief Engineer', ...]
+├─ grad_skew_typical TEXT         -- 'undergrad_majority' / 'grad_majority' / 'mixed'
+├─ typical_team_size TEXT
+├─ us_focus BOOLEAN
+├─ official_url TEXT
+└─ notes TEXT
+```
+
+21 rows. 11 mapped to existing signal_dictionary rows (reclassified from engineering_team). 10 needed new signal_dictionary rows (sae_aero, irec, robocup, iac, f1tenth, lunabotics, ccdc, ctf, vfs_design, vex_u).
+
+### `teams` table (per-school specific teams)
+
+```
+teams
+├─ team_id UUID PK
+├─ signal_id UUID UNIQUE FK → signal_dictionary(id)  -- one signal_dictionary row per team
+├─ school_id UUID FK → schools(school_id)
+├─ team_name, team_slug (UNIQUE per school)
+├─ tier_int SMALLINT (1-3)        -- 3 = elite team within its competition
+├─ domain_tags TEXT[]             -- ['mech', 'controls', 'embedded', 'power_electronics', ...]
+├─ grad_skew TEXT
+├─ website TEXT
+├─ is_consortium BOOLEAN          -- TRUE for multi-school teams; lead school in school_id
+├─ consortium_partners TEXT       -- free-text partner schools
+└─ is_verified BOOLEAN            -- empirical alumni-trace validation (future)
+```
+
+141 rows seeded by `scripts/import-teams.mjs` from `supabase/seeds/vetted_teams.csv` (142 CSV rows; one is a dedup — Stanford Solar Car Project appears under both `fsae_ev` and `solar_challenge`). 3 consortium teams: MIT-PITT-RW, AI Racing Tech, Black & Gold Autonomous Racing.
+
+### `team_competition_map` (M:N junction)
+
+```
+team_competition_map
+├─ team_id (FK)
+├─ competition_id (FK → competitions.signal_id)
+├─ is_primary BOOLEAN
+└─ PK (team_id, competition_id)
+```
+
+142 rows. Most teams compete in 1 competition (so team_id appears once); Stanford Solar Car Project is the one team in V1 with two map rows.
+
+### `team_domain_tag_dictionary` (controlled vocabulary)
+
+17 tags seeded from the union of `domain_tags` across all 141 teams: `mech`, `controls`, `embedded`, `power_electronics`, `manufacturing`, `aero`, `structures`, `propulsion`, `avionics`, `robotics`, `autonomy`, `perception`, `cyber`, `security`, `ml`, `rotorcraft`, `space`. **Intentionally separate from `specialty_normalized`** — specialty describes a person, domain_tags describe a team's build focus. Different concept layer.
+
+### Person-team detection — single pipeline
+
+Same `extractPatterns.ts` runner scans `person_education.activities_raw`, `experience.title_raw`, `experience.company_name_raw`, etc., for matches against `signal_dictionary.aliases[]`. When a match hits a row where category=`engineering_team`, the resulting `person_signals` row JOINs back to the team via:
+
+```sql
+SELECT t.*
+FROM person_signals ps
+JOIN signal_dictionary sd ON sd.id = ps.signal_id
+JOIN teams t ON t.signal_id = sd.id
+WHERE ps.person_id = $1 AND sd.category = 'engineering_team'
+```
+
+No `person_team_memberships` table. The team membership IS the `person_signals` row.
+
+### `person_signals.team_role_tier` and `team_role_text` (new columns)
+
+Two new columns on `person_signals` to capture role-within-team:
+
+| `team_role_tier` (SMALLINT 1–4) | Meaning |
+|---|---|
+| 4 | Captain / Chief Engineer / President / Founder |
+| 3 | Department or Subsystem Lead |
+| 2 | Engineer / Specialist |
+| 1 | General member / unspecified |
+
+**V1 detection** populates only tier 4 (regex match on `captain|chief\s+\w+|president|founder|team\s+lead|lead\s+engineer`) and tier 1 (everything else). Tiers 2 and 3 stay NULL until a future PR extends the extractor with mid-tier patterns. The `team_role_text` column preserves the raw source text so future re-classification can populate 2/3 without re-fetching from `raw_ingest_events`.
+
+NULL for all non-team signals (olympiads, fellowships, etc.).
+
+### `person_signals_active` view extension (migration 047)
+
+View was extended with 13 new columns (team_id, team_name, team_tier, team_domain_tags, team_school_id, team_is_consortium, team_is_verified, team_role_tier, team_role_text, competition_slug, competition_tier, competition_domain, competition_governing_org).
+
+**Critical pattern: LATERAL subquery with LIMIT 1.** Naive LEFT JOIN to `team_competition_map` would multiply rows when a team competes in multiple competitions. The view uses:
+
+```sql
+LEFT JOIN LATERAL (
+  SELECT cmp.competition_slug, cmp.tier_int, cmp.domain_primary, cmp.governing_org
+  FROM team_competition_map tcm
+  JOIN competitions cmp ON cmp.signal_id = tcm.competition_id
+  WHERE tcm.team_id = t.team_id
+  ORDER BY tcm.is_primary DESC, cmp.competition_slug ASC
+  LIMIT 1
+) c ON t.team_id IS NOT NULL
+```
+
+Picks one competition per team (primary first, slug as tiebreaker). Confirmed via post-migration query: `0` duplicated rows in the view.
+
+### `import-teams.mjs` — fuzzy school matching + idempotent UPSERT
+
+Script reads `supabase/seeds/vetted_teams.csv`, deduplicates by `(school_id, team_slug)`, resolves competition slugs to signal_ids, then UPSERTs into signal_dictionary + teams + team_competition_map + team_domain_tag_dictionary. `--dry-run` flag short-circuits before writes and prints any unmatched schools/competitions to stdout.
+
+**Slug derivation (locked):** lowercase team_name, replace non-alphanumerics with hyphens, drop article words (a/an/the/of/at/in), collapse hyphens, strip leading/trailing. Examples: `Cornell Racing` → `cornell-racing`; `MIT-PITT-RW` → `mit-pitt-rw`; `UM::Autonomy` → `um-autonomy`.
+
+**School lookup:** exact match → case-insensitive match → `school_aliases` match → skip with stdout warning if all three fail.
+
+**Consortia:** school field ending `(lead)` triggers `is_consortium=TRUE`; the lead school is parsed out; `consortium_partners` text is populated from the row's `notes` field.
+
+### 37 schools added to `schools` table during staging — backlog implication
+
+The first `--dry-run` against staging surfaced 61 unmatched team rows across 37 unique school names — all legitimate US universities not previously in the `schools` table (consistent with the existing schools-dedup backlog: schools are only added when candidate ingest surfaces them via Crust). Resolution before the real import: INSERTed all 37 as new canonical `schools` rows with `school_score = NULL` (unranked for now).
+
+⚠ **Some of these 37 may be duplicates of existing canonical names** that didn't match because of word-order / punctuation / canonical-form variance — e.g., `Pennsylvania State University` may co-exist with a canonical `Penn State University`. The schools-dedup backlog now includes these 37 additions in scope.
+
+### Reminder: app-code dependency
+
+Adding new `signal_dictionary` categories REQUIRES updates to:
+- [app/components/ProfileTable.tsx](app/components/ProfileTable.tsx) — `SIGNAL_CATEGORY_ORDER` + `SIGNAL_CATEGORY_LABELS`
+- [app/components/ProfileDrawer.tsx](app/components/ProfileDrawer.tsx) — same shape
+- [app/search-builder/page.tsx](app/search-builder/page.tsx) — same shape
+
+Without these edits, signals with the new category exist in the DB but don't render in filter chips. Olympiad and national_lab are in there as of this work; future categories must follow.
 
 ---
 
