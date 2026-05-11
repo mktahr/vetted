@@ -1,0 +1,143 @@
+team_name,team_aliases,school,competition_id,team_tier,domain_tags,grad_skew,website,notes
+MRacing,Michigan Formula Racing,University of Michigan,fsae_ic,3,mech;controls;embedded,undergrad_majority,mracing.engin.umich.edu,Multi-time top US team
+Cornell Racing,Cornell FSAE,Cornell University,fsae_ic,3,mech;controls;embedded,undergrad_majority,cornellracing.com,Consistent national contender
+HyTech Racing,GT Motorsports,Georgia Institute of Technology,fsae_ic,2,mech;controls;embedded,undergrad_majority,hytechracing.gatech.edu,Strong; also runs EV
+Spartan Racing,SJSU Formula,San Jose State University,fsae_ic,2,mech;controls;embedded,undergrad_majority,spartan-racing.com,Consistent west coast contender
+UW Formula Motorsports,UW FSAE,University of Washington,fsae_ic,2,mech;controls;embedded,undergrad_majority,washington.edu/uwfm,
+Cal Poly Racing,Cal Poly SLO FSAE,California Polytechnic State University San Luis Obispo,fsae_ic,2,mech;controls,undergrad_majority,calpolyracing.com,
+Aggie Motorsports,Fightin Texas Aggie Motorsports,Texas A&M University,fsae_ic,2,mech;manufacturing,undergrad_majority,tamusae.org,Strong manufacturing pipeline
+Wisconsin Racing,,University of Wisconsin-Madison,fsae_ic,2,mech;controls,undergrad_majority,wisconsinracing.org,
+MIT Motorsports,MIT FSAE,Massachusetts Institute of Technology,fsae_ic,2,mech;controls;embedded,undergrad_majority,motorsports.mit.edu,
+Penn State Formula SAE,PSU Racing,Pennsylvania State University,fsae_ic,2,mech;controls,undergrad_majority,pennstateracing.com,
+Illini Motorsports,Illinois Motorsports,University of Illinois Urbana-Champaign,fsae_ic,2,mech;controls,undergrad_majority,illinimotorsports.com,
+Purdue FSAE,Purdue Formula SAE,Purdue University,fsae_ic,2,mech;controls,undergrad_majority,purdueformulasae.com,
+MRacing EV,Michigan Formula Racing EV,University of Michigan,fsae_ev,3,mech;power_electronics;embedded;controls,undergrad_majority,mracing.engin.umich.edu,
+Cornell Racing EV,Resolute,Cornell University,fsae_ev,3,mech;power_electronics;embedded;controls,undergrad_majority,cornellracing.com,EV vehicle named Resolute
+Carnegie Mellon Racing,CMR,Carnegie Mellon University,fsae_ev,3,mech;power_electronics;embedded;controls,undergrad_majority,racing.club.cmu.edu,Very strong embedded/EV
+HyTech Racing EV,GT Off-Road EV,Georgia Institute of Technology,fsae_ev,3,mech;power_electronics;embedded;controls,undergrad_majority,hytechracing.gatech.edu,
+Olin Electric Motorsports,OEM,Olin College of Engineering,fsae_ev,3,mech;power_electronics;embedded;controls,undergrad_majority,olin.edu/oem,Small school punches above weight
+Berkeley Formula Racing,Formula Electric Berkeley,University of California Berkeley,fsae_ev,2,mech;power_electronics;embedded,undergrad_majority,feb.berkeley.edu,
+UCLA Formula Racing,UCLA FSAE EV,University of California Los Angeles,fsae_ev,2,mech;power_electronics;embedded,undergrad_majority,uclaformularacing.com,
+MIT Motorsports EV,,Massachusetts Institute of Technology,fsae_ev,2,mech;power_electronics;embedded,undergrad_majority,motorsports.mit.edu,
+Princeton Formula Racing,,Princeton University,fsae_ev,2,mech;power_electronics;embedded,undergrad_majority,princetonracing.com,
+Spartan Racing Electric,,San Jose State University,fsae_ev,2,mech;power_electronics;embedded,undergrad_majority,spartan-racing.com,
+Illini Motorsports EV,,University of Illinois Urbana-Champaign,fsae_ev,2,mech;power_electronics;embedded,undergrad_majority,illinimotorsports.com,
+Stanford Solar Car Project,SSCP,Stanford University,fsae_ev,2,mech;power_electronics;embedded,undergrad_majority,solarcar.stanford.edu,Note: also competes in solar challenge
+Blue Jay Racing,JHU Baja,Johns Hopkins University,baja_sae,3,mech;manufacturing,undergrad_majority,bluejayracing.org,Multi-time top US Baja team
+Cornell Baja,,Cornell University,baja_sae,3,mech;manufacturing,undergrad_majority,cornell-baja.com,
+Cal Poly Pomona Baja,CPP Baja,California State Polytechnic University Pomona,baja_sae,3,mech;manufacturing,undergrad_majority,cppbaja.com,Consistent west coast strong
+War Eagle Motorsports,Auburn Baja,Auburn University,baja_sae,2,mech;manufacturing,undergrad_majority,auburn.edu/baja,
+Gopher Motorsports Baja,,University of Minnesota,baja_sae,2,mech;manufacturing,undergrad_majority,gophermotorsports.com,
+Olin Baja,,Olin College of Engineering,baja_sae,2,mech;manufacturing,undergrad_majority,olin.edu/baja,
+Tennessee Tech Baja,TTU Baja,Tennessee Technological University,baja_sae,2,mech;manufacturing,undergrad_majority,ttu.edu/baja,
+Cal Poly SLO Baja,,California Polytechnic State University San Luis Obispo,baja_sae,2,mech;manufacturing,undergrad_majority,calpoly.edu/baja,
+Michigan Tech Baja,MTU Baja,Michigan Technological University,baja_sae,2,mech;manufacturing,undergrad_majority,mtu.edu/baja,Big program
+Iowa State Baja,,Iowa State University,baja_sae,2,mech;manufacturing,undergrad_majority,iastate.edu,
+RIT Baja,Rochester Tigers,Rochester Institute of Technology,baja_sae,2,mech;manufacturing,undergrad_majority,rit.edu,
+Wichita State DBF,WSU DBF,Wichita State University,aiaa_dbf,3,aero;structures,undergrad_majority,wichita.edu/dbf,Multi-time DBF winner; aerospace pipeline
+Georgia Tech DBF,GT DBF,Georgia Institute of Technology,aiaa_dbf,3,aero;structures;embedded,undergrad_majority,dbf.gtorg.gatech.edu,Strong
+UCLA DBF,UCLA Design Build Fly,University of California Los Angeles,aiaa_dbf,3,aero;structures,undergrad_majority,uclahap.com,
+M-Fly,Michigan DBF,University of Michigan,aiaa_dbf,3,aero;structures,undergrad_majority,mfly.engin.umich.edu,
+Virginia Tech DBF,,Virginia Polytechnic Institute and State University,aiaa_dbf,2,aero;structures,undergrad_majority,vt.edu,
+USC AeroDesign,,University of Southern California,aiaa_dbf,2,aero;structures,undergrad_majority,usc.edu,
+WPI DBF,,Worcester Polytechnic Institute,aiaa_dbf,2,aero;structures,undergrad_majority,wpi.edu,
+Cal Poly SLO DBF,,California Polytechnic State University San Luis Obispo,aiaa_dbf,2,aero;structures,undergrad_majority,calpoly.edu,
+Cornell DBF,,Cornell University,aiaa_dbf,2,aero;structures,undergrad_majority,cornelldbf.com,
+Farmers Flight,TAMU SAE Aero,Texas A&M University,sae_aero,3,aero;structures,undergrad_majority,tamusaeaero.org,Top SAE Aero team
+Cincy Flight,Queen City Aviators,University of Cincinnati,sae_aero,2,aero;structures,undergrad_majority,cincyflight.com,
+Embry-Riddle SAE Aero,ERAU Aero,Embry-Riddle Aeronautical University,sae_aero,2,aero;structures,undergrad_majority,erau.edu,
+Portland Pilots Aero,UP SAE Aero,University of Portland,sae_aero,2,aero;structures,undergrad_majority,up.edu,
+WPI SAE Aero,,Worcester Polytechnic Institute,sae_aero,2,aero;structures,undergrad_majority,wpi.edu,
+NCSU High-Powered Rocketry,NC State HPR,North Carolina State University,usli,3,propulsion;avionics,undergrad_majority,ncsu.edu,Frequent USLI top placers
+Charger Rocket Works,UAH Rocketry,University of Alabama in Huntsville,usli,3,propulsion;avionics,mixed,uah.edu,Host school region; strong
+Vanderbilt Aerospace Design Lab,VADL,Vanderbilt University,usli,2,propulsion;avionics,undergrad_majority,vu.edu,Competes in USLI and IREC
+JMU Rocketry,,James Madison University,usli,2,propulsion;avionics,undergrad_majority,jmu.edu,
+Mississippi State Rocketry,,Mississippi State University,usli,2,propulsion;avionics,undergrad_majority,msstate.edu,
+Iowa State Rocketry,,Iowa State University,usli,2,propulsion;avionics,undergrad_majority,iastate.edu,
+USCRPL,USC Rocket Propulsion Lab,University of Southern California,irec,3,propulsion;avionics;structures,mixed,uscrpl.com,First collegiate team to space (Traveler IV); top SpaceX pipeline
+MIT Rocket Team,,Massachusetts Institute of Technology,irec,3,propulsion;avionics,undergrad_majority,rocketry.mit.edu,
+Stanford SSI Rocketry,Stanford SSI,Stanford University,irec,3,propulsion;avionics,undergrad_majority,stanfordssi.org,Part of Stanford Student Space Initiative
+Purdue Space Program,PSP,Purdue University,irec,3,propulsion;avionics,undergrad_majority,purduespaceprogram.com,Competes IREC + USLI
+Cornell Rocketry,CRT,Cornell University,irec,3,propulsion;avionics,undergrad_majority,cornellrocketry.com,
+UCLA Rocket Project,,University of California Los Angeles,irec,2,propulsion;avionics,undergrad_majority,uclarocketproject.com,
+Yale Undergraduate Aerospace Association,YUAA,Yale University,irec,2,propulsion;avionics,undergrad_majority,yale.edu/yuaa,
+BU Rocket Propulsion Group,BURPG,Boston University,irec,2,propulsion;avionics,undergrad_majority,burpg.org,
+Cal Poly SLO Liquid Propulsion,,California Polytechnic State University San Luis Obispo,irec,2,propulsion;avionics,undergrad_majority,calpoly.edu,
+Princeton Rocketry,,Princeton University,irec,2,propulsion;avionics,undergrad_majority,princeton.edu,
+Penn State Lion's Roar,Penn State Rocketry,Pennsylvania State University,irec,2,propulsion;avionics,undergrad_majority,psu.edu,
+Cornell Mars Rover,CMR,Cornell University,urc,3,robotics;mech;controls;embedded,undergrad_majority,cornellmarsrover.com,Top US team; multi-time finalist
+MRover,Michigan Mars Rover,University of Michigan,urc,3,robotics;mech;controls;embedded,undergrad_majority,mrover.org,Top US team
+Husky Robotics,UW URC,University of Washington,urc,3,robotics;mech;controls,undergrad_majority,huskyrobotics.org,
+Mountaineer Mars Rover,WVU MRT,West Virginia University,urc,2,robotics;mech,undergrad_majority,wvu.edu,
+BYU Mars Rover,,Brigham Young University,urc,2,robotics;mech,undergrad_majority,byu.edu,
+Stanford Mars Rover,,Stanford University,urc,2,robotics;mech,undergrad_majority,stanford.edu,
+Caltech Robotics Team,,California Institute of Technology,urc,2,robotics;mech,mixed,caltech.edu,
+UC Berkeley Mars Rover,Cal Mars Rover,University of California Berkeley,urc,2,robotics;mech,undergrad_majority,berkeley.edu,
+CUAUV,Cornell University Autonomous Underwater Vehicle,Cornell University,robosub,3,autonomy;perception;embedded,undergrad_majority,cuauv.org,Top US RoboSub team historically
+Caltech Robotics RoboSub,,California Institute of Technology,robosub,2,autonomy;perception,mixed,caltech.edu,
+Duke Robotics,,Duke University,robosub,2,autonomy;perception,undergrad_majority,duke.edu,
+Harvey Mudd Robotics,,Harvey Mudd College,robosub,2,autonomy,undergrad_majority,hmc.edu,
+USNA Robotics,,United States Naval Academy,robosub,2,autonomy,undergrad_majority,usna.edu,Service academy; auto US person
+Embry-Riddle RoboSub,,Embry-Riddle Aeronautical University,robosub,2,autonomy,undergrad_majority,erau.edu,
+Virginia Tech RoboSub,,Virginia Polytechnic Institute and State University,robosub,2,autonomy,undergrad_majority,vt.edu,
+Cornell Autoboat,,Cornell University,roboboat,3,autonomy;perception;embedded,undergrad_majority,cornellautoboat.com,
+Arcturus,MIT Arcturus,Massachusetts Institute of Technology,roboboat,3,autonomy;perception;embedded,undergrad_majority,arcturus.mit.edu,
+UM::Autonomy,Michigan Autonomy,University of Michigan,roboboat,3,autonomy;perception;embedded,undergrad_majority,umautonomy.com,Top US team
+RoboJackets RoboBoat,GT RoboBoat,Georgia Institute of Technology,roboboat,2,autonomy,undergrad_majority,robojackets.org,RoboJackets is umbrella
+Embry-Riddle RoboBoat,,Embry-Riddle Aeronautical University,roboboat,2,autonomy,undergrad_majority,erau.edu,
+Villanova RoboBoat,,Villanova University,roboboat,2,autonomy,undergrad_majority,villanova.edu,
+CMU RoboCup,CMRoboBits,Carnegie Mellon University,robocup,3,robotics;perception;ml,grad_majority,cmu.edu,Multiple subteams (humanoid; soccer; @home)
+UT Austin Villa,,University of Texas at Austin,robocup,3,robotics;ml;perception,mixed,cs.utexas.edu/villa,Legendary in standard platform/simulation
+RoboJackets RoboCup,GT RoboCup,Georgia Institute of Technology,robocup,2,robotics,undergrad_majority,robojackets.org,
+Cavalier Autonomous Racing,UVA IAC,University of Virginia,iac,3,autonomy;perception;controls,grad_majority,virginia.edu/cavalier,
+MIT-PITT-RW,,Massachusetts Institute of Technology (lead),iac,3,autonomy;perception;controls,grad_majority,mitpittrw.com,Multi-school consortium (MIT/Pitt/Rochester/Waterloo)
+AI Racing Tech,,University of California San Diego (lead),iac,3,autonomy;perception;controls,grad_majority,airacingtech.org,Multi-school consortium (UCSD/UH/UCB)
+Black & Gold Autonomous Racing,Purdue IAC,Purdue University (lead),iac,3,autonomy;perception;controls,grad_majority,purdue.edu,Multi-school consortium
+UPenn F1Tenth,Penn F1Tenth,University of Pennsylvania,f1tenth,3,autonomy;controls,mixed,upenn.edu,Birthplace of F1Tenth
+MIT F1Tenth,,Massachusetts Institute of Technology,f1tenth,2,autonomy,mixed,mit.edu,
+CMU F1Tenth,,Carnegie Mellon University,f1tenth,2,autonomy,mixed,cmu.edu,
+Stanford F1Tenth,,Stanford University,f1tenth,2,autonomy,mixed,stanford.edu,
+Mississippi State SUAS,MSU SUAS,Mississippi State University,suas,3,autonomy;perception;aero,undergrad_majority,msstate.edu,Multi-time top finishers
+Notre Dame SUAS,,University of Notre Dame,suas,3,autonomy;perception;aero,undergrad_majority,nd.edu,
+RoboJackets SUAS,GT SUAS,Georgia Institute of Technology,suas,3,autonomy;perception,undergrad_majority,robojackets.org,
+Embry-Riddle SUAS,ERAU SUAS,Embry-Riddle Aeronautical University,suas,2,autonomy;aero,undergrad_majority,erau.edu,
+Virginia Tech SUAS,,Virginia Polytechnic Institute and State University,suas,2,autonomy;aero,undergrad_majority,vt.edu,
+Cornell SUAS,,Cornell University,suas,2,autonomy;aero,undergrad_majority,cornell.edu,
+Cal Poly Pomona SUAS,,California State Polytechnic University Pomona,suas,2,autonomy;aero,undergrad_majority,cpp.edu,
+BYU SUAS,,Brigham Young University,suas,2,autonomy;aero,undergrad_majority,byu.edu,
+Iowa State Lunabotics,ISU Lunabotics,Iowa State University,lunabotics,3,robotics;mech,undergrad_majority,iastate.edu,Top finisher
+Alabama Lunabotics,,University of Alabama,lunabotics,2,robotics;mech,undergrad_majority,alabama.edu,
+Embry-Riddle Lunabotics,,Embry-Riddle Aeronautical University,lunabotics,2,robotics;mech,undergrad_majority,erau.edu,
+Purdue Northwest Lunabotics,PNW Lunabotics,Purdue University Northwest,lunabotics,2,robotics;mech,undergrad_majority,pnw.edu,
+University of North Dakota Lunabotics,UND Lunabotics,University of North Dakota,lunabotics,2,robotics;mech,undergrad_majority,und.edu,
+Michigan Solar Car,UMSC,University of Michigan,solar_challenge,3,mech;power_electronics;controls;embedded,undergrad_majority,solarcar.engin.umich.edu,Multi-time American champ; legendary
+MIT Solar Electric Vehicle Team,MIT SEVT,Massachusetts Institute of Technology,solar_challenge,3,mech;power_electronics;embedded,undergrad_majority,mitsolarcar.org,
+Stanford Solar Car Project,SSCP,Stanford University,solar_challenge,3,mech;power_electronics;embedded,undergrad_majority,solarcar.stanford.edu,
+Principia Solar Car,,Principia College,solar_challenge,3,mech;power_electronics,undergrad_majority,principia.edu,Small school; consistent winner
+CalSol,Berkeley Solar,University of California Berkeley,solar_challenge,2,mech;power_electronics,undergrad_majority,calsol.berkeley.edu,
+Minnesota Solar Vehicle Project,MSVP,University of Minnesota,solar_challenge,2,mech;power_electronics,undergrad_majority,msvp.umn.edu,
+Illini Solar Car,,University of Illinois Urbana-Champaign,solar_challenge,2,mech;power_electronics,undergrad_majority,illinisolarcar.com,
+Western Michigan Sunseeker,WMU Sunseeker,Western Michigan University,solar_challenge,2,mech;power_electronics,undergrad_majority,sunseeker.wmich.edu,
+NUSolar,Northwestern Solar,Northwestern University,solar_challenge,2,mech;power_electronics,undergrad_majority,nusolar.northwestern.edu,
+App State Sunergy,,Appalachian State University,solar_challenge,2,mech;power_electronics,undergrad_majority,appstate.edu,
+Stanford SSI Satellite,Stanford SSI,Stanford University,cubesat,3,aerospace;avionics;embedded,mixed,stanfordssi.org,
+PolySat,Cal Poly CubeSat,California Polytechnic State University San Luis Obispo,cubesat,3,aerospace;avionics;embedded,mixed,polysat.org,Originated CubeSat standard
+MIT Space Systems Lab teams,MIT SSL,Massachusetts Institute of Technology,cubesat,3,aerospace;avionics,mixed,ssl.mit.edu,Umbrella for multiple flight projects
+Georgia Tech SSDL,GT Space Systems Design Lab,Georgia Institute of Technology,cubesat,3,aerospace;avionics,mixed,ssdl.gatech.edu,
+CU Boulder LASP undergrad,,University of Colorado Boulder,cubesat,3,aerospace;avionics,mixed,lasp.colorado.edu,Major space program
+CUSat,Cornell University Satellite,Cornell University,cubesat,2,aerospace;avionics,mixed,cornell.edu/cusat,
+UCLA CubeSat,,University of California Los Angeles,cubesat,2,aerospace;avionics,mixed,ucla.edu,
+Hack@UCF,UCF Cyber Defense,University of Central Florida,ccdc,3,cyber;security,undergrad_majority,hackucf.org,Multi-time national CCDC winner
+CPP SWIFT,Cal Poly Pomona CCDC,California State Polytechnic University Pomona,ccdc,3,cyber;security,undergrad_majority,cpp.edu,
+Stanford CCDC,,Stanford University,ccdc,2,cyber;security,undergrad_majority,stanford.edu,
+RIT CCDC,,Rochester Institute of Technology,ccdc,2,cyber;security,undergrad_majority,rit.edu,
+Plaid Parliament of Pwning,PPP,Carnegie Mellon University,ctf,3,cyber;security,mixed,pwning.net,Most legendary college CTF; many DEFCON wins
+RPISec,,Rensselaer Polytechnic Institute,ctf,3,cyber;security,mixed,rpis.ec,
+Shellphish,,University of California Santa Barbara,ctf,3,cyber;security,grad_majority,shellphish.net,Industry-grade; PhD-heavy
+Stanford ACM,,Stanford University,ctf,2,cyber,undergrad_majority,stanford.edu,
+Cal Poly SLO White Hats,,California Polytechnic State University San Luis Obispo,ctf,2,cyber,undergrad_majority,calpoly.edu,
+Penn State Helicopter,Penn State VFS,Pennsylvania State University,vfs_design,3,aero;rotorcraft,mixed,psu.edu,Strong rotorcraft program
+Georgia Tech Vertical Lift,GT VLRC,Georgia Institute of Technology,vfs_design,3,aero;rotorcraft,mixed,vlrc.gatech.edu,
+Maryland Rotorcraft,UMD VFS,University of Maryland College Park,vfs_design,3,aero;rotorcraft,mixed,umd.edu,Dedicated rotorcraft program
+Purdue VFS,,Purdue University,vfs_design,2,aero;rotorcraft,mixed,purdue.edu,
+Berkeley VEX U,,University of California Berkeley,vex_u,3,robotics,undergrad_majority,berkeley.edu,Multi-time world champ

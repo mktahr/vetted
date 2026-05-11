@@ -1,0 +1,25 @@
+canonical_name,category,subcategory,tier_group,aliases,source_field_hints,canonical_url,description,is_positive,is_active
+NASA Jet Propulsion Laboratory,national_lab,space,3,"jpl;nasa jpl;jet propulsion laboratory","title_raw;company_name_raw",https://www.jpl.nasa.gov,NASA spacecraft + planetary mission lab; Caltech-managed,TRUE,TRUE
+MIT Lincoln Laboratory,national_lab,defense,3,"mit lincoln lab;lincoln laboratory;mit ll","title_raw;company_name_raw",https://www.ll.mit.edu,DoD-funded R&D; radar/comms/signals; clearance pipeline,TRUE,TRUE
+Johns Hopkins Applied Physics Laboratory,national_lab,defense,3,"jhuapl;jhu apl;applied physics laboratory;johns hopkins apl","title_raw;company_name_raw",https://www.jhuapl.edu,DoD/NASA R&D; space + defense systems,TRUE,TRUE
+Lawrence Livermore National Laboratory,national_lab,energy,3,"llnl;lawrence livermore","title_raw;company_name_raw",https://www.llnl.gov,DOE national security + fusion research,TRUE,TRUE
+Los Alamos National Laboratory,national_lab,energy,3,"lanl;los alamos","title_raw;company_name_raw",https://www.lanl.gov,DOE national security + materials,TRUE,TRUE
+Sandia National Laboratories,national_lab,energy,3,"sandia;sandia national labs","title_raw;company_name_raw",https://www.sandia.gov,DOE engineering + national security; large hardware programs,TRUE,TRUE
+Oak Ridge National Laboratory,national_lab,energy,3,"ornl;oak ridge","title_raw;company_name_raw",https://www.ornl.gov,DOE materials + computing + nuclear,TRUE,TRUE
+NREL,national_lab,energy,3,"nrel;national renewable energy laboratory","title_raw;company_name_raw",https://www.nrel.gov,DOE renewable energy R&D,TRUE,TRUE
+Argonne National Laboratory,national_lab,energy,3,"argonne;anl","title_raw;company_name_raw",https://www.anl.gov,DOE multi-domain research,TRUE,TRUE
+Brookhaven National Laboratory,national_lab,energy,3,"brookhaven;bnl","title_raw;company_name_raw",https://www.bnl.gov,DOE physics + materials,TRUE,TRUE
+SLAC National Accelerator Laboratory,national_lab,energy,3,"slac;stanford linear accelerator","title_raw;company_name_raw",https://www.slac.stanford.edu,DOE particle physics + photon science,TRUE,TRUE
+Pacific Northwest National Laboratory,national_lab,energy,2,"pnnl;pacific northwest","title_raw;company_name_raw",https://www.pnnl.gov,DOE energy + national security,TRUE,TRUE
+Idaho National Laboratory,national_lab,energy,2,"inl;idaho national lab","title_raw;company_name_raw",https://inl.gov,DOE nuclear research,TRUE,TRUE
+Fermilab,national_lab,energy,3,"fermilab;fermi national accelerator laboratory","title_raw;company_name_raw",https://www.fnal.gov,DOE particle physics,TRUE,TRUE
+NASA Ames Research Center,national_lab,space,3,"nasa ames;ames research center","title_raw;company_name_raw",https://www.nasa.gov/ames,NASA aerospace + AI research,TRUE,TRUE
+NASA Goddard Space Flight Center,national_lab,space,3,"nasa goddard;goddard space flight center","title_raw;company_name_raw",https://www.nasa.gov/goddard,NASA earth science + astrophysics + spacecraft,TRUE,TRUE
+NASA Glenn Research Center,national_lab,space,2,"nasa glenn;glenn research center","title_raw;company_name_raw",https://www.nasa.gov/glenn,NASA aerospace propulsion + power,TRUE,TRUE
+NASA Langley Research Center,national_lab,space,3,"nasa langley;langley research center","title_raw;company_name_raw",https://www.nasa.gov/langley,NASA aeronautics R&D,TRUE,TRUE
+NASA Marshall Space Flight Center,national_lab,space,3,"nasa marshall;marshall space flight center","title_raw;company_name_raw",https://www.nasa.gov/marshall,NASA propulsion + launch vehicles,TRUE,TRUE
+NIST,national_lab,science,2,"nist;national institute of standards and technology","title_raw;company_name_raw",https://www.nist.gov,Department of Commerce; metrology + standards,TRUE,TRUE
+Air Force Research Laboratory,national_lab,defense,3,"afrl;air force research laboratory","title_raw;company_name_raw",https://www.afrl.af.mil,USAF R&D; aerospace + directed energy,TRUE,TRUE
+Naval Research Laboratory,national_lab,defense,3,"nrl;naval research laboratory","title_raw;company_name_raw",https://www.nrl.navy.mil,US Navy R&D,TRUE,TRUE
+Army Research Laboratory,national_lab,defense,2,"arl;army research laboratory","title_raw;company_name_raw",https://arl.devcom.army.mil,US Army R&D,TRUE,TRUE
+DARPA,national_lab,defense,3,"darpa;defense advanced research projects agency","title_raw;company_name_raw",https://www.darpa.mil,DoD frontier R&D agency,TRUE,TRUE

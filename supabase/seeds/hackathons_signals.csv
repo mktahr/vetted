@@ -1,0 +1,25 @@
+canonical_name,category,subcategory,tier_group,aliases,source_field_hints,canonical_url,description,is_positive,is_active
+TreeHacks,hackathon,student,3,"treehacks;treehacks stanford","activities_raw;description_raw;honors_raw",https://www.treehacks.com,Stanford flagship; product + startup bias; very selective,TRUE,TRUE
+PennApps,hackathon,student,3,"pennapps;penn apps","activities_raw;description_raw;honors_raw",https://pennapps.com,UPenn; oldest college hackathon; prestigious,TRUE,TRUE
+HackMIT,hackathon,student,3,"hackmit;hack mit","activities_raw;description_raw;honors_raw",https://hackmit.org,MIT; strong engineering rigor,TRUE,TRUE
+CalHacks,hackathon,student,3,"calhacks;cal hacks;berkeley hackathon","activities_raw;description_raw;honors_raw",https://calhacks.io,UC Berkeley; largest US student hackathon,TRUE,TRUE
+MHacks,hackathon,student,3,"mhacks;michigan hackathon","activities_raw;description_raw;honors_raw",https://mhacks.org,Michigan; strong systems and ME focus,TRUE,TRUE
+Hack the North,hackathon,student,3,"hackthenorth;hack the north","activities_raw;description_raw;honors_raw",https://hackthenorth.com,Waterloo (Canada); MIT/Stanford-tier global pull,TRUE,TRUE
+LA Hacks,hackathon,student,2,"lahacks;la hacks;ucla hackathon","activities_raw;description_raw;honors_raw",https://lahacks.com,UCLA; product + design focus,TRUE,TRUE
+TartanHacks,hackathon,student,2,"tartanhacks;cmu hackathon","activities_raw;description_raw;honors_raw",https://tartanhacks.com,CMU; robotics + HCI + systems,TRUE,TRUE
+BigRed Hacks,hackathon,student,2,"bigred hacks;bigred//hacks;cornell hackathon","activities_raw;description_raw;honors_raw",https://bigredhacks.com,Cornell; product + applied engineering,TRUE,TRUE
+DubHacks,hackathon,student,2,"dubhacks;uw hackathon","activities_raw;description_raw;honors_raw",https://dubhacks.co,University of Washington; PNW flagship,TRUE,TRUE
+HackHarvard,hackathon,student,2,"hackharvard;hack harvard","activities_raw;description_raw;honors_raw",https://hackharvard.io,Harvard; mid-Atlantic strong,TRUE,TRUE
+HackPrinceton,hackathon,student,2,"hackprinceton;hack princeton","activities_raw;description_raw;honors_raw",https://www.hackprinceton.com,Princeton hackathon,TRUE,TRUE
+HackTX,hackathon,student,2,"hacktx;hack tx;ut austin hackathon","activities_raw;description_raw;honors_raw",https://www.hacktx.com,UT Austin hackathon,TRUE,TRUE
+HackIllinois,hackathon,student,2,"hackillinois;hack illinois;uiuc hackathon","activities_raw;description_raw;honors_raw",https://hackillinois.org,UIUC hackathon,TRUE,TRUE
+HackGT,hackathon,student,2,"hackgt;hack gt;georgia tech hackathon","activities_raw;description_raw;honors_raw",https://hack.gt,Georgia Tech hackathon,TRUE,TRUE
+NASA Space Apps Challenge,hackathon,applied,3,"nasa space apps;space apps challenge","activities_raw;description_raw;honors_raw",https://www.spaceappschallenge.org,Largest applied science hackathon; finals-level signal,TRUE,TRUE
+YC AI Startup Hackathon,hackathon,industry,3,"yc ai hackathon;y combinator ai hackathon","activities_raw;description_raw;honors_raw",https://www.ycombinator.com,Recent YC-sponsored AI hackathons; founder pipeline,TRUE,TRUE
+AGI House Hackathon,hackathon,industry,2,"agi house;agi house hackathon","activities_raw;description_raw;honors_raw",https://agihouse.org,SF Bay Area AI hackathon hub,TRUE,TRUE
+Anthropic Builder Hackathons,hackathon,industry,2,"anthropic hackathon;anthropic builder","activities_raw;description_raw;honors_raw",https://anthropic.com,Anthropic-sponsored builder events,TRUE,TRUE
+OpenAI Hackathon,hackathon,industry,2,"openai hackathon","activities_raw;description_raw;honors_raw",https://openai.com,OpenAI-sponsored events,TRUE,TRUE
+Kaggle Competition Winner,hackathon,ml,3,"kaggle;kaggle competition;kaggle grandmaster;kaggle master","activities_raw;description_raw;honors_raw;summary_raw",https://www.kaggle.com,Kaggle competition top placements; Grandmaster/Master are elite signals,TRUE,TRUE
+Topcoder,hackathon,competitive_programming,2,"topcoder;topcoder srm","activities_raw;description_raw;honors_raw;summary_raw",https://www.topcoder.com,Algorithmic competitive programming; SRM ratings,TRUE,TRUE
+Codeforces,hackathon,competitive_programming,2,"codeforces;codeforces grandmaster;codeforces red","activities_raw;description_raw;honors_raw;summary_raw",https://codeforces.com,Competitive programming; ratings color-coded; red/legendary = elite,TRUE,TRUE
+ICPC,hackathon,competitive_programming,3,"icpc;international collegiate programming contest;acm icpc","activities_raw;description_raw;honors_raw",https://icpc.global,Premier college programming competition; World Finals = elite,TRUE,TRUE

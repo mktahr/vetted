@@ -1,0 +1,50 @@
+canonical_name,category,subcategory,tier_group,aliases,source_field_hints,canonical_url,description,is_positive,is_active
+NeurIPS,publication,ai_ml,3,"neurips;nips;neural information processing systems","description_raw;summary_raw;activities_raw",https://neurips.cc,Top global ML conference,TRUE,TRUE
+ICML,publication,ai_ml,3,"icml;international conference on machine learning","description_raw;summary_raw;activities_raw",https://icml.cc,Top ML theory + applied conference,TRUE,TRUE
+ICLR,publication,ai_ml,3,"iclr;international conference on learning representations","description_raw;summary_raw;activities_raw",https://iclr.cc,Top deep learning conference,TRUE,TRUE
+AAAI,publication,ai_ml,2,"aaai;association for the advancement of artificial intelligence","description_raw;summary_raw;activities_raw",https://aaai.org,Broad AI conference,TRUE,TRUE
+IJCAI,publication,ai_ml,2,"ijcai;international joint conference on artificial intelligence","description_raw;summary_raw;activities_raw",https://www.ijcai.org,International AI conference,TRUE,TRUE
+MLSys,publication,ai_ml,3,"mlsys;mlsys conference;machine learning systems","description_raw;summary_raw;activities_raw",https://mlsys.org,ML systems venue; fast-rising; production ML signal,TRUE,TRUE
+OSDI,publication,systems,3,"osdi;operating systems design and implementation","description_raw;summary_raw;activities_raw",https://www.usenix.org/conferences/osdi,Top OS systems conference,TRUE,TRUE
+SOSP,publication,systems,3,"sosp;symposium on operating systems principles","description_raw;summary_raw;activities_raw",https://sosp.org,Top OS conference,TRUE,TRUE
+NSDI,publication,systems,3,"nsdi;networked systems design and implementation","description_raw;summary_raw;activities_raw",https://www.usenix.org/conferences/nsdi,Top distributed systems conference,TRUE,TRUE
+SIGCOMM,publication,systems,3,"sigcomm","description_raw;summary_raw;activities_raw",https://www.sigcomm.org,Top networking conference,TRUE,TRUE
+ASPLOS,publication,systems,3,"asplos;architectural support for programming languages","description_raw;summary_raw;activities_raw",https://www.asplos-conference.org,Architecture + systems crossover,TRUE,TRUE
+MICRO,publication,architecture,3,"micro;international symposium on microarchitecture","description_raw;summary_raw;activities_raw",https://www.microarch.org,Top computer architecture conference,TRUE,TRUE
+ISCA,publication,architecture,3,"isca;international symposium on computer architecture","description_raw;summary_raw;activities_raw",https://iscaconf.org,Top computer architecture conference,TRUE,TRUE
+HPCA,publication,architecture,3,"hpca;high performance computer architecture","description_raw;summary_raw;activities_raw",https://hpca-conf.org,Top high-perf architecture conference,TRUE,TRUE
+IEEE S&P,publication,security,3,"ieee s&p;oakland;ieee security and privacy","description_raw;summary_raw;activities_raw",https://www.ieee-security.org/TC/SP,Top security conference (aka Oakland),TRUE,TRUE
+USENIX Security,publication,security,3,"usenix security;usenix security symposium","description_raw;summary_raw;activities_raw",https://www.usenix.org/conferences,Top applied security conference,TRUE,TRUE
+CCS,publication,security,3,"ccs;acm ccs;computer and communications security","description_raw;summary_raw;activities_raw",https://www.sigsac.org/ccs,Top security conference,TRUE,TRUE
+NDSS,publication,security,2,"ndss;network and distributed system security","description_raw;summary_raw;activities_raw",https://www.ndss-symposium.org,Network security conference,TRUE,TRUE
+CRYPTO,publication,security,3,"crypto;international cryptology conference","description_raw;summary_raw;activities_raw",https://www.iacr.org/conferences/crypto,Top cryptography conference,TRUE,TRUE
+SIGMOD,publication,databases,3,"sigmod;acm sigmod","description_raw;summary_raw;activities_raw",https://sigmod.org,Top database conference,TRUE,TRUE
+VLDB,publication,databases,3,"vldb;very large data bases","description_raw;summary_raw;activities_raw",https://vldb.org,Top database conference,TRUE,TRUE
+KDD,publication,databases,2,"kdd;acm sigkdd","description_raw;summary_raw;activities_raw",https://www.kdd.org,Data mining + industry crossover,TRUE,TRUE
+ICDE,publication,databases,2,"icde;international conference on data engineering","description_raw;summary_raw;activities_raw",https://icde2024.github.io,Data engineering conference,TRUE,TRUE
+CVPR,publication,vision,3,"cvpr;computer vision and pattern recognition","description_raw;summary_raw;activities_raw",https://cvpr.thecvf.com,Top computer vision conference,TRUE,TRUE
+ICCV,publication,vision,3,"iccv;international conference on computer vision","description_raw;summary_raw;activities_raw",https://iccv.thecvf.com,Top computer vision conference,TRUE,TRUE
+ECCV,publication,vision,3,"eccv;european conference on computer vision","description_raw;summary_raw;activities_raw",https://eccv2024.ecva.net,Top European vision venue,TRUE,TRUE
+ACL,publication,nlp,3,"acl;association for computational linguistics","description_raw;summary_raw;activities_raw",https://www.aclweb.org,Top NLP conference,TRUE,TRUE
+EMNLP,publication,nlp,3,"emnlp;empirical methods in natural language processing","description_raw;summary_raw;activities_raw",https://2024.emnlp.org,Top applied NLP conference,TRUE,TRUE
+NAACL,publication,nlp,2,"naacl;north american chapter of the acl","description_raw;summary_raw;activities_raw",https://naacl.org,Strong regional NLP conference,TRUE,TRUE
+RSS,publication,robotics,3,"rss;robotics science and systems","description_raw;summary_raw;activities_raw",https://roboticsconference.org,Very selective robotics conference,TRUE,TRUE
+ICRA,publication,robotics,3,"icra;international conference on robotics and automation","description_raw;summary_raw;activities_raw",https://www.icra2024.org,Largest broad robotics conference,TRUE,TRUE
+IROS,publication,robotics,3,"iros;intelligent robots and systems","description_raw;summary_raw;activities_raw",https://iros2024-abudhabi.org,Industry-heavy robotics conference,TRUE,TRUE
+CoRL,publication,robotics,3,"corl;conference on robot learning","description_raw;summary_raw;activities_raw",https://corl.org,Robotics + ML; fast-rising,TRUE,TRUE
+CHI,publication,hci,3,"chi;sigchi;conference on human factors","description_raw;summary_raw;activities_raw",https://chi.acm.org,Top HCI conference,TRUE,TRUE
+UIST,publication,hci,3,"uist;user interface software and technology","description_raw;summary_raw;activities_raw",https://uist.acm.org,Elite interface research conference,TRUE,TRUE
+ISMB,publication,bio,3,"ismb;intelligent systems for molecular biology","description_raw;summary_raw;activities_raw",https://www.iscb.org,Top computational biology venue,TRUE,TRUE
+RECOMB,publication,bio,3,"recomb;research in computational molecular biology","description_raw;summary_raw;activities_raw",https://www.recomb.org,Computational biology theory,TRUE,TRUE
+Nature,publication,journal,3,"nature;nature journal","description_raw;summary_raw;activities_raw",https://www.nature.com,Top general science journal,TRUE,TRUE
+Science,publication,journal,3,"science;science journal;science magazine","description_raw;summary_raw;activities_raw",https://www.science.org,Top general science journal,TRUE,TRUE
+Cell,publication,journal,3,"cell;cell journal","description_raw;summary_raw;activities_raw",https://www.cell.com,Top life sciences journal,TRUE,TRUE
+PNAS,publication,journal,3,"pnas;proceedings of the national academy of sciences","description_raw;summary_raw;activities_raw",https://www.pnas.org,Broad elite research journal,TRUE,TRUE
+Nature Biotechnology,publication,journal,3,"nature biotechnology;nature biotech","description_raw;summary_raw;activities_raw",https://www.nature.com/nbt,Industry-impact biotech journal,TRUE,TRUE
+JMLR,publication,journal,3,"jmlr;journal of machine learning research","description_raw;summary_raw;activities_raw",https://jmlr.org,ML journal gold standard,TRUE,TRUE
+Communications of the ACM,publication,journal,2,"cacm;communications of the acm","description_raw;summary_raw;activities_raw",https://cacm.acm.org,CS recognition,TRUE,TRUE
+ISSCC,publication,hardware,3,"isscc;international solid state circuits","description_raw;summary_raw;activities_raw",https://www.isscc.org,Top circuits conference (Chip Olympics),TRUE,TRUE
+DAC,publication,hardware,3,"dac;design automation conference","description_raw;summary_raw;activities_raw",https://www.dac.com,Top design automation conference,TRUE,TRUE
+Hot Chips,publication,hardware,3,"hot chips;hotchips","description_raw;summary_raw;activities_raw",https://hotchips.org,Industry + academia hardware showcase,TRUE,TRUE
+VLSI Symposium,publication,hardware,3,"vlsi symposium;symposium on vlsi","description_raw;summary_raw;activities_raw",https://www.vlsisymposium.org,Elite semiconductor conference,TRUE,TRUE
+CICC,publication,hardware,3,"cicc;custom integrated circuits conference","description_raw;summary_raw;activities_raw",https://www.cicc.ieee.org,Top custom IC design conference,TRUE,TRUE

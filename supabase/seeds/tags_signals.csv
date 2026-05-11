@@ -1,0 +1,13 @@
+canonical_name,category,subcategory,tier_group,aliases,source_field_hints,canonical_url,description,is_positive,is_active
+Army ROTC,military,rotc,2,"army rotc;reserve officers training corps","activities_raw;description_raw;experience.title_raw",https://www.goarmy.com/rotc.html,US Army ROTC; defense pipeline tag,TRUE,TRUE
+Navy ROTC,military,rotc,2,"navy rotc;nrotc","activities_raw;description_raw;experience.title_raw",https://www.netc.navy.mil/NSTC/NROTC,US Navy ROTC,TRUE,TRUE
+Air Force ROTC,military,rotc,2,"afrotc;air force rotc","activities_raw;description_raw;experience.title_raw",https://www.afrotc.com,US Air Force ROTC,TRUE,TRUE
+Marine Corps PLC,military,rotc,2,"plc;platoon leaders class;marine corps plc","activities_raw;description_raw;experience.title_raw",https://www.marines.com/become-a-marine/officer/plc.html,USMC officer commissioning track,TRUE,TRUE
+US Army Veteran,military,veteran,2,"us army;army veteran;former us army","experience.title_raw;experience.company_name_raw",https://www.army.mil,Active or prior US Army service; tag for defense fit,TRUE,TRUE
+US Navy Veteran,military,veteran,2,"us navy;navy veteran;former us navy","experience.title_raw;experience.company_name_raw",https://www.navy.mil,Active or prior US Navy service,TRUE,TRUE
+US Air Force Veteran,military,veteran,2,"usaf;air force veteran","experience.title_raw;experience.company_name_raw",https://www.airforce.com,Active or prior USAF service,TRUE,TRUE
+US Marine Corps Veteran,military,veteran,2,"usmc;marine corps veteran;former marine","experience.title_raw;experience.company_name_raw",https://www.marines.mil,Active or prior USMC service,TRUE,TRUE
+US Space Force,military,veteran,2,"us space force;ussf","experience.title_raw;experience.company_name_raw",https://www.spaceforce.mil,US Space Force service,TRUE,TRUE
+US Coast Guard Veteran,military,veteran,2,"uscg;coast guard veteran","experience.title_raw;experience.company_name_raw",https://www.uscg.mil,Active or prior USCG service,TRUE,TRUE
+US Patent Holder,patent,patent,2,"us patent;uspto;patent holder;inventor","summary_raw;description_raw;activities_raw",https://www.uspto.gov,Holds at least one US patent; deep tech signal,TRUE,TRUE
+Has Conference Publication,publication,publication,2,"published at;paper accepted;first author;corresponding author","description_raw;summary_raw",,Has published research at a notable conference (use conference dictionary for venue tier),TRUE,TRUE
