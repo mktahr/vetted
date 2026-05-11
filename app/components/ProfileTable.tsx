@@ -482,12 +482,20 @@ export default function ProfileTable() {
 
         // Signal filter options: category-level + individual signals
         const SIGNAL_CATEGORY_ORDER = ['founder','military','national_lab','fellowship','scholarship','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
+        // Full audit: every signal_dictionary.category enum value must have a label
+        // here. Categories not in ORDER above but present on candidates fall through
+        // to the end of the list — still need a label or they render lowercase.
         const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
           founder:'Founder', military:'Military', national_lab:'National Lab',
           fellowship:'Fellowship', scholarship:'Scholarship',
           academic_distinction:'Academic', olympiad:'Olympiad',
+          publication:'Publication', patent:'Patent', open_source:'Open Source',
+          speaking:'Speaking', writing:'Writing',
           competition:'Competition', hackathon:'Hackathon',
           athletics:'Athletics', engineering_team:'Eng. Team', student_leadership:'Leadership', greek_life:'Greek Life',
+          career_changer:'Career Changer', self_taught:'Self-Taught',
+          teaching:'Teaching', hospitality:'Hospitality',
+          language:'Language', other:'Other',
         }
         // Collect unique categories that have signals on any person
         const catsWithSignals = new Set<string>()

@@ -186,12 +186,18 @@ function SearchBuilderInner() {
 
       // Signal options: category-level + individual
       const SIGNAL_CATEGORY_ORDER = ['founder','military','national_lab','fellowship','scholarship','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
+      // Full audit: every signal_dictionary.category enum value must have a label.
       const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
         founder:'Founder', military:'Military', national_lab:'National Lab',
         fellowship:'Fellowship', scholarship:'Scholarship',
         academic_distinction:'Academic', olympiad:'Olympiad',
+        publication:'Publication', patent:'Patent', open_source:'Open Source',
+        speaking:'Speaking', writing:'Writing',
         competition:'Competition', hackathon:'Hackathon',
         athletics:'Athletics', engineering_team:'Eng. Team', student_leadership:'Leadership', greek_life:'Greek Life',
+        career_changer:'Career Changer', self_taught:'Self-Taught',
+        teaching:'Teaching', hospitality:'Hospitality',
+        language:'Language', other:'Other',
       }
       const catsWithSignals = new Set<string>()
       const allSignalIds = new Map<string, { name: string; cat: string }>()

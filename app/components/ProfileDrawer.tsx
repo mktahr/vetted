@@ -97,6 +97,9 @@ const SIGNAL_CATEGORY_ORDER = [
   'student_leadership', 'greek_life',
 ]
 
+// Audited against signal_dictionary.category CHECK constraint (migration 040).
+// Every enum value must have a label here, otherwise the drawer renders the
+// raw lowercase enum (visible bug — see "patent" in the 2026-05-11 test screenshots).
 const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
   founder: 'Founder',
   military: 'Military',
@@ -105,12 +108,23 @@ const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
   scholarship: 'Scholarship',
   academic_distinction: 'Academic',
   olympiad: 'Olympiad',
+  publication: 'Publication',
+  patent: 'Patent',
+  open_source: 'Open Source',
+  speaking: 'Speaking',
+  writing: 'Writing',
   competition: 'Competition',
   hackathon: 'Hackathon',
   athletics: 'Athletics',
   engineering_team: 'Engineering Team',
   student_leadership: 'Leadership',
   greek_life: 'Greek Life',
+  career_changer: 'Career Changer',
+  self_taught: 'Self-Taught',
+  teaching: 'Teaching',
+  hospitality: 'Hospitality',
+  language: 'Language',
+  other: 'Other',
 }
 
 export default function ProfileDrawer({ person, experiences, education, signals, currentSeniority, isOpen, onClose, onPrev, onNext }: ProfileDrawerProps) {
