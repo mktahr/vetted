@@ -26,11 +26,9 @@ function cleanCompanyName(name: string | null | undefined): string | null {
 
 // Bucket chip using design system tag palette
 const BUCKET_TAG: Record<CandidateBucket, { label: string; bg: string; border: string; text: string }> = {
-  vetted_talent:    { label: 'Vetted Talent',    bg: 'var(--tag-sage-bg)',  border: 'var(--tag-sage-border)',  text: 'var(--tag-sage-text)' },
-  high_potential:   { label: 'High Potential',   bg: 'var(--tag-steel-bg)', border: 'var(--tag-steel-border)', text: 'var(--tag-steel-text)' },
-  silver_medalist:  { label: 'Silver Medalist',  bg: 'var(--tag-slate-bg)', border: 'var(--tag-slate-border)', text: 'var(--tag-slate-text)' },
-  non_vetted:       { label: 'Non-Vetted',       bg: 'var(--tag-sand-bg)',  border: 'var(--tag-sand-border)',  text: 'var(--tag-sand-text)' },
+  vetted:           { label: 'Vetted',           bg: 'var(--tag-sage-bg)',  border: 'var(--tag-sage-border)',  text: 'var(--tag-sage-text)' },
   needs_review:     { label: 'Needs Review',     bg: 'var(--tag-clay-bg)',  border: 'var(--tag-clay-border)',  text: 'var(--tag-clay-text)' },
+  flagged:          { label: 'Flagged',          bg: 'var(--tag-sand-bg)',  border: 'var(--tag-sand-border)',  text: 'var(--tag-sand-text)' },
 }
 
 function BucketChip({ bucket }: { bucket: CandidateBucket | null | undefined }) {
@@ -360,7 +358,7 @@ export default function ProfileTable() {
           { data: signalsData },
         ] = await Promise.all([
           supabase.from('people').select('*, companies:current_company_id ( company_name )').order('created_at', { ascending: false }),
-          supabase.from('candidate_bucket_assignments').select('person_id, candidate_bucket, assignment_reason, effective_at').order('effective_at', { ascending: false }),
+          supabase.from('candidate_bucket_assignments').select('person_id, candidate_bucket, flagged_reasons, assignment_reason, effective_at').order('effective_at', { ascending: false }),
           supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, seniority_normalized, start_date, end_date, is_current, employment_type_normalized, title_raw, description_raw'),
           supabase.from('person_education').select('person_id, school_id, school_name_raw, degree_raw, degree_level, field_of_study_raw, start_year, end_year'),
           supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
@@ -374,8 +372,16 @@ export default function ProfileTable() {
 
         if (peopleErr) { setError(`Database error: ${peopleErr.message}`); return }
 
-        const latestBucket: Record<string, { bucket: CandidateBucket; reason: string | null }> = {}
-        for (const r of bucketData || []) { if (!latestBucket[r.person_id]) latestBucket[r.person_id] = { bucket: r.candidate_bucket as CandidateBucket, reason: r.assignment_reason } }
+        const latestBucket: Record<string, { bucket: CandidateBucket; reason: string | null; flagged_reasons: string[] }> = {}
+        for (const r of bucketData || []) {
+          if (!latestBucket[r.person_id]) {
+            latestBucket[r.person_id] = {
+              bucket: r.candidate_bucket as CandidateBucket,
+              reason: r.assignment_reason,
+              flagged_reasons: (r as any).flagged_reasons || [],
+            }
+          }
+        }
 
         // V1 (post-migration 031): track company category + review_status separately
         const companyCategory: Record<string, 'hardware' | 'non_hardware' | null> = {}
@@ -433,7 +439,7 @@ export default function ProfileTable() {
 
         setPeople((peopleData || []).map((r: any) => ({
           ...r, current_company_name: r.companies?.company_name || null,
-          latest_bucket: latestBucket[r.person_id]?.bucket ?? null, latest_bucket_reason: latestBucket[r.person_id]?.reason ?? null,
+          latest_bucket: latestBucket[r.person_id]?.bucket ?? null, latest_bucket_reason: latestBucket[r.person_id]?.reason ?? null, latest_flagged_reasons: latestBucket[r.person_id]?.flagged_reasons ?? null,
           company_ids_all: companyIds[r.person_id] || new Set(), school_ids_all: schoolIds[r.person_id] || new Set(),
           experiences_lite: expLite[r.person_id] || [], education_lite: eduLite[r.person_id] || [],
           all_specialties: allSpecs[r.person_id] || new Set(),
@@ -481,12 +487,12 @@ export default function ProfileTable() {
         setSignalsByPerson(sigMap)
 
         // Signal filter options: category-level + individual signals
-        const SIGNAL_CATEGORY_ORDER = ['founder','military','national_lab','fellowship','scholarship','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
+        const SIGNAL_CATEGORY_ORDER = ['founder','incubator','military','national_lab','fellowship','scholarship','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
         // Full audit: every signal_dictionary.category enum value must have a label
         // here. Categories not in ORDER above but present on candidates fall through
         // to the end of the list — still need a label or they render lowercase.
         const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
-          founder:'Founder', military:'Military', national_lab:'National Lab',
+          founder:'Founder', incubator:'Incubator', military:'Military', national_lab:'National Lab',
           fellowship:'Fellowship', scholarship:'Scholarship',
           academic_distinction:'Academic', olympiad:'Olympiad',
           publication:'Publication', patent:'Patent', open_source:'Open Source',
@@ -573,8 +579,19 @@ export default function ProfileTable() {
 
   const filteredPeople = useMemo(() => {
     let rows: PersonWithFilters[] = [...people]
+    // Default exclusion: current founders are not recruitable targets per V1 spec.
+    // Opt-in toggle to include them lives in the backlog (kebab/recruiter view PR).
+    rows = rows.filter(p => !p.is_current_founder)
     if (searchQuery) { const q = searchQuery.toLowerCase(); rows = rows.filter(p => p.full_name?.toLowerCase().includes(q) || p.current_company_name?.toLowerCase().includes(q) || p.current_title_raw?.toLowerCase().includes(q) || p.location_name?.toLowerCase().includes(q)) }
-    if (bucketSel.length > 0) { const s = new Set(bucketSel); rows = rows.filter(p => p.latest_bucket && s.has(p.latest_bucket)) }
+    // Bucket filter. Default-exclude 'flagged' unless admin explicitly opts in
+    // via the bucket sidebar selection (matches user spec: "flagged means they
+    // don't show up unless we manually override that it needs review").
+    if (bucketSel.length > 0) {
+      const s = new Set(bucketSel)
+      rows = rows.filter(p => p.latest_bucket && s.has(p.latest_bucket))
+    } else {
+      rows = rows.filter(p => p.latest_bucket !== 'flagged')
+    }
     if (stageSel.length > 0) { const s = new Set(stageSel); rows = rows.filter(p => p.career_stage_assigned && s.has(p.career_stage_assigned)) }
     // Seniority with per-pill scope (OR across pills)
     if (seniorityPills.length > 0) {
@@ -1053,7 +1070,7 @@ export default function ProfileTable() {
                     </th>
                     <th style={{ ...eyebrow, width: 28, padding: '8px 4px' }} title="Add to list" />
                     {[
-                      {h:'Name',field:null},{h:'Company',field:null},{h:'Title',field:null},{h:'Specialty',field:null},{h:'School',field:null},
+                      {h:'Name',field:null},{h:'Bucket',field:null},{h:'Company',field:null},{h:'Title',field:null},{h:'Specialty',field:null},{h:'School',field:null},
                       {h:'Yrs',field:'years_experience_estimate' as SortField},
                       {h:'Cur Ten',field:'current_tenure' as SortField},
                       {h:'Avg Ten',field:'avg_tenure' as SortField},
@@ -1068,7 +1085,7 @@ export default function ProfileTable() {
                 </thead>
                 <tbody>
                   {filteredPeople.length === 0 ? (
-                    <tr><td colSpan={10} style={{ padding: 24, textAlign: 'center', color: 'var(--fg-tertiary)' }}>No candidates match these filters</td></tr>
+                    <tr><td colSpan={11} style={{ padding: 24, textAlign: 'center', color: 'var(--fg-tertiary)' }}>No candidates match these filters</td></tr>
                   ) : filteredPeople.map(person => {
                     const isSelected = selectedPerson?.person_id === person.person_id
                     return (
@@ -1115,6 +1132,10 @@ export default function ProfileTable() {
                           onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none' }}>
                           {person.full_name || 'N/A'}
                         </button>
+                      </td>
+                      {/* Bucket */}
+                      <td style={{ padding: '8px 8px', whiteSpace: 'nowrap' }}>
+                        <BucketChip bucket={person.latest_bucket} />
                       </td>
                       {/* Company */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>

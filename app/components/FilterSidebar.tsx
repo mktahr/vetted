@@ -77,9 +77,9 @@ export interface FilterSidebarProps {
 }
 
 const BUCKET_OPTIONS: MultiSelectOption[] = [
-  { value: 'vetted_talent', label: 'Vetted Talent' }, { value: 'high_potential', label: 'High Potential' },
-  { value: 'silver_medalist', label: 'Silver Medalist' }, { value: 'non_vetted', label: 'Non-Vetted' },
+  { value: 'vetted', label: 'Vetted' },
   { value: 'needs_review', label: 'Needs Review' },
+  { value: 'flagged', label: 'Flagged' },
 ]
 const STAGE_OPTIONS: MultiSelectOption[] = [
   { value: 'pre_career', label: 'Pre-Career' }, { value: 'early_career', label: 'Early Career' },

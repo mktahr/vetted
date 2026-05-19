@@ -21,7 +21,7 @@ import { getFtExperiences, type FtExperience, type FtEducation } from '@/lib/ten
 export type SeniorityLevel =
   | 'unknown'
   | 'intern'
-  | 'entry'
+  | 'junior_ic'
   | 'individual_contributor'
   | 'senior_ic'
   | 'lead_ic'
@@ -31,6 +31,7 @@ export type SeniorityLevel =
   // Deprecated but kept for backward compat with old data
   | 'student'
   | 'lead'
+  | 'entry'  // renamed to junior_ic in migration 048; type kept so older code paths compile
 
 export interface SeniorityRule {
   rule_id: number
@@ -168,10 +169,10 @@ const DESCRIPTION_SENIORITY_SIGNALS: Array<{ pattern: RegExp; level: SeniorityLe
   { pattern: /\blead\b/i, level: 'lead_ic', rank: 5 },
   { pattern: /\bsenior\b/i, level: 'senior_ic', rank: 4 },
   { pattern: /\bsr\.\b/i, level: 'senior_ic', rank: 4 },
-  { pattern: /\bjunior\b/i, level: 'entry', rank: 2 },
-  { pattern: /\bjr\.\b/i, level: 'entry', rank: 2 },
-  { pattern: /\bassociate\b/i, level: 'entry', rank: 2 },
-  { pattern: /\bnew grad\b/i, level: 'entry', rank: 2 },
+  { pattern: /\bjunior\b/i, level: 'junior_ic', rank: 2 },
+  { pattern: /\bjr\.\b/i, level: 'junior_ic', rank: 2 },
+  { pattern: /\bassociate\b/i, level: 'junior_ic', rank: 2 },
+  { pattern: /\bnew grad\b/i, level: 'junior_ic', rank: 2 },
   { pattern: /\binternship\b/i, level: 'intern', rank: 1 },
   { pattern: /\bintern\b/i, level: 'intern', rank: 1 },
 ]
@@ -199,7 +200,7 @@ export function scanDescriptionForSeniority(
 // Seniority levels where a description scan should NOT override.
 // If the title already gave a specific signal, trust it.
 const TITLE_IS_AUTHORITATIVE = new Set<SeniorityLevel>([
-  'intern', 'entry', 'senior_ic', 'lead_ic', 'founder', 'manager', 'executive',
+  'intern', 'junior_ic', 'senior_ic', 'lead_ic', 'founder', 'manager', 'executive',
 ])
 
 /**

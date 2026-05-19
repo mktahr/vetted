@@ -29,9 +29,9 @@ export default function SearchBuilderPage() {
 type TemporalScope = 'ever' | 'currently' | 'previously'
 
 const BUCKET_OPTIONS: MultiSelectOption[] = [
-  { value: 'vetted_talent', label: 'Vetted Talent' }, { value: 'high_potential', label: 'High Potential' },
-  { value: 'silver_medalist', label: 'Silver Medalist' }, { value: 'non_vetted', label: 'Non-Vetted' },
+  { value: 'vetted', label: 'Vetted' },
   { value: 'needs_review', label: 'Needs Review' },
+  { value: 'flagged', label: 'Flagged' },
 ]
 const STAGE_OPTIONS: MultiSelectOption[] = [
   { value: 'pre_career', label: 'Pre-Career' }, { value: 'early_career', label: 'Early Career' },
@@ -185,10 +185,10 @@ function SearchBuilderInner() {
       setSpecialtyOptions((specs || []).map((d: any) => ({ value: d.specialty_normalized, label: d.specialty_normalized.replace(/_/g, ' '), sublabel: (d.parent_function || '').replace(/_/g, ' ') })))
 
       // Signal options: category-level + individual
-      const SIGNAL_CATEGORY_ORDER = ['founder','military','national_lab','fellowship','scholarship','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
+      const SIGNAL_CATEGORY_ORDER = ['founder','incubator','military','national_lab','fellowship','scholarship','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
       // Full audit: every signal_dictionary.category enum value must have a label.
       const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
-        founder:'Founder', military:'Military', national_lab:'National Lab',
+        founder:'Founder', incubator:'Incubator', military:'Military', national_lab:'National Lab',
         fellowship:'Fellowship', scholarship:'Scholarship',
         academic_distinction:'Academic', olympiad:'Olympiad',
         publication:'Publication', patent:'Patent', open_source:'Open Source',

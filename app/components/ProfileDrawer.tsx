@@ -50,11 +50,9 @@ function cleanCompanyName(name: string | null | undefined): string | null {
 }
 
 const BUCKET_TAG: Record<CandidateBucket, { label: string; bg: string; border: string; text: string }> = {
-  vetted_talent:    { label: 'Vetted Talent',    bg: 'var(--tag-sage-bg)',  border: 'var(--tag-sage-border)',  text: 'var(--tag-sage-text)' },
-  high_potential:   { label: 'High Potential',   bg: 'var(--tag-steel-bg)', border: 'var(--tag-steel-border)', text: 'var(--tag-steel-text)' },
-  silver_medalist:  { label: 'Silver Medalist',  bg: 'var(--tag-slate-bg)', border: 'var(--tag-slate-border)', text: 'var(--tag-slate-text)' },
-  non_vetted:       { label: 'Non-Vetted',       bg: 'var(--tag-sand-bg)',  border: 'var(--tag-sand-border)',  text: 'var(--tag-sand-text)' },
+  vetted:           { label: 'Vetted',           bg: 'var(--tag-sage-bg)',  border: 'var(--tag-sage-border)',  text: 'var(--tag-sage-text)' },
   needs_review:     { label: 'Needs Review',     bg: 'var(--tag-clay-bg)',  border: 'var(--tag-clay-border)',  text: 'var(--tag-clay-text)' },
+  flagged:          { label: 'Flagged',          bg: 'var(--tag-sand-bg)',  border: 'var(--tag-sand-border)',  text: 'var(--tag-sand-text)' },
 }
 
 const navBtn: React.CSSProperties = {
@@ -91,7 +89,7 @@ function computeDuration(start: string | null, end: string | null, isCurrent: bo
 
 // Category display order for signals section
 const SIGNAL_CATEGORY_ORDER = [
-  'founder', 'military', 'national_lab',
+  'founder', 'incubator', 'military', 'national_lab',
   'fellowship', 'scholarship', 'academic_distinction', 'olympiad',
   'competition', 'hackathon', 'athletics', 'engineering_team',
   'student_leadership', 'greek_life',
@@ -102,6 +100,7 @@ const SIGNAL_CATEGORY_ORDER = [
 // raw lowercase enum (visible bug — see "patent" in the 2026-05-11 test screenshots).
 const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
   founder: 'Founder',
+  incubator: 'Incubator',
   military: 'Military',
   national_lab: 'National Lab',
   fellowship: 'Fellowship',
@@ -149,10 +148,18 @@ export default function ProfileDrawer({ person, experiences, education, signals,
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div style={{ flex: 1 }}>
               <h2 style={{ fontSize: 'var(--fs-22)', fontWeight: 'var(--fw-semibold)', color: 'var(--fg-primary)', letterSpacing: '-0.01em' }}>{person.full_name}</h2>
-              {person.latest_bucket && (() => {
-                const s = BUCKET_TAG[person.latest_bucket]
-                return <span style={{ display: 'inline-block', marginTop: 8, padding: '2px 10px', borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)', fontWeight: 'var(--fw-medium)', background: s.bg, border: `1px solid ${s.border}`, color: s.text }}>{s.label}</span>
-              })()}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 8 }}>
+                {person.latest_bucket && (() => {
+                  const s = BUCKET_TAG[person.latest_bucket]
+                  return <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)', fontWeight: 'var(--fw-medium)', background: s.bg, border: `1px solid ${s.border}`, color: s.text }}>{s.label}</span>
+                })()}
+                {person.is_former_founder && (
+                  <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)', fontWeight: 'var(--fw-medium)', background: 'var(--tag-sage-bg)', border: '1px solid var(--tag-sage-border)', color: 'var(--tag-sage-text)' }}>Former Founder</span>
+                )}
+                {person.is_current_founder && (
+                  <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)', fontWeight: 'var(--fw-medium)', background: 'var(--tag-clay-bg)', border: '1px solid var(--tag-clay-border)', color: 'var(--tag-clay-text)' }}>Current Founder</span>
+                )}
+              </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <button onClick={onPrev ?? undefined} disabled={!onPrev} style={{ ...navBtn, opacity: onPrev ? 1 : 0.3, cursor: onPrev ? 'pointer' : 'not-allowed' }} title="Previous">‹</button>
@@ -161,10 +168,21 @@ export default function ProfileDrawer({ person, experiences, education, signals,
             </div>
           </div>
 
-          {/* Score */}
-          {person.latest_bucket_reason && (
-            <div style={{ marginBottom: 16, padding: 8, background: 'var(--bg-surface-raised)', borderRadius: 'var(--r-button)', border: '1px solid var(--border-subtle)', fontSize: 'var(--fs-12)', fontFamily: 'var(--font-mono)', color: 'var(--fg-secondary)' }}>
-              {person.latest_bucket_reason}
+          {/* Score reasoning + flag chips */}
+          {(person.latest_bucket_reason || (person.latest_flagged_reasons || []).length > 0) && (
+            <div style={{ marginBottom: 16, padding: 8, background: 'var(--bg-surface-raised)', borderRadius: 'var(--r-button)', border: '1px solid var(--border-subtle)' }}>
+              {person.latest_bucket_reason && (
+                <div style={{ fontSize: 'var(--fs-12)', fontFamily: 'var(--font-mono)', color: 'var(--fg-secondary)' }}>
+                  {person.latest_bucket_reason}
+                </div>
+              )}
+              {(person.latest_flagged_reasons || []).length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: person.latest_bucket_reason ? 8 : 0 }}>
+                  {(person.latest_flagged_reasons || []).map(flag => (
+                    <span key={flag} style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-11)', background: 'var(--tag-clay-bg)', border: '1px solid var(--tag-clay-border)', color: 'var(--tag-clay-text)' }}>{flag.replace(/_/g, ' ')}</span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

@@ -1,11 +1,15 @@
 // ─── Types matching the normalized database schema ────────────────────────
 
 export type CandidateBucket =
-  | 'vetted_talent'
-  | 'high_potential'
-  | 'silver_medalist'
-  | 'non_vetted'
+  | 'vetted'
+  | 'flagged'
   | 'needs_review'
+
+export type FlaggedReason =
+  | 'low_score'
+  | 'contractor_only'
+  | 'job_hopping'
+  | 'unknown_seniority'
 
 export interface ScoreComponent {
   name: string
@@ -37,6 +41,7 @@ export interface BucketAssignment {
   bucket_assignment_id: string
   person_id: string
   candidate_bucket: CandidateBucket
+  flagged_reasons: FlaggedReason[]
   assigned_by: string
   assignment_reason: string | null
   confidence: number | null
@@ -70,6 +75,8 @@ export interface Person {
   early_stage_companies_count: number
   has_hypergrowth_experience: boolean
   hypergrowth_companies_count: number
+  is_current_founder: boolean
+  is_former_founder: boolean
   narrative_summary: string | null
   narrative_summary_generated_at: string | null
   clearance_level: ClearanceLevel
@@ -80,6 +87,7 @@ export interface Person {
   current_company_name?: string | null
   latest_bucket?: CandidateBucket | null
   latest_bucket_reason?: string | null
+  latest_flagged_reasons?: FlaggedReason[] | null
   person_experiences?: Experience[]
   person_education?: Education[]
 }

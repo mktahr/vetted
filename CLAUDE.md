@@ -244,31 +244,43 @@ As of 2026-04-24, the ingest route **no longer writes to the legacy `profiles` t
 
 ---
 
-## Candidate Bucket Taxonomy
+## Candidate Bucket Taxonomy (V1 — post-migrations 049, 058)
 
-| Bucket | Meaning |
-|---|---|
-| `vetted_talent` | Clearly crosses the high-signal bar — top tier |
-| `high_potential` | Strong signals but earlier in career, or not yet fully proven |
-| `silver_medalist` | Strong, credible candidate — doesn't make the top tier but clearly above the "good enough" baseline (e.g., past finalists, near-misses) |
-| `non_vetted` | Capable, but doesn't cross the Vetted bar |
-| `needs_review` | Default state before the scoring engine has classified them, OR scoring failed / data was insufficient. A person in any other bucket has been deterministically scored |
+Collapsed from 5 values to 3 in migration 049. Migration 058 renamed `non_vetted` → `flagged` for clarity (the old name was ambiguous — could read as "not yet vetted").
 
-DO NOT add "rejected" or "excluded" to this taxonomy. That lives in `candidate_decision_state`.
+| Bucket | Meaning | Who assigns | Default visibility |
+|---|---|---|---|
+| `vetted` | Score ≥ stage threshold AND no system flags | Scoring engine (auto) | Shown by default |
+| `needs_review` | Default state for everything that isn't clean enough to be vetted — low score, has flags, or unknown_seniority. Still in the recruiter pool. | Scoring engine (auto) | Shown by default |
+| `flagged` | Admin manually hid this candidate. Carries flagged_reasons[] explaining why. | Admin only — engine never assigns | **Hidden by default** unless admin explicitly selects "Flagged" in the bucket filter sidebar |
 
-**Note on `needs_review`:** this bucket value means "not yet classified by the scorer" — it is distinct from the `candidate_review_flags` table, which tracks manual-review signals (credential ambiguity, contractor ambiguity, etc.) on already-classified candidates. Per Rule 1, the two dimensions remain independent: a `vetted_talent` candidate can still have open review flags.
+DO NOT add "rejected" or "excluded" to this taxonomy. That lives in `candidate_decision_state`. The dropped values (`vetted_talent`, `high_potential`, `silver_medalist`) were removed from the CHECK constraint in migration 049 along with the old `candidate_bucket_type` enum.
+
+### Default-exclude behavior for `flagged`
+
+Implemented in [app/components/ProfileTable.tsx](app/components/ProfileTable.tsx) `filteredPeople`: when the bucket filter sidebar selection is empty, `flagged` candidates are filtered out. Admin must explicitly select "Flagged" in the sidebar to see them. This is the canonical mechanism for "admin manual hide" — no separate query-level filter needed.
+
+### flagged_reasons column (added in 049)
+
+`candidate_bucket_assignments.flagged_reasons TEXT[]` carries system-computed flags. Bucket assignment uses this:
+
+| Condition | Bucket | flagged_reasons |
+|---|---|---|
+| `highest_seniority_reached='unknown'` | needs_review | `['unknown_seniority', ...]` |
+| Only contract/freelance employment | needs_review | `['contractor_only', ...]` |
+| Avg tenure below half of penalty threshold | needs_review | `['job_hopping', ...]` |
+| total_score < stage threshold | needs_review | `['low_score', ...]` |
+| score ≥ threshold AND empty flags | **vetted** | `[]` |
+
+Flags stack (a candidate can have all of unknown_seniority + low_score + job_hopping). Admin-managed concerns still live in `candidate_review_flags` (separate table) — flagged_reasons is system-computed only.
 
 ### Display labels (UI)
 
-When rendering buckets in the UI (tables, chips, detail pages), use these title-cased labels. The database always stores the snake_case enum value.
-
 | Enum value | UI label |
 |---|---|
-| `vetted_talent` | Vetted Talent |
-| `high_potential` | High Potential |
-| `silver_medalist` | Silver Medalist |
-| `non_vetted` | Non-Vetted |
+| `vetted` | Vetted |
 | `needs_review` | Needs Review |
+| `flagged` | Flagged |
 
 ---
 
@@ -300,16 +312,18 @@ We do NOT use Crust's `years_of_experience_raw` because it includes pre-graduati
 ## Seniority System
 
 ### Enum (9 active values + 2 deprecated)
-`unknown`(0) < `intern`(1) < `entry`(2) < `individual_contributor`(3) < `senior_ic`(4) < `lead_ic`(5) < `founder`(6) < `manager`(7) < `executive`(8)
+`unknown`(0) < `intern`(1) < `junior_ic`(2) < `individual_contributor`(3) < `senior_ic`(4) < `lead_ic`(5) < `founder`(6) < `manager`(7) < `executive`(8)
 
 Deprecated aliases kept in the enum for backward compat: `student`(=intern), `lead`(=lead_ic).
+
+Note: `junior_ic` was renamed from `entry` in migration 048. The rename was an `ALTER TYPE RENAME VALUE` — all enum-typed columns cascaded automatically. The user-facing label "Junior IC" lives in UI label maps.
 
 Stored in `seniority_dictionary` with `rank_order` 0–8.
 
 | Level | Meaning | Examples |
 |---|---|---|
 | `intern` | Internship, co-op, student worker | SWE Intern, Research Intern |
-| `entry` | Junior, associate, new grad | Associate Engineer, SDE I, Junior PM |
+| `junior_ic` | Junior, associate, new grad | Associate Engineer, SDE I, Junior PM |
 | `individual_contributor` | Mid-level IC | Software Engineer, SDE II, Product Manager |
 | `senior_ic` | Senior IC | Senior Software Engineer, SDE III, Senior PM |
 | `lead_ic` | Staff, principal, architect, tech lead | Staff Engineer, Principal PM, TLM |
@@ -348,47 +362,54 @@ Then exact case-insensitive title lookup against the rule map; first match (lowe
 
 ---
 
-## Scoring Spec (Phase 2)
+## Scoring Spec (V1 — post-migrations 049-055)
 
 The engine lives at [lib/scoring/score-candidate.ts](lib/scoring/score-candidate.ts). Summary:
 
-### Structure
+### Architecture: config-driven bonus, hardcoded core
 
-Each career stage has three buckets of signals:
+- **CORE weights stay hardcoded** in [lib/scoring/score-candidate.ts](lib/scoring/score-candidate.ts) (`STAGE_CORE_WEIGHTS`, `RECRUITING_OVERRIDE_CORE`, `EXECUTIVE_OVERRIDE_CORE`). Per user decision in the V1 refactor: "no changes to existing core weight profiles."
+- **BONUS weights are read from `signal_scoring_weights`** (migration 050, 104 rows). Keyed by `(category, tier_group, career_stage)`. Recruiters can tune via direct SQL without code deploys.
+- **TEAM membership scoring** is read from `team_role_scoring_weights` (migration 051, 48 rows). When a `person_signals` row has `category=engineering_team`, lookup uses `(team_tier, team_role_tier, career_stage)` and applies the points directly — no multiplier math.
+- **Bucket thresholds** are read from `career_stage_bucket_thresholds` (migration 052, 4 rows). Low by design (30/35/40/45) — curation at ingest is the real quality gate; the threshold is a safety net for curation accidents.
 
+Each career stage still has three categories of signals:
 - **CORE** — always evaluated, sum to ~100 points. Missing data → 0 for that component.
-- **BONUS** — only adds points if the underlying data exists. Stacks on top of core, not capped at 100.
-- **PENALTY** — only in mid/senior; scales with how far the candidate's average tenure is below the threshold.
+- **BONUS** — only adds points if the underlying data exists. Stacks on top of core, not capped at 100. Sourced from signal_scoring_weights config + person_signals_active rows.
+- **PENALTY** — only in mid/senior; scales with how far the candidate's average tenure is below the threshold. Also fires the `job_hopping` flag when avg tenure < threshold/2.
 
-### Weights by stage
+### Core weights by stage (unchanged from prior V1)
 
-**Pre-career (0–0.49 yrs)**
-- Core: education 30, degree_relevance 30, internships 40
-- Bonus: hackathons 10, clubs 10, labs 10, publications 10, open_source 10, fellowships 25
+**Pre-career (0–0.49 yrs)** — Core: education 30, degree_relevance 30, internships 40
 
-**Early career (0.5–1.99 yrs)**
-- Core: company_quality_recent 40, education 25, degree_relevance 25, internships 10
-- Bonus: company_function_quality 10, hackathons 10, publications 10, open_source 10, labs 5, fellowships 25, biz_unit 25
+**Early career (0.5–1.99 yrs)** — Core: company_quality_recent 40, education 25, degree_relevance 25, internships 10
 
-**Mid career (2–4.99 yrs)**
-- Core: company_quality_recent 60, company_quality_average 10, education 15, degree_relevance 15
-- Bonus: career_slope 15, fellowships 10, company_function_quality 10, publications 10, open_source 5, biz_unit 25
-- Penalty: if average tenure < 12 mo, deduct up to 20 pts (linear, 20 pts at 0 mo → 0 at 12 mo)
+**Mid career (2–4.99 yrs)** — Core: company_quality_recent 60, company_quality_average 10, education 15, degree_relevance 15. Penalty: avg tenure < 12 mo → deduct up to 20 pts (linear).
 
-**Senior career (5+ yrs)**
-- Core: company_quality_recent 60, company_quality_average 30, education 5, degree_relevance 5
-- Bonus: career_slope 10, company_function_quality 10, publications 10, open_source 5, biz_unit 25
-- Penalty: if average tenure < 18 mo, deduct up to 30 pts (linear, 30 pts at 0 mo → 0 at 18 mo)
+**Senior career (5+ yrs)** — Core: company_quality_recent 60, company_quality_average 30, education 5, degree_relevance 5. Penalty: avg tenure < 18 mo → deduct up to 30 pts (linear).
 
-### Signal definitions
+### Bonus categories (from signal_scoring_weights)
+
+Tiered (3 tiers × 4 stages): `olympiad`, `fellowship`, `incubator`, `national_lab`, `hackathon`, `publication`. Pre/early get same values; mid ≈ 60% taper; senior ≈ 40% taper (except publication which stays higher because cumulative).
+
+Flat (no tier): `patent`, `former_founder` (reads `people.is_former_founder`), `open_source` (placeholder — no data source yet), `growth_stage_tenure` (placeholder), `career_slope` (reads `people.title_level_slope='rising'`), `company_quality_slope` (PLACEHOLDER — bonus weight wired but computation deferred), `biz_unit` (placeholder), `company_function_quality` (reads `company_function_scores` with overall-score fallback).
+
+### Signal definitions (core)
 
 - **company_quality_recent** — avg `company_year_scores.company_score` over the years worked at the most recent full-time role. Not in scored set → 0. Normalized /5.
-- **company_quality_average** — same avg across *all* full-time roles. Not in scored set → treated as 0 per rubric. Normalized /5.
-- **education** — max `schools.school_score` across the candidate's education entries, with lookups going `schools.school_name` → `school_aliases.alias_name` → no match → 0. Whitespace and trailing `.`/`,` stripped before matching. Normalized /4.
+- **company_quality_average** — same avg across *all* full-time roles. Not in scored set → treated as 0. Normalized /5.
+- **education** — max `schools.school_score` across the candidate's education entries, with lookups going `schools.school_name` → `school_aliases.alias_name` → no match → 0. Normalized /4.
 - **degree_relevance** — dictionary lookup by function (see below). Normalized /1.
-- **internships** — avg `company_year_scores.company_score` across all internship experiences. Quality-based, *not* count-based. Normalized /5.
-- **career_slope** (BONUS only) — if `people.career_progression = 'rising'`, full bonus points. `flat`/`declining`/`insufficient_data`/null → 0. **Never subtracts.**
-- All other bonus signals (hackathons, clubs, labs, publications, open_source, fellowships, biz_unit, company_function_quality) — not yet sourced; they're declared with weights but contribute 0 until data arrives.
+- **internships** — avg `company_year_scores.company_score` across all internship experiences. Normalized /5.
+
+### Signal-driven bonus loop
+
+For each `person_signals_active` row:
+- If `category=engineering_team`: look up `team_role_scoring_weights[team_tier, team_role_tier ?? 1, stage]` (NULL role_tier treated as Member tier 1).
+- Else: look up `signal_scoring_weights[category, tier_group, stage]`. NULL tier_group hits the flat row.
+- Points summed per category for the breakdown chip ("3 signal(s)" pattern in the score_breakdown UI).
+
+Synthetic bonus signals (not from person_signals): `career_slope` reads `people.title_level_slope='rising'`, `former_founder` reads `people.is_former_founder`, `company_function_quality` reads `company_function_scores`. All three read their points value from signal_scoring_weights but pull truth from the relevant column rather than person_signals.
 
 ### Degree relevance dictionary (by function)
 
@@ -435,25 +456,34 @@ Total max = 100 core + 45 bonus.
 
 **`role_scope` component** — executive-only core signal read directly from `highest_seniority_reached`:
 - `executive` → 1.0
-- `manager` → 0.7
-- `lead` → 0.5
+- `manager` / `founder` → 0.7
+- `lead_ic` / `lead` → 0.5
+- `senior_ic` → 0.4
 - `individual_contributor` → 0.3
+- `junior_ic` / `entry` → 0.2
+- `intern` / `student` → 0.1
 - anything else → 0
 
-### Bucket assignment thresholds
+### Bucket assignment (V1 model — only `vetted` or `needs_review` ever auto-assigned; `flagged` is admin-only)
 
-| Stage | vetted_talent | high_potential | silver_medalist | non_vetted |
-|---|---|---|---|---|
-| pre_career | ≥ 60 | 45–59 | — | < 45 |
-| early_career | ≥ 65 | 50–64 | — | < 50 |
-| mid_career | ≥ 65 | — | 50–64 | < 50 |
-| senior_career | ≥ 70 | — | 55–69 | < 55 |
+Thresholds come from `career_stage_bucket_thresholds` table (migration 052):
 
-- `high_potential` applies only to pre/early career.
-- `silver_medalist` applies only to mid/senior career.
-- `needs_review` is the default state for anyone not yet scored.
+| Stage | vetted threshold |
+|---|---|
+| pre_career | ≥ 30 |
+| early_career | ≥ 35 |
+| mid_career | ≥ 40 |
+| senior_career | ≥ 45 |
 
-Final bucket is written to `candidate_bucket_assignments` with the full score breakdown in `assignment_reason`.
+Thresholds are **intentionally low** — curation at ingest is the real quality gate. The threshold is a safety net for curation accidents (e.g., a junk profile slipping through).
+
+Bucket logic (in order):
+1. Build `flagged_reasons` array from: `unknown_seniority`, `contractor_only`, `job_hopping`, `low_score`.
+2. If `flagged_reasons` is empty → bucket = `vetted`.
+3. Else → bucket = `needs_review` (with the flags array attached).
+4. `flagged` is never auto-assigned — admin-only via POST `/api/admin/bucket/[person_id]`. Default-excluded from the candidate list view.
+
+Final bucket + flagged_reasons + full score_breakdown JSONB are written to `candidate_bucket_assignments`.
 
 ---
 
@@ -472,6 +502,8 @@ All are **searchable filter tags** — never direct inputs to the score, except 
 | `early_stage_companies_count` | smallint | How many such companies. |
 | `has_hypergrowth_experience` | boolean | TRUE if any experience overlapped a year where `company_metrics_by_year.headcount_estimate` ≥ 2× the prior year. |
 | `hypergrowth_companies_count` | smallint | How many such companies. |
+| `is_current_founder` | boolean | TRUE if any `is_current=true` experience has a founder-titled role (matches `/\b(co-?)?founder\b/i` OR `seniority_normalized='founder'`). **Default search excludes these candidates** per V1 spec — active founders aren't recruitable. Filter at [app/components/ProfileTable.tsx](app/components/ProfileTable.tsx) `filteredPeople`. Opt-in toggle is in backlog. |
+| `is_former_founder` | boolean | TRUE if any past founder-titled experience exists AND `is_current_founder=FALSE` (mutually exclusive by spec). Surfaces as positive-signal chip on profile page. Also drives `former_founder` bonus weight from `signal_scoring_weights` (20 / 20 / 15 / 12 pts by stage). |
 
 ---
 
@@ -528,12 +560,21 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 - 045 — 10 new `competition` signal_dictionary rows + 21 `competitions` rows seeded (CTE-based slug→signal_id resolution; fails loud on NULL signal_id)
 - 046 — marker only; data load via `scripts/import-teams.mjs` (141 teams + 142 team_competition_map rows + 17 domain tags)
 - 047 — extended `person_signals_active` view with team + competition metadata via LATERAL subquery (no row multiplication when a team competes in multiple competitions)
+- 048 — `ALTER TYPE seniority_level RENAME VALUE 'entry' → 'junior_ic'` (enum cascade — all enum-typed columns auto-migrated); signal_dictionary CHECK extended with `incubator` category (see "Scoring Spec" + "Seniority System")
+- 049 — bucket schema swap: dropped `candidate_bucket_type` enum, replaced with TEXT + CHECK (`vetted`, `non_vetted`, `needs_review`); added `flagged_reasons TEXT[]` + GIN partial index; TRUNCATE'd existing bucket assignments (no audit value once model changed). See "Candidate Bucket Taxonomy" section.
+- 050 — `signal_scoring_weights` config table (104 rows: 6 tiered × 4 stages × 3 tiers + 8 flat × 4 stages). Read by scoring engine, mutable without code deploy. See "Scoring Spec" section.
+- 051 — `team_role_scoring_weights` config table (48 rows: 3 team_tiers × 4 role_tiers × 4 career_stages). Direct point lookup for engineering_team signals.
+- 052 — `career_stage_bucket_thresholds` config table (4 rows: pre=30, early=35, mid=40, senior=45). Low by design — curation at ingest is the real gate.
+- 053 — disable RLS on the 3 config tables from 050-052
+- 054 — reclassify 7 fellowship rows → category='incubator' (YC, EF, Antler, CDL, SPC, Pioneer, On Deck with tier adjustments); seed 38 new incubator entries (Techstars, Neo, HF0, AI Grant, In-Q-Tel, DIU, AFWERX, etc.)
+- 055 — `people.is_current_founder` + `is_former_founder` BOOLEAN columns + partial indexes. Computed by `computeAndWriteDerivedFields()` via `/\b(co-?)?founder\b/i` title match or `seniority_normalized='founder'`. Mutually exclusive by definition.
+- 058 — rename `candidate_bucket` value `non_vetted` → `flagged`. CHECK constraint updated to `(vetted, needs_review, flagged)`. Same admin-only semantic; clearer name. Default UI behavior: flagged candidates excluded from main list unless admin explicitly selects them. Numbered 058 (skipping 056/057) to avoid collision with the parallel sourcing-pipeline workstream on `sourcing-pipeline-phase1` branch.
 
 The "Normalized tables" / "Dictionary tables" lists below describe the post-migration state. They name the most-used columns; consult the actual schema for exhaustive column lists.
 
 ### Enums
-- `seniority_level` (6): `unknown`, `student`, `individual_contributor`, `lead`, `manager`, `executive`
-- `candidate_bucket_type` (5): `vetted_talent`, `high_potential`, `silver_medalist`, `non_vetted`, `needs_review`
+- `seniority_level` (9 active + 2 deprecated): `unknown`, `intern`, `junior_ic`, `individual_contributor`, `senior_ic`, `lead_ic`, `founder`, `manager`, `executive` (+ deprecated `student`, `lead`)
+- `candidate_bucket_type` — **DROPPED in migration 049**. `candidate_bucket_assignments.candidate_bucket` is now TEXT with CHECK constraint (`vetted`, `needs_review`, `flagged`) — `non_vetted` was renamed to `flagged` in migration 056.
 - `degree_level_type`: high_school, associate, bachelor, master, mba, phd, jd, md, certificate, coursework, other
 - `employment_type_norm`: full_time, contract, part_time, internship, freelance, advisory, board, unknown
 - `career_stage_type`: pre_career, early_career, mid_career, senior_career
@@ -542,7 +583,7 @@ The "Normalized tables" / "Dictionary tables" lists below describe the post-migr
 - `review_flag_status_type` / `review_flag_severity_type` / `decision_state_type`
 
 ### Normalized tables
-- **`people`** — person_id PK, full_name, linkedin_url UNIQUE, location_name, headline_raw, summary_raw, current_company_id, current_title_raw, current_title_normalized, current_function_normalized, years_experience_estimate, career_stage_assigned, career_stage_override, legacy_profile_id, **career_progression, highest_seniority_reached, has_early_stage_experience, early_stage_companies_count, has_hypergrowth_experience, hypergrowth_companies_count** (derived fields)
+- **`people`** — person_id PK, full_name, linkedin_url UNIQUE, location_name, headline_raw, summary_raw, current_company_id, current_title_raw, current_title_normalized, current_function_normalized, years_experience_estimate, career_stage_assigned, career_stage_override, legacy_profile_id, **career_progression, highest_seniority_reached, has_early_stage_experience, early_stage_companies_count, has_hypergrowth_experience, hypergrowth_companies_count, is_current_founder, is_former_founder** (derived fields)
 - **`person_experiences`** — company_id FK, title_raw, title_normalized, function_normalized, specialty_normalized, seniority_normalized, employment_type_normalized, start_date, end_date, is_current, duration_months, description_raw, is_founder_role, is_full_time_role
 - **`person_education`** — school_id FK, school_name_raw, degree_raw, degree_normalized, degree_level, field_of_study_raw, field_of_study_normalized, start_year, end_year
 - **`companies`** — company_name, primary_industry_tag, company_bucket, company_score_mode, current_status, hq_location_name, linkedin_url, website_url, **founding_year**
@@ -884,6 +925,18 @@ Required in `.env.local` and on Vercel:
 ## Backlog
 
 Not scoped to a build phase yet. Ordered roughly by dependency / impact.
+
+### V1 scoring refactor — deferred from PR A (migrations 048-055)
+
+These were intentionally cut from the V1 refactor scope to keep PR A shippable. All have clear hooks in the already-shipped code; small follow-ups each.
+
+- **Kebab dropdown + recruiter view.** Today everything renders in admin view (bucket badges, score breakdown, flagged_reasons, clearance section, **Bucket column on main list**). Recruiter view should hide admin-only signals and surface a cleaner candidate-facing card — including hiding the Bucket column. Implementation: add a `?view=admin|recruiter` URL param + global toggle in nav. Default view per route. Affects ProfileTable, ProfileDrawer, profile/[id]/page.tsx, admin/companies/*. Scope ~0.5 day.
+- **Admin field editor for derived/normalized fields.** Today there's no admin UI to manually correct specialty, seniority (per-experience or highest_seniority_reached), career_progression, title_level_slope, or signals (add/remove individual person_signals rows). All are computed by extractors/scorers and may be wrong on edge cases. Bucket override (PR A) handles the bucket layer. Scope: small per-field editors with simple PATCH endpoints, anchored on the profile page in an "Admin corrections" section. ~1-2 days.
+- **Flags-only quick edit (separate from bucket override).** Admin sometimes wants to add/remove a single flag without re-evaluating the whole bucket. Today the only path is bucket override popover (which requires picking a bucket). Add a flag-only popover that inserts a new candidate_bucket_assignments row with the SAME bucket but edited flagged_reasons. Trivial — reuses the existing POST endpoint with bucket=current. ~50 LOC.
+- **Modular columns on the main list.** Admin should be able to pick which columns to show (e.g., hide Bucket, show Years, hide Tenure). Phased build: (a) localStorage-persisted column-visibility checklist behind a small "Columns" button in the table toolbar; (b) preference persistence in the DB once auth lands; (c) per-user role defaults. Foundation is small (~100 LOC for phase a). User has repeatedly asked for this — high latent value.
+- **`company_quality_slope` bonus computation.** Migration 050 seeded the weight (mid=10, senior=5) but the scoring engine currently contributes 0 because no derivation exists. Logic: trajectory of `company_year_scores.company_score` across the candidate's last 2-3 FT roles, similar pattern to `career_progression` but on raw company scores. Should write to a new `people.company_quality_slope` derived column (rising/flat/declining/insufficient_data), then `score-candidate.ts` reads it like `title_level_slope`. Scope ~150 LOC.
+- **Rescore-on-seniority-change endpoint.** When admin edits a candidate's seniority manually (`career_stage_override` or per-experience `seniority_normalized`), trigger a rescore so the new bucket reflects the edit immediately. No UI exists for editing seniority yet — gate this on that surface being built. Scope ~50 LOC once the UI exists.
+- **Include-current-founders filter toggle.** Today current founders are excluded from the default list with no UI to opt back in. Add a checkbox to FilterSidebar ("Include current founders" — off by default) and wire to the `filteredPeople` filter at [app/components/ProfileTable.tsx:573](app/components/ProfileTable.tsx#L573). Pairs naturally with the kebab/recruiter-view PR.
 
 ### Data quality
 
