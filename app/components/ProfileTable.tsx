@@ -171,6 +171,7 @@ export default function ProfileTable() {
   const [bucketSel, setBucketSel] = useState<string[]>([])
   const [stageSel, setStageSel] = useState<string[]>([])
   const [schoolSel, setSchoolSel] = useState<string[]>([])
+  const [degreeSel, setDegreeSel] = useState<string[]>([])
   const [locationSel, setLocationSel] = useState<string[]>([])
   const [clearanceSel, setClearanceSel] = useState<string[]>([])
   // Per-pill scope: each selected value has its own temporal scope
@@ -319,6 +320,7 @@ export default function ProfileTable() {
       if (f.compoundYearMax) setCompoundYearMax(f.compoundYearMax)
       if (f.schoolSel) setSchoolSel(f.schoolSel)
       if (f.schoolTemporalScope) setSchoolTemporalScope(f.schoolTemporalScope)
+      if (f.degreeSel) setDegreeSel(f.degreeSel)
       if (f.titleBoolean) setTitleBoolean(f.titleBoolean)
       if (f.titleBooleanScope) setTitleBooleanScope(f.titleBooleanScope)
       if (f.experienceBoolean) setExperienceBoolean(f.experienceBoolean)
@@ -328,6 +330,11 @@ export default function ProfileTable() {
       if (f.companyGroupSel) setCompanyGroupSel(f.companyGroupSel)
       if (f.companyGroupScope) setCompanyGroupScope(f.companyGroupScope)
       if (f.acceleratorSel) setAcceleratorSel(f.acceleratorSel)
+      if (f.currentTenureMin) setCurrentTenureMin(f.currentTenureMin)
+      if (f.currentTenureMax) setCurrentTenureMax(f.currentTenureMax)
+      if (f.avgTenureMin) setAvgTenureMin(f.avgTenureMin)
+      if (f.avgTenureMax) setAvgTenureMax(f.avgTenureMax)
+      if (typeof f.avgTenureIncludeCurrent === 'boolean') setAvgTenureIncludeCurrent(f.avgTenureIncludeCurrent)
       // New condition row format
       if (f.cc && Array.isArray(f.cc)) {
         setCompanyConditions(f.cc.map((c: any) => compactToCondition(c)))
@@ -623,6 +630,12 @@ export default function ProfileTable() {
       }
     }
 
+    // Degree level — match candidates with at least one education entry at any selected level
+    if (degreeSel.length > 0) {
+      const s = new Set(degreeSel)
+      rows = rows.filter(p => p.education_lite?.some(e => e.degree_level && s.has(e.degree_level)))
+    }
+
     // Location
     if (locationSel.length > 0) {
       rows = rows.filter(p => { if (!p.location_name) return false; return locationSel.some(sel => p.location_name!.toLowerCase().includes(sel.toLowerCase())) })
@@ -889,7 +902,7 @@ export default function ProfileTable() {
       })
     }
     return rows
-  }, [people, searchQuery, bucketSel, stageSel, rolePills, seniorityPills, schoolSel, schoolTemporalScope, locationSel, specialtyPills, clearanceSel, categoryScope, reviewStatusScope, compoundCompanyPills, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel, companyConditions, schoolConditions, companiesRaw, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap, currentTenureMin, currentTenureMax, avgTenureMin, avgTenureMax, avgTenureIncludeCurrent])
+  }, [people, searchQuery, bucketSel, stageSel, rolePills, seniorityPills, schoolSel, schoolTemporalScope, locationSel, specialtyPills, clearanceSel, categoryScope, reviewStatusScope, compoundCompanyPills, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel, degreeSel, companyConditions, schoolConditions, companiesRaw, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap, currentTenureMin, currentTenureMax, avgTenureMin, avgTenureMax, avgTenureIncludeCurrent])
 
   const activeFilterCount =
     (roleSel.length > 0 ? 1 : 0) + (bucketSel.length > 0 ? 1 : 0) + (stageSel.length > 0 ? 1 : 0) +
@@ -898,7 +911,7 @@ export default function ProfileTable() {
     (categoryScope !== 'all' ? 1 : 0) + (reviewStatusScope !== 'all' ? 1 : 0) +
     (compoundCompany.length > 0 ? 1 : 0) + (yearsMin || yearsMax ? 1 : 0) + (titleBoolean ? 1 : 0) + (experienceBoolean ? 1 : 0) +
     (signalSel.length > 0 ? 1 : 0) + (schoolGroupSel.length > 0 ? 1 : 0) + (companyGroupSel.length > 0 ? 1 : 0) +
-    (acceleratorSel.length > 0 ? 1 : 0) +
+    (acceleratorSel.length > 0 ? 1 : 0) + (degreeSel.length > 0 ? 1 : 0) +
     (companyConditions.length > 0 ? 1 : 0) + (schoolConditions.length > 0 ? 1 : 0) +
     (currentTenureMin || currentTenureMax ? 1 : 0) + (avgTenureMin || avgTenureMax ? 1 : 0)
 
@@ -908,7 +921,7 @@ export default function ProfileTable() {
     setClearanceSel([]); setCategoryScope('all'); setReviewStatusScope('all'); setCompoundCompany([]); setCompoundSpecialties([])
     setCompoundYearMin(''); setCompoundYearMax('')
     setYearsMin(''); setYearsMax(''); setTitleBoolean(''); setTitleBooleanScope('ever'); setExperienceBoolean('')
-    setSignalSel([]); setSchoolGroupSel([]); setCompanyGroupSel([]); setAcceleratorSel([])
+    setSignalSel([]); setSchoolGroupSel([]); setCompanyGroupSel([]); setAcceleratorSel([]); setDegreeSel([])
     setCompanyConditions([]); setSchoolConditions([])
     setRolePills([]); setSpecialtyPills([]); setSeniorityPills([]); setCompoundCompanyPills([])
     setSchoolTemporalScope('ever'); setSchoolGroupScope('ever'); setCompanyGroupScope('ever')
@@ -950,6 +963,7 @@ export default function ProfileTable() {
     }})
   }
   for (const v of schoolSel) { const sc = schoolOptions.find(s => s.value === v); chips.push({ label: `School: ${sc?.label || v}`, onRemove: () => setSchoolSel(schoolSel.filter(x => x !== v)) }) }
+  for (const v of degreeSel) { chips.push({ label: `Degree: ${v.toUpperCase()}`, onRemove: () => setDegreeSel(degreeSel.filter(x => x !== v)) }) }
   if (titleBoolean) chips.push({ label: `Title: "${titleBoolean}"`, onRemove: () => setTitleBoolean('') })
   if (experienceBoolean) chips.push({ label: `Keywords: "${experienceBoolean}"`, onRemove: () => setExperienceBoolean('') })
 
@@ -985,6 +999,7 @@ export default function ProfileTable() {
         schoolSel={schoolSel} setSchoolSel={setSchoolSel} schoolOptions={schoolOptions}
         schoolScope={schoolScope} setSchoolScope={setSchoolScope}
         schoolGroupSel={schoolGroupSel} setSchoolGroupSel={setSchoolGroupSel} schoolGroupOptions={schoolGroupOptions}
+        degreeSel={degreeSel} setDegreeSel={setDegreeSel}
         companyGroupSel={companyGroupSel} setCompanyGroupSel={setCompanyGroupSel} companyGroupOptions={companyGroupOptions}
         signalSel={signalSel} setSignalSel={setSignalSel} signalOptions={signalOptions}
         acceleratorSel={acceleratorSel} setAcceleratorSel={setAcceleratorSel} acceleratorOptions={acceleratorOptions}
@@ -1001,7 +1016,8 @@ export default function ProfileTable() {
         onOpenBuilder={() => {
           // Encode current filter state as JSON in URL param
           const state = {
-            rolePills, specialtyPills, seniorityPills, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, categoryScope, reviewStatusScope, compoundCompanyPills, compoundSpecialties, compoundYearMin, compoundYearMax, schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel,
+            rolePills, specialtyPills, seniorityPills, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, categoryScope, reviewStatusScope, compoundCompanyPills, compoundSpecialties, compoundYearMin, compoundYearMax, schoolSel, schoolTemporalScope, degreeSel, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel,
+            currentTenureMin, currentTenureMax, avgTenureMin, avgTenureMax, avgTenureIncludeCurrent,
             cc: companyConditions.map(conditionToCompact),
             sc: schoolConditions.map(conditionToCompact),
           }

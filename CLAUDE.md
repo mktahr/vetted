@@ -569,6 +569,7 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 - 054 — reclassify 7 fellowship rows → category='incubator' (YC, EF, Antler, CDL, SPC, Pioneer, On Deck with tier adjustments); seed 38 new incubator entries (Techstars, Neo, HF0, AI Grant, In-Q-Tel, DIU, AFWERX, etc.)
 - 055 — `people.is_current_founder` + `is_former_founder` BOOLEAN columns + partial indexes. Computed by `computeAndWriteDerivedFields()` via `/\b(co-?)?founder\b/i` title match or `seniority_normalized='founder'`. Mutually exclusive by definition.
 - 058 — rename `candidate_bucket` value `non_vetted` → `flagged`. CHECK constraint updated to `(vetted, needs_review, flagged)`. Same admin-only semantic; clearer name. Default UI behavior: flagged candidates excluded from main list unless admin explicitly selects them. Numbered 058 (skipping 056/057) to avoid collision with the parallel sourcing-pipeline workstream on `sourcing-pipeline-phase1` branch.
+- 059 — fix `seniority_dictionary` rank ordering: founder bumped from rank 6 → 8 (now the highest active rank); manager 7→6; executive 8→7. Locked spec: `intern(1) < junior_ic(2) < individual_contributor(3) < senior_ic(4) < lead_ic(5) < manager(6) < executive(7) < founder(8)`. Affects `highest_seniority_reached` derivation; scoring engine's executive override is gated on `=executive` and is unaffected.
 
 The "Normalized tables" / "Dictionary tables" lists below describe the post-migration state. They name the most-used columns; consult the actual schema for exhaustive column lists.
 

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Person, CandidateBucket } from '../types'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from './CompanyLogo'
 
@@ -147,7 +148,14 @@ export default function ProfileDrawer({ person, experiences, education, signals,
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div style={{ flex: 1 }}>
-              <h2 style={{ fontSize: 'var(--fs-22)', fontWeight: 'var(--fw-semibold)', color: 'var(--fg-primary)', letterSpacing: '-0.01em' }}>{person.full_name}</h2>
+              <Link
+                href={`/profile/${person.person_id}`}
+                style={{ fontSize: 'var(--fs-22)', fontWeight: 'var(--fw-semibold)', color: 'var(--fg-primary)', letterSpacing: '-0.01em', textDecoration: 'none', display: 'inline-block' }}
+                onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; e.currentTarget.style.textDecorationColor = 'var(--fg-secondary)'; e.currentTarget.style.textUnderlineOffset = '3px'; e.currentTarget.style.textDecorationThickness = '1px' }}
+                onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none' }}
+              >
+                <h2 style={{ fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit', letterSpacing: 'inherit', margin: 0 }}>{person.full_name}</h2>
+              </Link>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 8 }}>
                 {person.latest_bucket && (() => {
                   const s = BUCKET_TAG[person.latest_bucket]
