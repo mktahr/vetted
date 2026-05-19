@@ -16,6 +16,10 @@
 //   has_hypergrowth_experience   TRUE if any experience overlapped a year
 //                                where company headcount ≥ 2× prior year
 //   hypergrowth_companies_count  count
+//   is_current_founder           TRUE if any is_current=true founder-titled
+//                                experience exists. Excluded from default search.
+//   is_former_founder            TRUE if any past founder role AND
+//                                is_current_founder=FALSE. Positive signal chip.
 //
 // scoreCandidate() reads these fields, so this must run BEFORE scoring.
 
@@ -34,6 +38,18 @@ export interface DerivedFields {
   early_stage_companies_count: number
   has_hypergrowth_experience: boolean
   hypergrowth_companies_count: number
+  is_current_founder: boolean
+  is_former_founder: boolean
+}
+
+// Matches "Founder", "Co-Founder", "Cofounder", "Founder & CEO", etc. but
+// NOT "Founding Engineer" / "Founding Designer" (early employees, not founders).
+const FOUNDER_TITLE_PATTERN = /\b(co-?)?founder\b/i
+
+function isFounderExperience(exp: ExperienceRow): boolean {
+  if (exp.seniority_normalized === 'founder') return true
+  if (exp.title_raw && FOUNDER_TITLE_PATTERN.test(exp.title_raw)) return true
+  return false
 }
 
 interface ExperienceRow {
@@ -257,6 +273,12 @@ export async function computeDerivedFields(
     }
   }
 
+  // 8a. Founder flag derivation. Current + Former are mutually exclusive per spec:
+  //     is_former_founder is TRUE only when is_current_founder is FALSE.
+  const founderExps = experiences.filter(isFounderExperience)
+  const isCurrentFounder = founderExps.some(e => e.is_current === true)
+  const isFormerFounder = !isCurrentFounder && founderExps.some(e => e.is_current === false)
+
   // 8. Person-level specialty aggregation (most-recent first for recency weighting)
   const experiencesRecentFirst = [...experiences].reverse()
   const specialties: PersonSpecialties = aggregatePersonSpecialties(
@@ -280,6 +302,8 @@ export async function computeDerivedFields(
     early_stage_companies_count: earlyStageCompanyIds.size,
     has_hypergrowth_experience: hyperCompanyIds.size > 0,
     hypergrowth_companies_count: hyperCompanyIds.size,
+    is_current_founder: isCurrentFounder,
+    is_former_founder: isFormerFounder,
   }
 }
 

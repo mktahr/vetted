@@ -29,9 +29,17 @@ export default function SearchBuilderPage() {
 type TemporalScope = 'ever' | 'currently' | 'previously'
 
 const BUCKET_OPTIONS: MultiSelectOption[] = [
-  { value: 'vetted_talent', label: 'Vetted Talent' }, { value: 'high_potential', label: 'High Potential' },
-  { value: 'silver_medalist', label: 'Silver Medalist' }, { value: 'non_vetted', label: 'Non-Vetted' },
+  { value: 'vetted', label: 'Vetted' },
   { value: 'needs_review', label: 'Needs Review' },
+  { value: 'flagged', label: 'Flagged' },
+]
+const DEGREE_OPTIONS: MultiSelectOption[] = [
+  { value: 'bachelor', label: "Bachelor's" },
+  { value: 'master',   label: "Master's" },
+  { value: 'mba',      label: 'MBA' },
+  { value: 'jd',       label: 'JD' },
+  { value: 'md',       label: 'MD' },
+  { value: 'phd',      label: 'PhD' },
 ]
 const STAGE_OPTIONS: MultiSelectOption[] = [
   { value: 'pre_career', label: 'Pre-Career' }, { value: 'early_career', label: 'Early Career' },
@@ -133,9 +141,16 @@ function SearchBuilderInner() {
   const [experienceBoolean, setExperienceBoolean] = useState('')
   const [signalSel, setSignalSel] = useState<string[]>([])
   const [schoolGroupSel, setSchoolGroupSel] = useState<string[]>([])
+  const [degreeSel, setDegreeSel] = useState<string[]>([])
   const [schoolGroupScope, setSchoolGroupScope] = useState<TemporalScope>('ever')
   const [companyGroupSel, setCompanyGroupSel] = useState<string[]>([])
   const [companyGroupScope, setCompanyGroupScope] = useState<TemporalScope>('ever')
+  const [acceleratorSel, setAcceleratorSel] = useState<string[]>([])
+  const [currentTenureMin, setCurrentTenureMin] = useState('')
+  const [currentTenureMax, setCurrentTenureMax] = useState('')
+  const [avgTenureMin, setAvgTenureMin] = useState('')
+  const [avgTenureMax, setAvgTenureMax] = useState('')
+  const [avgTenureIncludeCurrent, setAvgTenureIncludeCurrent] = useState(true)
 
   // Condition rows (new model)
   const [companyConditions, setCompanyConditions] = useState<ConditionRow[]>([])
@@ -152,6 +167,7 @@ function SearchBuilderInner() {
   const [signalOptions, setSignalOptions] = useState<MultiSelectOption[]>([])
   const [schoolGroupOptions, setSchoolGroupOptions] = useState<MultiSelectOption[]>([])
   const [companyGroupOptions, setCompanyGroupOptions] = useState<MultiSelectOption[]>([])
+  const [acceleratorOptions, setAcceleratorOptions] = useState<MultiSelectOption[]>([])
   const [industryOptions, setIndustryOptions] = useState<MultiSelectOption[]>([])
   const [categoryFilterOptions, setCategoryFilterOptions] = useState<MultiSelectOption[]>([])
   const [companyNameMap, setCompanyNameMap] = useState<Record<string, string>>({})
@@ -168,7 +184,7 @@ function SearchBuilderInner() {
         supabase.from('role_dictionary').select('role_id, role_name, display_order').eq('active', true).order('display_order'),
         supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
         fetchAllRows<any>('companies', 'company_id, company_name, primary_industry, industries, category, review_status, legacy_primary_industry_tag, company_groups', 'company_name').then(data => ({ data })),
-        fetchAllRows<any>('schools', 'school_id, school_name, school_score, is_foreign, school_groups', 'school_name').then(data => ({ data })),
+        fetchAllRows<any>('schools', 'school_id, school_name, school_score, is_foreign, school_groups, school_type', 'school_name').then(data => ({ data })),
         supabase.from('specialty_dictionary').select('specialty_normalized, parent_function').eq('active', true).order('specialty_normalized'),
         supabase.from('person_signals_active').select('signal_id, canonical_name, category').order('confidence', { ascending: false }),
       ])
@@ -182,13 +198,14 @@ function SearchBuilderInner() {
         sublabel: c.primary_industry || c.legacy_primary_industry_tag || undefined,
       })))
       setSchoolOptions((schools || []).filter((s: any) => s.school_score != null).map((s: any) => ({ value: s.school_id, label: s.school_name, sublabel: s.is_foreign ? "Int'l" : undefined })))
+      setAcceleratorOptions((schools || []).filter((s: any) => s.school_type === 'accelerator').map((s: any) => ({ value: s.school_id, label: s.school_name })))
       setSpecialtyOptions((specs || []).map((d: any) => ({ value: d.specialty_normalized, label: d.specialty_normalized.replace(/_/g, ' '), sublabel: (d.parent_function || '').replace(/_/g, ' ') })))
 
       // Signal options: category-level + individual
-      const SIGNAL_CATEGORY_ORDER = ['founder','military','national_lab','fellowship','scholarship','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
+      const SIGNAL_CATEGORY_ORDER = ['founder','incubator','military','national_lab','fellowship','scholarship','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
       // Full audit: every signal_dictionary.category enum value must have a label.
       const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
-        founder:'Founder', military:'Military', national_lab:'National Lab',
+        founder:'Founder', incubator:'Incubator', military:'Military', national_lab:'National Lab',
         fellowship:'Fellowship', scholarship:'Scholarship',
         academic_distinction:'Academic', olympiad:'Olympiad',
         publication:'Publication', patent:'Patent', open_source:'Open Source',
@@ -289,6 +306,7 @@ function SearchBuilderInner() {
           if (f.compoundYearMax) setCompoundYearMax(f.compoundYearMax)
           if (f.schoolSel) setSchoolSel(f.schoolSel)
           if (f.schoolTemporalScope) setSchoolTemporalScope(f.schoolTemporalScope)
+          if (f.degreeSel) setDegreeSel(f.degreeSel)
           if (f.titleBoolean) setTitleBoolean(f.titleBoolean)
           if (f.titleBooleanScope) setTitleBooleanScope(f.titleBooleanScope)
           if (f.experienceBoolean) setExperienceBoolean(f.experienceBoolean)
@@ -297,6 +315,12 @@ function SearchBuilderInner() {
           if (f.schoolGroupScope) setSchoolGroupScope(f.schoolGroupScope)
           if (f.companyGroupSel) setCompanyGroupSel(f.companyGroupSel)
           if (f.companyGroupScope) setCompanyGroupScope(f.companyGroupScope)
+          if (f.acceleratorSel) setAcceleratorSel(f.acceleratorSel)
+          if (f.currentTenureMin) setCurrentTenureMin(f.currentTenureMin)
+          if (f.currentTenureMax) setCurrentTenureMax(f.currentTenureMax)
+          if (f.avgTenureMin) setAvgTenureMin(f.avgTenureMin)
+          if (f.avgTenureMax) setAvgTenureMax(f.avgTenureMax)
+          if (typeof f.avgTenureIncludeCurrent === 'boolean') setAvgTenureIncludeCurrent(f.avgTenureIncludeCurrent)
           // Condition rows
           if (f.cc && Array.isArray(f.cc)) setCompanyConditions(f.cc.map((c: any) => compactToCondition(c)))
           if (f.sc && Array.isArray(f.sc)) setSchoolConditions(f.sc.map((c: any) => compactToCondition(c)))
@@ -313,8 +337,9 @@ function SearchBuilderInner() {
       bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, categoryScope, reviewStatusScope,
       compoundCompanyPills: compoundCompany.map(v => ({ value: v, scope: compoundCompanyScope })),
       compoundSpecialties, compoundYearMin, compoundYearMax,
-      schoolSel, schoolTemporalScope, titleBoolean, titleBooleanScope, experienceBoolean,
-      signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope,
+      schoolSel, schoolTemporalScope, degreeSel, titleBoolean, titleBooleanScope, experienceBoolean,
+      signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel,
+      currentTenureMin, currentTenureMax, avgTenureMin, avgTenureMax, avgTenureIncludeCurrent,
       cc: companyConditions.map(conditionToCompact),
       sc: schoolConditions.map(conditionToCompact),
     }
@@ -375,6 +400,7 @@ function SearchBuilderInner() {
               {seniorityPills.length > 0 && <PillScopeRow pills={seniorityPills} setPills={setSeniorityPills} formatLabel={v => v.replace(/_/g, ' ')} />}
             </div>
             <MultiSelect label="Bucket" options={BUCKET_OPTIONS} selected={bucketSel} onChange={setBucketSel} placeholder="Any bucket" />
+            <MultiSelect label="Degree" options={DEGREE_OPTIONS} selected={degreeSel} onChange={setDegreeSel} placeholder="Any degree" />
             <MultiSelect label="Career Stage" options={STAGE_OPTIONS} selected={stageSel} onChange={setStageSel} placeholder="Any stage" />
             <div>
               <label style={lblStyle}>Years of Experience</label>
@@ -382,6 +408,28 @@ function SearchBuilderInner() {
                 <input type="number" min="0" step="0.5" value={yearsMin} onChange={e => setYearsMin(e.target.value)} placeholder="min" style={inputStyle} />
                 <span style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)' }}>–</span>
                 <input type="number" min="0" step="0.5" value={yearsMax} onChange={e => setYearsMax(e.target.value)} placeholder="max" style={inputStyle} />
+              </div>
+            </div>
+            <div>
+              <label style={lblStyle}>Current tenure (years)</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <input type="number" min="0" step="0.5" value={currentTenureMin} onChange={e => setCurrentTenureMin(e.target.value)} placeholder="min" style={inputStyle} />
+                <span style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)' }}>–</span>
+                <input type="number" min="0" step="0.5" value={currentTenureMax} onChange={e => setCurrentTenureMax(e.target.value)} placeholder="max" style={inputStyle} />
+              </div>
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label style={lblStyle}>Avg tenure (years)</label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)', fontFamily: 'var(--font-sans)', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={avgTenureIncludeCurrent} onChange={e => setAvgTenureIncludeCurrent(e.target.checked)} style={{ accentColor: 'var(--accent-500)' }} />
+                  Incl. current
+                </label>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <input type="number" min="0" step="0.5" value={avgTenureMin} onChange={e => setAvgTenureMin(e.target.value)} placeholder="min" style={inputStyle} />
+                <span style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)' }}>–</span>
+                <input type="number" min="0" step="0.5" value={avgTenureMax} onChange={e => setAvgTenureMax(e.target.value)} placeholder="max" style={inputStyle} />
               </div>
             </div>
             <MultiSelect label="Clearance" options={CLEARANCE_OPTIONS} selected={clearanceSel} onChange={setClearanceSel} placeholder="Any clearance" />
@@ -395,6 +443,11 @@ function SearchBuilderInner() {
         {/* Where They Worked — full width */}
         <div style={sectionStyle}>
           <div style={headingStyle}>Where They Worked</div>
+          {companyGroupOptions.length > 0 && (
+            <div style={{ marginBottom: 12, maxWidth: 400 }}>
+              <MultiSelect label="Company group" options={companyGroupOptions} selected={companyGroupSel} onChange={setCompanyGroupSel} placeholder="Any company group" />
+            </div>
+          )}
           <ConditionRowList
             rows={companyConditions}
             onChange={setCompanyConditions}
@@ -414,6 +467,18 @@ function SearchBuilderInner() {
         {/* Where They Studied — full width */}
         <div style={sectionStyle}>
           <div style={headingStyle}>Where They Studied</div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+            {schoolGroupOptions.length > 0 && (
+              <div style={{ minWidth: 240, flex: 1, maxWidth: 400 }}>
+                <MultiSelect label="School group" options={schoolGroupOptions} selected={schoolGroupSel} onChange={setSchoolGroupSel} placeholder="Any school group" />
+              </div>
+            )}
+            {acceleratorOptions.length > 0 && (
+              <div style={{ minWidth: 240, flex: 1, maxWidth: 400 }}>
+                <MultiSelect label="Accelerator" options={acceleratorOptions} selected={acceleratorSel} onChange={setAcceleratorSel} placeholder="Any accelerator" />
+              </div>
+            )}
+          </div>
           <ConditionRowList
             rows={schoolConditions}
             onChange={setSchoolConditions}

@@ -51,16 +51,16 @@ const SIGNALS = [
   { re: /\blead\b/i, level: 'lead_ic', rank: 5 },
   { re: /\bsenior\b/i, level: 'senior_ic', rank: 4 },
   { re: /\bsr\.\b/i, level: 'senior_ic', rank: 4 },
-  { re: /\bjunior\b/i, level: 'entry', rank: 2 },
-  { re: /\bjr\.\b/i, level: 'entry', rank: 2 },
-  { re: /\bassociate\b/i, level: 'entry', rank: 2 },
-  { re: /\bnew grad\b/i, level: 'entry', rank: 2 },
+  { re: /\bjunior\b/i, level: 'junior_ic', rank: 2 },
+  { re: /\bjr\.\b/i, level: 'junior_ic', rank: 2 },
+  { re: /\bassociate\b/i, level: 'junior_ic', rank: 2 },
+  { re: /\bnew grad\b/i, level: 'junior_ic', rank: 2 },
   { re: /\binternship\b/i, level: 'intern', rank: 1 },
   { re: /\bintern\b/i, level: 'intern', rank: 1 },
 ]
 
 const TITLE_AUTHORITATIVE = new Set([
-  'intern', 'entry', 'senior_ic', 'lead_ic', 'founder', 'manager', 'executive',
+  'intern', 'junior_ic', 'senior_ic', 'lead_ic', 'founder', 'manager', 'executive',
 ])
 
 const NOISE_SUFFIX = [

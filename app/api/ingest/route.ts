@@ -559,7 +559,7 @@ export async function POST(req: NextRequest) {
     // also upgrade title_level so slope calculations reflect the real level.
     if (seniorityResult.source === 'description' && titleLevel !== null) {
       const SENIORITY_TO_TITLE_LEVEL: Record<string, number> = {
-        intern: 1, entry: 2, individual_contributor: 3, senior_ic: 5,
+        intern: 1, junior_ic: 2, individual_contributor: 3, senior_ic: 5,
         lead_ic: 6, founder: 6, manager: 9, executive: 10,
       };
       const impliedLevel = SENIORITY_TO_TITLE_LEVEL[seniority] ?? titleLevel;

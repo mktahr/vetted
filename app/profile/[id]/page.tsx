@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Person, Experience, Education, BucketAssignment, CandidateBucket, ClearanceLevel, ScoreComponent } from '../../types'
+import { Person, Experience, Education, BucketAssignment, CandidateBucket, FlaggedReason, ClearanceLevel, ScoreComponent } from '../../types'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from '../../components/CompanyLogo'
 import { filterEducationForDisplay } from '@/lib/education/display-filter'
 
@@ -13,11 +13,9 @@ function cleanCompanyName(name: string | null | undefined): string | null {
 }
 
 const BUCKET_STYLES: Record<CandidateBucket, { label: string; bg: string; text: string; border: string }> = {
-  vetted_talent:    { label: 'Vetted Talent',    bg: 'bg-positive/10',  text: 'text-positive', border: 'border-positive/30' },
-  high_potential:   { label: 'High Potential',   bg: 'bg-selected',     text: 'text-foreground',    border: 'border-primary' },
-  silver_medalist:  { label: 'Silver Medalist',  bg: 'bg-muted',    text: 'text-foreground',   border: 'border-border' },
-  non_vetted:       { label: 'Non-Vetted',       bg: 'bg-background',     text: 'text-muted-foreground',    border: 'border-border' },
-  needs_review:     { label: 'Needs Review',     bg: 'bg-watch/10',    text: 'text-watch',   border: 'border-watch/30' },
+  vetted:           { label: 'Vetted',           bg: 'bg-positive/10',  text: 'text-positive',         border: 'border-positive/30' },
+  needs_review:     { label: 'Needs Review',     bg: 'bg-watch/10',     text: 'text-watch',            border: 'border-watch/30' },
+  flagged:          { label: 'Flagged',          bg: 'bg-background',   text: 'text-muted-foreground', border: 'border-border' },
 }
 
 function formatDuration(months: number | null): string {
@@ -43,6 +41,9 @@ export default function ProfilePage() {
   const [education, setEducation] = useState<Education[]>([])
   const [bucket, setBucket] = useState<BucketAssignment | null>(null)
   const [breakdownOpen, setBreakdownOpen] = useState(false)
+  const [overrideOpen, setOverrideOpen] = useState(false)
+  const [overrideSaving, setOverrideSaving] = useState(false)
+  const [overrideError, setOverrideError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [narrative, setNarrative] = useState<string | null>(null)
   const [narrativeAt, setNarrativeAt] = useState<string | null>(null)
@@ -187,6 +188,39 @@ export default function ProfilePage() {
     }
   }
 
+  async function submitBucketOverride(args: { bucket: CandidateBucket; flagged_reasons: string[]; reason: string }) {
+    setOverrideSaving(true)
+    setOverrideError(null)
+    try {
+      const r = await fetch(`/api/admin/bucket/${params.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(args),
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`)
+      // Update local bucket with the new assignment
+      setBucket({
+        ...(bucket || {} as BucketAssignment),
+        bucket_assignment_id: data.assignment.bucket_assignment_id,
+        person_id: params.id as string,
+        candidate_bucket: data.assignment.candidate_bucket,
+        flagged_reasons: data.assignment.flagged_reasons,
+        assignment_reason: data.assignment.assignment_reason,
+        assigned_by: 'admin',
+        effective_at: data.assignment.effective_at,
+        score_breakdown: null,
+        confidence: null,
+        created_at: data.assignment.effective_at,
+      })
+      setOverrideOpen(false)
+    } catch (err) {
+      setOverrideError(err instanceof Error ? err.message : 'Unknown error')
+    } finally {
+      setOverrideSaving(false)
+    }
+  }
+
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -312,17 +346,56 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Bucket badge */}
+            {/* Bucket badge — admin override pencil here, founder lives separately below */}
             {bucket && (
-              <div className={`px-4 py-2 rounded-lg border-2 ${BUCKET_STYLES[bucket.candidate_bucket].bg} ${BUCKET_STYLES[bucket.candidate_bucket].border}`}>
-                <p className="text-xs uppercase tracking-wide text-tertiary">Bucket</p>
-                <p className={`text-lg font-bold ${BUCKET_STYLES[bucket.candidate_bucket].text}`}>
-                  {BUCKET_STYLES[bucket.candidate_bucket].label}
-                </p>
+              <div className="relative">
+                <div className={`px-4 py-2 rounded-lg border-2 ${BUCKET_STYLES[bucket.candidate_bucket].bg} ${BUCKET_STYLES[bucket.candidate_bucket].border}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs uppercase tracking-wide text-tertiary">Bucket</p>
+                    <button
+                      onClick={() => setOverrideOpen(o => !o)}
+                      className="text-xs text-muted-foreground hover:text-foreground underline"
+                      title="Override bucket"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                  <p className={`text-lg font-bold ${BUCKET_STYLES[bucket.candidate_bucket].text}`}>
+                    {BUCKET_STYLES[bucket.candidate_bucket].label}
+                  </p>
+                </div>
+                {overrideOpen && (
+                  <BucketOverridePopover
+                    currentBucket={bucket.candidate_bucket}
+                    currentFlags={bucket.flagged_reasons || []}
+                    saving={overrideSaving}
+                    error={overrideError}
+                    onClose={() => setOverrideOpen(false)}
+                    onSubmit={submitBucketOverride}
+                  />
+                )}
               </div>
             )}
           </div>
         </div>
+
+        {/* Highlights chip strip — Former/Current Founder + early-stage + hypergrowth.
+            Lives below the header, above the overview cards, so it's visible at a
+            glance but not conflated with bucket editing. */}
+        {(person.is_current_founder || person.is_former_founder) && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            {person.is_former_founder && (
+              <span className="px-2 py-1 text-xs font-medium rounded-md border border-positive/30 bg-positive/10 text-positive">
+                Former Founder
+              </span>
+            )}
+            {person.is_current_founder && (
+              <span className="px-2 py-1 text-xs font-medium rounded-md border border-watch/30 bg-watch/10 text-watch">
+                Current Founder
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Overview — Title, Company, Experience, Stage (moved to top) */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-background rounded-lg">
@@ -415,6 +488,16 @@ export default function ProfilePage() {
           <div className="mb-8 p-4 bg-background rounded-lg">
             <p className="text-xs text-tertiary uppercase mb-1">Score breakdown</p>
             <p className="text-sm font-mono text-muted-foreground whitespace-pre-wrap">{bucket.assignment_reason}</p>
+
+            {bucket.flagged_reasons && bucket.flagged_reasons.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {bucket.flagged_reasons.map(flag => (
+                  <span key={flag} className="px-1.5 py-0.5 text-xs rounded border border-watch/30 bg-watch/10 text-watch">
+                    {flag.replace(/_/g, ' ')}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {bucket.score_breakdown ? (
               <>
@@ -712,6 +795,144 @@ function ScoreBreakdownTable({ bucket }: { bucket: BucketAssignment }) {
           </tr>
         </tfoot>
       </table>
+    </div>
+  )
+}
+
+// ─── Admin bucket override popover ─────────────────────────────────────────
+// Anchored to the bucket badge. Lets admin re-bucket a candidate and
+// optionally edit flagged_reasons. Overriding to 'vetted' forces flags=[]
+// (semantic — a vetted candidate has no system flags).
+
+const KNOWN_FLAGS: FlaggedReason[] = ['unknown_seniority', 'contractor_only', 'job_hopping', 'low_score']
+
+function BucketOverridePopover({
+  currentBucket,
+  currentFlags,
+  saving,
+  error,
+  onClose,
+  onSubmit,
+}: {
+  currentBucket: CandidateBucket
+  currentFlags: string[]
+  saving: boolean
+  error: string | null
+  onClose: () => void
+  onSubmit: (args: { bucket: CandidateBucket; flagged_reasons: string[]; reason: string }) => void
+}) {
+  const [pickBucket, setPickBucket] = useState<CandidateBucket>(currentBucket)
+  const [knownFlagSel, setKnownFlagSel] = useState<Set<string>>(new Set(currentFlags.filter(f => (KNOWN_FLAGS as string[]).includes(f))))
+  const [extraFlagsText, setExtraFlagsText] = useState<string>(
+    currentFlags.filter(f => !(KNOWN_FLAGS as string[]).includes(f)).join(', ')
+  )
+  const [reason, setReason] = useState<string>('')
+
+  const flagsDisabled = pickBucket === 'vetted'
+
+  function toggleFlag(f: string) {
+    const next = new Set(knownFlagSel)
+    if (next.has(f)) next.delete(f)
+    else next.add(f)
+    setKnownFlagSel(next)
+  }
+
+  function handleSubmit() {
+    const extras = extraFlagsText.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+    const merged = Array.from(new Set<string>([...Array.from(knownFlagSel), ...extras]))
+    onSubmit({
+      bucket: pickBucket,
+      flagged_reasons: pickBucket === 'vetted' ? [] : merged,
+      reason: reason.trim(),
+    })
+  }
+
+  return (
+    <div
+      className="absolute left-0 top-full mt-2 z-50 w-80 p-4 rounded-lg border-2 border-border bg-card shadow-lg"
+      onClick={e => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-semibold">Override bucket</p>
+        <button onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground">✕</button>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-tertiary mb-1">Bucket</p>
+          <div className="flex flex-col gap-1">
+            {(['vetted', 'needs_review', 'flagged'] as CandidateBucket[]).map(b => (
+              <label key={b} className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  checked={pickBucket === b}
+                  onChange={() => setPickBucket(b)}
+                />
+                {BUCKET_STYLES[b].label}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs uppercase tracking-wide text-tertiary mb-1">
+            Flags {flagsDisabled && <span className="text-tertiary normal-case">— forced empty when Vetted</span>}
+          </p>
+          <div className={`space-y-1 ${flagsDisabled ? 'opacity-50' : ''}`}>
+            {KNOWN_FLAGS.map(f => (
+              <label key={f} className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={knownFlagSel.has(f)}
+                  onChange={() => toggleFlag(f)}
+                  disabled={flagsDisabled}
+                />
+                {f.replace(/_/g, ' ')}
+              </label>
+            ))}
+            <input
+              type="text"
+              placeholder="Custom flags, comma-separated"
+              value={extraFlagsText}
+              onChange={e => setExtraFlagsText(e.target.value)}
+              disabled={flagsDisabled}
+              className="w-full text-sm px-2 py-1 mt-2 border border-border rounded bg-background"
+            />
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs uppercase tracking-wide text-tertiary mb-1">Reason (optional)</p>
+          <input
+            type="text"
+            placeholder="Why override?"
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            className="w-full text-sm px-2 py-1 border border-border rounded bg-background"
+          />
+        </div>
+
+        {error && (
+          <p className="text-xs text-destructive">{error}</p>
+        )}
+
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="text-sm px-3 py-1 rounded border border-border text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="text-sm px-3 py-1 rounded bg-foreground text-background hover:opacity-90 disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

@@ -57,6 +57,7 @@ export interface FilterSidebarProps {
   schoolScope: 'us' | 'all';    setSchoolScope: (v: 'us' | 'all') => void
   schoolGroupSel: string[];     setSchoolGroupSel: (v: string[]) => void
   schoolGroupOptions: MultiSelectOption[]
+  degreeSel: string[];          setDegreeSel: (v: string[]) => void
   companyGroupSel: string[];    setCompanyGroupSel: (v: string[]) => void
   companyGroupOptions: MultiSelectOption[]
   signalSel: string[];          setSignalSel: (v: string[]) => void
@@ -77,9 +78,17 @@ export interface FilterSidebarProps {
 }
 
 const BUCKET_OPTIONS: MultiSelectOption[] = [
-  { value: 'vetted_talent', label: 'Vetted Talent' }, { value: 'high_potential', label: 'High Potential' },
-  { value: 'silver_medalist', label: 'Silver Medalist' }, { value: 'non_vetted', label: 'Non-Vetted' },
+  { value: 'vetted', label: 'Vetted' },
   { value: 'needs_review', label: 'Needs Review' },
+  { value: 'flagged', label: 'Flagged' },
+]
+const DEGREE_OPTIONS: MultiSelectOption[] = [
+  { value: 'bachelor', label: "Bachelor's" },
+  { value: 'master',   label: "Master's" },
+  { value: 'mba',      label: 'MBA' },
+  { value: 'jd',       label: 'JD' },
+  { value: 'md',       label: 'MD' },
+  { value: 'phd',      label: 'PhD' },
 ]
 const STAGE_OPTIONS: MultiSelectOption[] = [
   { value: 'pre_career', label: 'Pre-Career' }, { value: 'early_career', label: 'Early Career' },
@@ -331,6 +340,7 @@ export default function FilterSidebar(props: FilterSidebarProps) {
         {props.schoolGroupOptions.length > 0 && (
           <div style={{ marginBottom: 12 }}><MultiSelect label="School group" options={props.schoolGroupOptions} selected={props.schoolGroupSel} onChange={props.setSchoolGroupSel} placeholder="Any school group" /></div>
         )}
+        <div style={{ marginBottom: 12 }}><MultiSelect label="Degree" options={DEGREE_OPTIONS} selected={props.degreeSel} onChange={props.setDegreeSel} placeholder="Any degree" /></div>
         {props.acceleratorOptions.length > 0 && (
           <div style={{ marginBottom: 12 }}><MultiSelect label="Accelerator" options={props.acceleratorOptions} selected={props.acceleratorSel} onChange={props.setAcceleratorSel} placeholder="Any accelerator" /></div>
         )}

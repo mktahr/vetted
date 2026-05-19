@@ -4,11 +4,11 @@
 export { scoreCandidate, writeBucketAssignment } from './score-candidate';
 export type {
   ScoringStage,
-  CandidateBucket,
   ScoreComponent,
   ScoreResult,
   ScoreBreakdown,
 } from './score-candidate';
+export type { CandidateBucket, FlaggedReason } from '../../app/types';
 
 export { computeDerivedFields, computeAndWriteDerivedFields } from './compute-derived';
 export type { DerivedFields } from './compute-derived';
