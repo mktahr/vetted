@@ -686,6 +686,7 @@ The "Normalized tables" / "Dictionary tables" lists below describe the post-migr
 │           │   └── [id]/
 │           │       ├── tag/route.ts             ← "Tag now" button on company detail
 │           │       └── re-enrich/route.ts       ← refresh Crust firmographics + funding without re-tagging
+│           ├── bucket/[person_id]/route.ts      ← admin bucket override: POST {bucket, flagged_reasons, reason} → new candidate_bucket_assignments row with assigned_by='admin'
 │           └── rescore-all/route.ts             ← admin-only batch re-score endpoint for candidates
 │
 ├── lib/
