@@ -90,8 +90,11 @@ function computeDuration(start: string | null, end: string | null, isCurrent: bo
 
 // Category display order for signals section
 const SIGNAL_CATEGORY_ORDER = [
-  'founder', 'incubator', 'military', 'national_lab',
-  'fellowship', 'scholarship', 'academic_distinction', 'olympiad',
+  'founder', 'incubator', 'university_incubator_accelerator',
+  'university_fellowship', 'fellowship', 'university_program',
+  'student_venture_fund',
+  'military', 'national_lab', 'research_institute', 'university_lab',
+  'scholarship', 'academic_distinction', 'olympiad',
   'competition', 'hackathon', 'athletics', 'engineering_team',
   'student_leadership', 'greek_life',
 ]
@@ -102,6 +105,12 @@ const SIGNAL_CATEGORY_ORDER = [
 const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
   founder: 'Founder',
   incubator: 'Incubator',
+  university_program: 'University Program',
+  university_fellowship: 'University Fellowship',
+  university_incubator_accelerator: 'University Accelerator',
+  university_lab: 'University Lab',
+  research_institute: 'Research Institute',
+  student_venture_fund: 'Student VC',
   military: 'Military',
   national_lab: 'National Lab',
   fellowship: 'Fellowship',

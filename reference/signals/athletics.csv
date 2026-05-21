@@ -1,0 +1,7 @@
+canonical_name,category,subcategory,tier_group,aliases,source_field_hints,canonical_url,description,is_positive,is_active
+NCAA Division 1 Athlete,athletics,collegiate,tier_3,"ncaa division 1;ncaa d1;division 1 athlete;division i athlete;ncaa div 1;d1 athlete","activities_honors;experience_description",,NCAA D1 varsity athlete — top collegiate tier,TRUE,TRUE
+Professional Athlete,athletics,professional,tier_3,"professional athlete;pro athlete;professional sports","activities_honors;experience_description",,Professional sports player,TRUE,TRUE
+Olympic Athlete,athletics,olympic,tier_3,"olympic athlete;olympian;olympics;olympic team;olympic games","activities_honors;experience_description",,Olympic team member or Olympic competitor,TRUE,TRUE
+Junior Olympics Athlete,athletics,olympic_dev,tier_2,"junior olympics;junior olympic;junior olympic athlete;jr olympics","activities_honors;experience_description",,Junior Olympic development pipeline athlete,TRUE,TRUE
+NCAA Division 2 Athlete,athletics,collegiate,tier_2,"ncaa division 2;ncaa d2;division 2 athlete;division ii athlete;d2 athlete","activities_honors;experience_description",,NCAA D2 varsity athlete,TRUE,TRUE
+NCAA Division 3 Athlete,athletics,collegiate,tier_2,"ncaa division 3;ncaa d3;division 3 athlete;division iii athlete;d3 athlete","activities_honors;experience_description",,NCAA D3 varsity athlete,TRUE,TRUE

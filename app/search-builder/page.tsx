@@ -202,10 +202,14 @@ function SearchBuilderInner() {
       setSpecialtyOptions((specs || []).map((d: any) => ({ value: d.specialty_normalized, label: d.specialty_normalized.replace(/_/g, ' '), sublabel: (d.parent_function || '').replace(/_/g, ' ') })))
 
       // Signal options: category-level + individual
-      const SIGNAL_CATEGORY_ORDER = ['founder','incubator','military','national_lab','fellowship','scholarship','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
+      const SIGNAL_CATEGORY_ORDER = ['founder','incubator','university_incubator_accelerator','university_fellowship','fellowship','university_program','student_venture_fund','military','national_lab','research_institute','university_lab','scholarship','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
       // Full audit: every signal_dictionary.category enum value must have a label.
       const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
-        founder:'Founder', incubator:'Incubator', military:'Military', national_lab:'National Lab',
+        founder:'Founder', incubator:'Incubator',
+        university_program:'University Program', university_fellowship:'University Fellowship',
+        university_incubator_accelerator:'University Accelerator', university_lab:'University Lab',
+        research_institute:'Research Institute', student_venture_fund:'Student VC',
+        military:'Military', national_lab:'National Lab',
         fellowship:'Fellowship', scholarship:'Scholarship',
         academic_distinction:'Academic', olympiad:'Olympiad',
         publication:'Publication', patent:'Patent', open_source:'Open Source',

@@ -15,7 +15,10 @@ const env = Object.fromEntries(
 
 const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
-const CSV_PATH = '/Users/matt/Downloads/Vetted - Original Tech Startup Focus   - Company Scoring (4).csv';
+// CSV moved into the repo at reference/companies/company_scores.csv (2026-05-20)
+// — was previously at /Users/matt/Downloads which made the script unrunnable
+// for anyone else and broke CI. See reference/companies/ for canonical source.
+const CSV_PATH = 'reference/companies/company_scores.csv';
 
 const raw = readFileSync(CSV_PATH, 'utf-8');
 const lines = raw.split('\n').filter(l => l.trim().length > 0);
