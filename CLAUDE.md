@@ -8,6 +8,118 @@ The core insight: instead of asking AI to judge a candidate, we build our own di
 
 ---
 
+## Documentation Index
+
+This file (CLAUDE.md) is the engineering context. Other docs at repo root:
+
+- **[README.md](README.md)** — GitHub-facing project intro: what Vetted is, stack summary, data-flow paragraph.
+- **[CHANGELOG.md](CHANGELOG.md)** — Reverse-chronological work-session log (shipped / decisions / where we left off / open questions / watch-outs). Updated automatically by the End-of-Session Protocol when Matt types "wrap session".
+- **[ROADMAP.md](ROADMAP.md)** — Current build, sequenced "Next Up" items, recently completed (with PR links). The "what are we shipping" doc.
+- **[BACKLOG.md](BACKLOG.md)** — Major deferred features (>0.5 day to scope/build), sub-sectioned by domain. Each entry has a trigger condition for when to build.
+- **[BUGS.md](BUGS.md)** — Small fixes (<0.5 day each). Items move here from BACKLOG when they're scoped down or surface during build.
+- **[POSITIONING.md](POSITIONING.md)** — Product positioning + differentiators. Marketing-facing language, not engineering.
+- **[COMMANDS.md](COMMANDS.md)** — Plain-English commands Matt uses with Claude Code + technical command reference + glossary.
+- **[GETTING_STARTED.md](GETTING_STARTED.md)** — Onboarding for a new machine. **Currently stale; references old build phases.**
+
+**When to update which:**
+- Session ends (Matt typed "wrap session") → CHANGELOG.md (per End-of-Session Protocol below)
+- New deferred feature → BACKLOG.md
+- New small fix that's <0.5 day → BUGS.md
+- Item moved into active queue → ROADMAP.md "Next Up"
+- Item finished and merged → ROADMAP.md "Recently Completed" (with PR link)
+- Engineering decision or new system → CLAUDE.md (this file)
+
+---
+
+## Documentation Vocabulary
+
+Matt uses plain-English phrases for common doc operations. Recognize these and act accordingly:
+
+| Phrase | What to do |
+|---|---|
+| "Add to roadmap" | Edit ROADMAP.md under the appropriate section ("Current Build" / "Next Up" / "Recently Completed") |
+| "Add to backlog" | Edit BACKLOG.md (deferred features, sub-sectioned by domain) |
+| "Add to bugs" | Edit BUGS.md (small fixes) |
+| "Add to CLAUDE.md" | Add engineering context to this file |
+| "wrap session" (exact) | Execute the End-of-Session Protocol: session summary + CHANGELOG entry + migration ledger + ROADMAP + BACKLOG/BUGS + next-session starter prompt. Show diff for approval; commit only after approval. See "End-of-Session Protocol" section below. |
+| "Wrap up session" | Confirm everything merged to main, pushed to GitHub, deployed to prod, all docs updated. Report any gaps. (Status verification — distinct from "wrap session" which executes the docs-update protocol.) |
+| "Status check" | Report: current branch, what's in flight, last commit, what's on roadmap next |
+| "What did we ship last session?" | Report the last merged PR with contents (from `git log main` and PR titles) |
+| "What's next on the roadmap?" | Read ROADMAP.md "Current Build" + top of "Next Up" |
+| "What did we last complete?" | Read ROADMAP.md "Recently Completed" — most recent row |
+
+---
+
+## Reference Data Convention (Post-Migration 060 / 2026-05-20)
+
+Reference data (dictionaries, lookup tables, curated lists) lives in **`/reference/`** as canonical CSVs. Edits flow: **edit CSV → commit → run `node scripts/sync-reference.mjs` → DB updates.**
+
+**HARD RULE:** Do not edit reference data directly in Supabase Studio. The CSV is the source of truth. Direct DB edits will be overwritten on the next sync.
+
+### Folder layout (`/reference/`)
+
+```
+/reference/
+├── signals/                          # one CSV per signal_dictionary.category (post-063: all is_searchable=FALSE)
+│   ├── academic_distinction.csv      # PBK, Latin honors, valedictorian, etc.
+│   ├── athletics.csv                 # 6 rows (D1/Pro/Olympic = tier_3; JrOlympic/D2/D3 = tier_2)
+│   ├── competition.csv               # engineering competition leagues (FSAE, IREC, RoboCup, IAC, etc.)
+│   ├── engineering_team.csv          # category-row only (141 specific teams seeded via import-teams.mjs)
+│   ├── fellowship.csv                # non-university only (Hertz, KP, Thiel, etc.)
+│   ├── founder.csv                   # 3 rows after migration 063 (Side Project Founder dropped)
+│   ├── greek_life.csv
+│   ├── hackathon.csv
+│   ├── military.csv
+│   ├── national_lab.csv              # federal R&D centers ONLY (JPL, Lincoln Lab, MITRE, etc.)
+│   ├── olympiad.csv
+│   ├── patent.csv
+│   ├── publication.csv               # conferences + tag-style ("Has Conference Publication")
+│   ├── research_institute.csv        # Allen AI, Arc, Santa Fe, CSET, RAND, Broad
+│   ├── scholarship.csv               # Rhodes, Marshall, Truman, etc.
+│   ├── student_leadership.csv
+│   ├── student_venture_fund.csv      # Dorm Room Fund, RDV, Prospect, Harvard Ventures Alpha
+│   ├── university_fellowship.csv     # Mayfield, Kessler, HUTIF, ELITE, Viterbi, Tsai CITY
+│   ├── university_incubator_accelerator.csv  # StartX, SkyDeck, delta v, Sandbox, etc.
+│   ├── university_lab.csv            # SAIL, BAIR, Sky, CSAIL, ERL, SISL
+│   └── university_program.csv        # M.E.T., M&T, IBE, Iovine, Schreyer, CS+X, Converse, SEAL
+├── teams/
+│   ├── teams.csv                     # 141 university teams (FSAE, rocketry, etc.)
+│   ├── competitions.csv              # 21 competition leagues
+│   └── (team_domain_tags loaded by scripts/import-teams.mjs)
+├── companies/
+│   └── company_scores.csv            # company year-scores source (moved from ~/Downloads on 2026-05-20)
+├── investors/
+│   └── investor_tiers.csv            # 70 rows: 44 VC firms + 26 individual angels (post-migration 061)
+├── dictionaries/
+│   └── field_of_study.csv            # 86 rows → 43 normalized values (added migration 064)
+├── schools/                          # canonical school list + aliases (TBD — not yet CSV-driven)
+└── search_intents/
+    └── intent_signal_map.csv         # reference-only; not DB-loaded (AI chat search workstream will consume)
+```
+
+### Sync script (`scripts/sync-reference.mjs`)
+
+- Dispatcher pattern — one handler per CSV target table.
+- `--dry-run` prints diff (inserts / updates / deletes) without writing.
+- `--only=signals/athletics.csv,investors/investor_tiers.csv` to scope.
+- `--table=signal_dictionary` to scope by target table.
+- UPSERT on conflict keys: `signal_dictionary(canonical_name, category)`, `investor_tiers(investor_name)`.
+- **Diff scoping for signal CSVs** — each CSV's diff is restricted to its own category (athletics.csv compares against `WHERE category='athletics'`, not the whole table), so rows in DB outside that category aren't touched.
+- Deletes cascade through FKs where configured (e.g., `person_signals` follows `signal_dictionary` deletes — per the "candidate data is test material until launch" memory, this is acceptable).
+- The `investor_tiers.kind` legacy column is kept in sync with `investor_type` via a post-sync SQL the script emits — run it manually after sync if you see the prompt.
+
+### What's NOT yet CSV-driven (still ad-hoc)
+
+- `companies` + `company_year_scores` — uses `scripts/reseed-companies.mjs` reading from `/reference/companies/company_scores.csv`. Not yet folded into sync-reference because the company table is too large to UPSERT row-by-row efficiently.
+- `teams` + `competitions` + `team_domain_tag_dictionary` — uses `scripts/import-teams.mjs`. Could be folded into sync-reference; not today.
+- `schools` + `school_aliases` — uses `scripts/seed-universities.mjs` + `scripts/seed-school-aliases.mjs`. Backlog item to migrate.
+- `seniority_rules` — DB-only, no CSV. Backlog item.
+- `lib/companies/tagger/dictionary.ts` — hardcoded TS dictionary. Stays as code because it's deeply tied to the Claude prompt structure.
+- `lib/companies/taxonomy.ts` — hardcoded TS (CATEGORIES + HARDWARE_INDUSTRIES + NON_HARDWARE_INDUSTRIES + domain tags). Stays as code because it's enforced via CHECK constraints AND tagger prompt.
+- `lib/tenure/data/*.ts` + `lib/education/data/*.ts` + `lib/locations/us-locations.ts` — small, semantic, paired with logic in same module. Stay as code.
+
+---
+
 ## Current Tech Stack
 
 | Layer | Tool |
@@ -523,7 +635,7 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 
 ---
 
-## Database: Final Schema State (after migrations 001–047)
+## Database: Final Schema State (after migrations 001–064)
 
 **Migration ledger** (full per-migration descriptions live in `supabase/migrations/*.sql` headers):
 - 001 — Phase 1 normalized schema + enums
@@ -570,6 +682,11 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 - 055 — `people.is_current_founder` + `is_former_founder` BOOLEAN columns + partial indexes. Computed by `computeAndWriteDerivedFields()` via `/\b(co-?)?founder\b/i` title match or `seniority_normalized='founder'`. Mutually exclusive by definition.
 - 058 — rename `candidate_bucket` value `non_vetted` → `flagged`. CHECK constraint updated to `(vetted, needs_review, flagged)`. Same admin-only semantic; clearer name. Default UI behavior: flagged candidates excluded from main list unless admin explicitly selects them. Numbered 058 (skipping 056/057) to avoid collision with the parallel sourcing-pipeline workstream on `sourcing-pipeline-phase1` branch.
 - 059 — fix `seniority_dictionary` rank ordering: founder bumped from rank 6 → 8 (now the highest active rank); manager 7→6; executive 8→7. Locked spec: `intern(1) < junior_ic(2) < individual_contributor(3) < senior_ic(4) < lead_ic(5) < manager(6) < executive(7) < founder(8)`. Affects `highest_seniority_reached` derivation; scoring engine's executive override is gated on `=executive` and is unaffected.
+- 060 — extend `signal_dictionary.category` CHECK with **6 net-new categories** for university-affiliated and research-org signal coverage: `university_program`, `university_fellowship`, `university_incubator_accelerator`, `university_lab`, `research_institute`, `student_venture_fund`. Total: 31 categories in CHECK constraint. Data load via `scripts/sync-reference.mjs` from `/reference/signals/*.csv`.
+- 061 — add `investor_tiers.investor_type` column (`vc_firm` / `angel`, default `vc_firm`) so VC firms and individual angels coexist with a clear distinction. Existing rows defaulted to `vc_firm`; sync from `/reference/investors/investor_tiers.csv` corrected the 19 rows that should be `angel` (kept from older `kind='angel'` tagging) and seeded 7 new angels (Alana Goyal, Charlie Cheever, Daniel Gross, Jack Altman, Mike Vernal, Sahil Lavingia, Sriram Krishnan).
+- 062 — add `signal_dictionary.is_searchable BOOLEAN DEFAULT TRUE` column + cleanup pass on dictionary entries (30 Under 30 removal, naming cleanups). Wired into UI filter dropdown so individual signals can be flagged out of the searchable set without deletion. (Universal one-bucket policy in 063 then flips ALL rows to FALSE.)
+- 063 — universal one-bucket filter policy: `UPDATE signal_dictionary SET is_searchable = FALSE` on all rows. Only categories surface as UI filters today; granular per-signal search deferred to AI chat workstream. Added `people.is_vc_backed_founder` + `is_bootstrapped_founder` BOOLEAN columns with partial indexes. Dropped Side Project Founder from signal_dictionary (founder category 4 → 3 rows). VC-backed gated on: funding rounds OR recorded investors OR linked incubator/accelerator signal OR `current_status IN ('acquired','public')`; bootstrapped is the default for founders. Auto-reclassifies on rescore via `computeAndWriteDerivedFields()`. Backfill yields 0 VC-backed / 21 bootstrapped today (data-quality gap — see CHANGELOG 2026-05-25 watch-out).
+- 064 — seeded `field_of_study_dictionary` with 86 rows → 43 distinct `field_of_study_normalized` values across 7 domain groups: core_engineering, advanced_engineering, software_cs, physical_sciences, life_sciences, math, design. Aliases include EECS→ECE, Mech E→Mechanical Engineering, CS→Computer Science, AI/ML→`artificial_intelligence_ml`, Life Sciences catch-all (biology/biochem/microbiology/genetics roll up), comp-bio/bioinformatics together, neuroscience kept distinct. Wired as multi-select in FilterSidebar + search-builder. Backfill populated 22 `person_education` rows (sparse `field_of_study_raw` coverage on existing base).
 
 The "Normalized tables" / "Dictionary tables" lists below describe the post-migration state. They name the most-used columns; consult the actual schema for exhaustive column lists.
 
@@ -603,7 +720,7 @@ The "Normalized tables" / "Dictionary tables" lists below describe the post-migr
 - `title_dictionary` — ~175 patterns, populated by migration 002 + `scripts/seed-recruiting-titles.mjs` (16 recruiting titles). **Stores title_normalized + function_normalized + specialty_normalized + confidence only — seniority comes from `seniority_rules`.**
 - `employment_type_dictionary` — 20 patterns (full-time, contract, freelance, part-time, internship, board, advisory variants)
 - `degree_dictionary` — 32 patterns (BS, BA, MS, MA, MBA, PhD, JD, MD, Certificate, Bootcamp, Coursework, etc.)
-- `field_of_study_dictionary` — empty (declared in migration, no seeds yet)
+- `field_of_study_dictionary` — 86 rows → 43 normalized values (seeded migration 064). Domain groups: core_engineering, advanced_engineering, software_cs, physical_sciences, life_sciences, math, design.
 - `seniority_dictionary` — 11 rows (9 active + 2 deprecated, with rank_order 0–8)
 - `seniority_rules` — 400+ rows, exact case-insensitive matching (see Seniority System section above)
 - `title_level_dictionary` — ~85 patterns mapping title substrings to numeric levels (1–10). Level scale: 1=intern, 2=junior, 3=mid-IC, 4=IC-II, 5=senior/IC-III, 6=staff/lead, 7=principal, 8=distinguished, 9=VP/director, 10=C-suite. Per-experience `title_level` stored on `person_experiences`; trajectory across roles → `people.title_level_slope`.
@@ -626,17 +743,8 @@ The "Normalized tables" / "Dictionary tables" lists below describe the post-migr
 │   ├── 07-person-enrich.md                      ← /person/enrich (cached / IN-DB) + add-on cost model
 │   ├── 08-person-autocomplete.md                ← /person/search/autocomplete (FREE)
 │   └── 09-person-live-enrich.md                 ← /person/professional_network/enrich/live (5 credits, real-time scrape)
-├── supabase/migrations/                         ← see "Database: Final Schema State" for full migration set 001–047
-├── supabase/seeds/                              ← CSV source-of-truth for migration 043, 044, 045 data + import-teams.mjs
-│   ├── README.md                                ← run order + diagnostics + idempotency notes
-│   ├── olympiads_signals.csv                    ← 17 rows → signal_dictionary category='olympiad'
-│   ├── national_labs_signals.csv                ← 24 rows → signal_dictionary category='national_lab'
-│   ├── tags_signals.csv                         ← 12 rows (4 ROTC + 6 veteran + 1 patent + 1 publication)
-│   ├── hackathons_signals.csv                   ← 24 rows → signal_dictionary category='hackathon'
-│   ├── conferences_signals.csv                  ← 49 rows → signal_dictionary category='publication'
-│   ├── fellowships_signals.csv                  ← 45 rows → signal_dictionary category='fellowship' (UPSERT MERGE)
-│   ├── vetted_competitions.csv                  ← 21 rows → competitions table + signal_dictionary
-│   └── vetted_teams.csv                         ← 142 rows → 141 teams + 142 team_competition_map + 17 domain tags
+├── supabase/migrations/                         ← see "Database: Final Schema State" for full migration set 001–064
+├── supabase/seeds/                              ← DEPRECATED post-migration 060. Source of truth is now /reference/. README.md is a deprecation pointer; legacy CSVs (olympiads_signals, national_labs_signals, tags_signals, hackathons_signals, conferences_signals, fellowships_signals, vetted_competitions, vetted_teams) live on for historical replay only.
 │
 ├── app/                                         ← Next.js 14 App Router
 │   ├── page.tsx                                 ← "/" renders ProfileTable
@@ -686,6 +794,7 @@ The "Normalized tables" / "Dictionary tables" lists below describe the post-migr
 │           │   └── [id]/
 │           │       ├── tag/route.ts             ← "Tag now" button on company detail
 │           │       └── re-enrich/route.ts       ← refresh Crust firmographics + funding without re-tagging
+│           ├── bucket/[person_id]/route.ts      ← admin bucket override: POST {bucket, flagged_reasons, reason} → new candidate_bucket_assignments row with assigned_by='admin'
 │           └── rescore-all/route.ts             ← admin-only batch re-score endpoint for candidates
 │
 ├── lib/
@@ -923,75 +1032,14 @@ Required in `.env.local` and on Vercel:
 
 ---
 
-## Backlog
+## Backlog → moved out of this file
 
-Not scoped to a build phase yet. Ordered roughly by dependency / impact.
+The backlog content that used to live here has been split into separate docs:
+- **Sequenced upcoming work + recently completed** → [ROADMAP.md](ROADMAP.md)
+- **Major deferred features (>0.5 day to scope/build)** → [BACKLOG.md](BACKLOG.md)
+- **Small fixes (<0.5 day each)** → [BUGS.md](BUGS.md)
 
-### V1 scoring refactor — deferred from PR A (migrations 048-055)
-
-These were intentionally cut from the V1 refactor scope to keep PR A shippable. All have clear hooks in the already-shipped code; small follow-ups each.
-
-- **Kebab dropdown + recruiter view.** Today everything renders in admin view (bucket badges, score breakdown, flagged_reasons, clearance section, **Bucket column on main list**). Recruiter view should hide admin-only signals and surface a cleaner candidate-facing card — including hiding the Bucket column. Implementation: add a `?view=admin|recruiter` URL param + global toggle in nav. Default view per route. Affects ProfileTable, ProfileDrawer, profile/[id]/page.tsx, admin/companies/*. Scope ~0.5 day.
-- **Admin field editor for derived/normalized fields.** Today there's no admin UI to manually correct specialty, seniority (per-experience or highest_seniority_reached), career_progression, title_level_slope, or signals (add/remove individual person_signals rows). All are computed by extractors/scorers and may be wrong on edge cases. Bucket override (PR A) handles the bucket layer. Scope: small per-field editors with simple PATCH endpoints, anchored on the profile page in an "Admin corrections" section. ~1-2 days.
-- **Flags-only quick edit (separate from bucket override).** Admin sometimes wants to add/remove a single flag without re-evaluating the whole bucket. Today the only path is bucket override popover (which requires picking a bucket). Add a flag-only popover that inserts a new candidate_bucket_assignments row with the SAME bucket but edited flagged_reasons. Trivial — reuses the existing POST endpoint with bucket=current. ~50 LOC.
-- **Modular columns on the main list.** Admin should be able to pick which columns to show (e.g., hide Bucket, show Years, hide Tenure). Phased build: (a) localStorage-persisted column-visibility checklist behind a small "Columns" button in the table toolbar; (b) preference persistence in the DB once auth lands; (c) per-user role defaults. Foundation is small (~100 LOC for phase a). User has repeatedly asked for this — high latent value.
-- **Field of study filter (companion to Degree).** PR A added Degree-level filtering (Bachelor's / Master's / MBA / etc.) but not Field of Study (Computer Science / Electrical Engineering / Mechanical Engineering / Finance / etc.). The data already exists: `person_education.field_of_study_normalized`. Add a multi-select alongside the Degree filter in both the sidebar (Where they studied section) and build-a-search (Who they are section). Options pulled from `field_of_study_dictionary` if seeded, else `DISTINCT field_of_study_normalized` from the data. Filter logic mirrors degree: candidate matches if any education entry's normalized field is in the selected set. Scope ~50 LOC. Also surfaces the `field_of_study_dictionary` table which is empty per CLAUDE.md — may need a separate seed migration if we want canonical normalization (vs raw distincts).
-- **`company_quality_slope` bonus computation.** Migration 050 seeded the weight (mid=10, senior=5) but the scoring engine currently contributes 0 because no derivation exists. Logic: trajectory of `company_year_scores.company_score` across the candidate's last 2-3 FT roles, similar pattern to `career_progression` but on raw company scores. Should write to a new `people.company_quality_slope` derived column (rising/flat/declining/insufficient_data), then `score-candidate.ts` reads it like `title_level_slope`. Scope ~150 LOC.
-- **Rescore-on-seniority-change endpoint.** When admin edits a candidate's seniority manually (`career_stage_override` or per-experience `seniority_normalized`), trigger a rescore so the new bucket reflects the edit immediately. No UI exists for editing seniority yet — gate this on that surface being built. Scope ~50 LOC once the UI exists.
-- **Include-current-founders filter toggle.** Today current founders are excluded from the default list with no UI to opt back in. Add a checkbox to FilterSidebar ("Include current founders" — off by default) and wire to the `filteredPeople` filter at [app/components/ProfileTable.tsx:573](app/components/ProfileTable.tsx#L573). Pairs naturally with the kebab/recruiter-view PR.
-
-### Data quality
-
-- **Comprehensive `specialty_normalized` dictionary.** Current count is 25. Target 80–100 patterns for engineering alone (backend sub-specialties like payments/auth/data-pipeline, ML sub-specialties like NLP/vision/rec-sys, infra sub-specialties like kubernetes/observability/databases), then equivalent depth for product, design, sales, marketing, operations, recruiting, finance, data/analytics.
-- **Company data enrichment.** Pull funding rounds, founding year (partially done — 20 hand-seeded), investor names, headcount by year, and major events (acquisitions, layoffs, C-suite departures) so `company_metrics_by_year` has real data and tenure scoring has more context. Required precondition for the AI narrative summary below.
-- **Executive scoring weights.** Dedicated weight profile that deprioritizes `education` and `degree_relevance` and heavily weights `company_quality_recent`, `company_quality_average`, and role scope. Kicks in when `highest_seniority_reached = 'executive'` or when the scoring stage is `senior_career` AND current title matches the executive rule set.
-- **`isStudentTitle` regex at ingest derive-current step ([app/api/ingest/route.ts](app/api/ingest/route.ts)) only matches title patterns (`intern|internship|co-op|student`). Crust v2 sometimes returns `employment_type='Internship'` on roles with non-student titles like "Flight Test Engineering" — those slip through the filter. Cross-check `employment_type='internship'` once that signal is consistently populated in v2 responses. Mitigated for now by `is_primary_current` being checked first (Crust's `is_default` flag wins over heuristics).**
-- **Concurrent-ingest race on `companies` name-only inserts.** [`upsertCompany`](app/api/ingest/route.ts) (post-`company-mapper-enrich-minimal` merge) handles the `linkedin_url` UNIQUE collision via 23505 re-resolve, but two ingests of a never-seen-before company *without* a LinkedIn URL (e.g. concurrent Chrome extension scrapes) can still create duplicate rows because `companies.company_name` has no UNIQUE constraint. Low impact today — extension throughput is single-user, and Crust import always has a `linkedin_url` to dedupe by. Fix would be a case-insensitive UNIQUE on `company_name` (or a generated `company_name_lower` column) — not safe to add without first deduping existing case-variant duplicates.
-- **Schools dedup expanded scope (post-migration 047 import).** The schools-dedup backlog now includes 37 schools added during the competitions/teams migration to resolve unmatched team imports. Some of these *may* duplicate existing canonical rows under different naming (e.g. `Pennsylvania State University` might co-exist with `Penn State University`; `Texas A&M University` with `Texas A&M`; `Virginia Polytechnic Institute and State University` with `Virginia Tech`). A dedup pass needs to identify and merge any duplicates that exist. Until then `teams.school_id` may point at the newly-inserted row rather than a pre-existing canonical row for those schools.
-- **Team role tier 2 + 3 extractor.** V1 of the team-role extractor only populates `team_role_tier=4` (Captain/Chief/President/Founder) and `team_role_tier=1` (everyone else). Tiers 2 (Engineer/Specialist) and 3 (Dept/Subsystem Lead) stay NULL until a future PR extends the regex set. The `team_role_text` column preserves source text so the future extractor can re-classify without re-fetching from `raw_ingest_events`.
-- **National Labs company group seed not yet run.** `scripts/seed-national-labs-company-group.mjs` is staged but hasn't been executed against prod. Re-run periodically as Crust ingest adds national lab companies to the `companies` table. The signal_dictionary `national_lab` category (24 rows) already provides text-based detection; this script just adds clean filter-UX via `company_groups` when the companies are FK-linkable.
-
-### UI / search surface (post-migration 040–047)
-
-- **Signals column on the main candidate table (`/`).** Currently candidates' signals only render in the drawer + full profile page — recruiters scanning the main list can't see why a candidate is interesting at a glance. Add a Signals column following the existing pattern (1–2 lead chips + `+N` overflow with click-to-expand popover, mirroring the Company column's multi-subcategory pattern). **Scope tight**: top 3–5 chips per row, not every signal on every row; 2–3 days max. Should NOT slip the AI chat search project — signals column is table stakes, AI chat is the actual product moment. Ordering preference may evolve (e.g., prioritize signals matching active filters), but defer that until first version ships and recruiter feedback informs it.
-- **Crust enrichment for activities/honors coverage.** ~90% of `person_education` rows have empty `activities_raw` because Crust's `/person/search` (used by ingest today) doesn't return `activities_and_societies` — only `/person/enrich` does. This is a structural gap; backfill of the existing extractor won't fix it because the source text isn't there. When this becomes a priority, three approaches to evaluate (probably some combination):
-  - **(a) Enrich-at-ingest** — every new candidate gets enriched immediately. Blanket coverage; costs ~$0.01–0.03 per candidate ingested (depends on Crust per-record pricing).
-  - **(b) Enrich-on-promote** — fire enrich only when a recruiter signals interest (added to list, opened detail, etc.). Lazy, cheaper, more targeted.
-  - **(c) Enrich-backfill** — one-time pass over existing 30+ candidate corpus to fill the gap retroactively. Solves history; doesn't help future.
-
-  Most likely answer is (a) + (b) combined: (a) for proactive coverage, (b) as a "we missed it" recovery path for high-value candidates. Defer the decision until signal-driven search proves valuable enough to justify the credit spend.
-
-### Vetted Companies V1 — vocabulary gaps surfaced during eval
-
-- **Gaming as a hardware domain_tag.** Currently Gaming lives only in `NON_HARDWARE_DOMAIN_TAGS` (typed as a non-hardware-only tag). Hardware companies with real gaming businesses — Sony PlayStation, Valve (Steam Deck), Razer, Logitech G — have nowhere to surface that signal. During the larger-eval ground truth (2026-05-03), Sony's domain_tags ended up `[]` for this reason. Defer the call until recruiter searches surface gaming-hardware roles often enough to justify adding `Gaming` to `HARDWARE_DOMAIN_TAGS`. If added, requires a migration that updates the CHECK constraint AND `lib/companies/taxonomy.ts` together.
-- **Out-of-scope industry gaps**: Telecommunications (Verizon falls to Services), Real Estate / co-working (WeWork falls to Services), Streaming/Music as primary (Spotify falls to Consumer Tech), Agriculture (John Deere falls to Industrial Manufacturing). Tracked as known gaps in the larger-eval report; only add as V1 industries if recruiter demand surfaces them.
-
-### Vetted Companies V1 — tagger issues to track in production
-
-These are known tagger limitations from the round-3/round-4 eval. Not severe enough to block ship, but worth watching once the cron is live.
-
-- **Climate-vs-Energy disambiguation (systemic).** 2/4 Climate companies misclassified as Energy across rounds 3-4: Climeworks (DAC, called Energy) and Twelve (CO2-to-fuel, called Energy). Charm Industrial and Heirloom Carbon classified correctly. Pattern: Claude reads "produces fuel/material from carbon" as energy-production rather than climate-tech. **Track in production.** Revisit if recruiters surface confusion or if more Climate cos enter the DB and the misclassification rate stays high. A prompt-tightening fix is possible (rule: "carbon removal/avoidance mission → Climate, even if byproduct is fuel/material") but defer until justified.
-- **AI-feature over-tagging on Asana (borderline).** In the larger eval, 3/3 AI-feature-not-core companies (Asana / Zoom / Salesforce) classified primary correctly as SaaS, but Asana was over-tagged with `AI` in domain_tags. Zoom and Salesforce correctly suppressed it; Notion (round-3) also passed. **Don't fix now** — risk of regressing AI-suppression on AI-core companies (Anthropic / OpenAI / Mistral / Perplexity all got AI-suppression right 4/4 in round-4). Track in production; revisit if over-tagging on AI-feature SaaS rises above ~25% of cases.
-
-### Pipelines
-
-- **Early-stage startup monitoring.** Auto-ingest companies backed by A16Z, Sequoia, YC (and similar) on funding rounds or stealth-exit events. Keeps the scored-company set fresh without manual re-seeding.
-- **Bulk company scoring.** Claude + Excel pipeline to auto-apply tier scores to mid-tier companies based on founding date and other signals. Output tagged as `AI-averaged` vs `manually ranked` (add a column or reuse `company_score_mode`). Deliverable: CSV that re-seeds `company_year_scores` in bulk.
-- **PDL Preview API.** Explore as a supplement / alternative to Crust Data for bulk pulls (different coverage profile, different credit economics).
-- **Import UI: sample-first workflow.** Before firing a full 500-profile pull, let the user request 50, review the mapped output, then confirm the full pull. Reduces credit burn on bad filters.
-
-### AI (bounded, non-decision-making)
-
-- **AI narrative summary.** Claude API generates a short story-of-the-candidate paragraph from their structured data (experiences + company context + education). This is summarization, not judgment — the scoring and bucketing stay deterministic. Depends on company data enrichment to have enough signal for useful summaries.
-
-### Crust Data follow-ups
-
-Confirm directly with Crust:
-- Exact JSON shape for the `exclude_profiles` parameter on `/screener/persondb/search`
-- Whether a `years_of_experience` filter is supported (to pre-filter by experience server-side)
-- Full list of valid `SENIORITY_LEVEL` values accepted by the filter
-- Whether a `school` filter is available
-- Direct URL to the full authenticated API docs (our current docs are public-facing and partial)
+This file (CLAUDE.md) keeps only engineering context: architecture, schema, scoring spec, migration ledger, hard rules, file layout, design rules, bucket taxonomy, derived fields, development rules.
 
 ---
 
@@ -1027,7 +1075,7 @@ A curl response of HTTP 200 is NOT proof a page works. Next.js often prerenders 
 
 ### End-of-session docs update — MUST DO
 
-Before wrapping a session that shipped any feature, migration, or architectural change, update CLAUDE.md so the next Claude session starts with accurate ground truth. Bump the migration ledger, add/revise the relevant section, update the File Layout if new files were added, and prune anything now wrong. See the "End-of-session docs update" section near the bottom of this file for the specific trigger pattern.
+Before wrapping a session that shipped any feature, migration, or architectural change, update CLAUDE.md + CHANGELOG.md + ROADMAP.md so the next Claude session starts with accurate ground truth. The full procedure (trigger phrase `wrap session`, the 8 steps, the next-session starter-prompt template) lives in the "End-of-Session Protocol" section near the bottom of this file.
 
 A stale CLAUDE.md is worse than a short one — future sessions read it as authoritative.
 
@@ -1509,15 +1557,76 @@ Without these edits, signals with the new category exist in the DB but don't ren
 
 ---
 
-## End-of-session docs update — read this before closing a session
+## End-of-Session Protocol
 
-Before closing a session that shipped a feature, migration, or architectural change, **update CLAUDE.md so the next Claude has accurate ground truth.** Specifically:
+**Trigger phrase: `wrap session`** (exact). When Matt types this, execute the
+following without further prompting — do the work, gate only at the explicit
+approval points (steps 7 and 10):
 
-- Bump the migration ledger if migrations were added.
-- Add or revise the relevant section (or create one if a new system was introduced).
-- Update the File Layout if files were added.
-- Prune anything that's now wrong.
+1. **Generate a short session summary** (2–4 sentences max).
+2. **Append a dated entry to [CHANGELOG.md](CHANGELOG.md)** using the 6-block
+   template (if today's entry already exists, expand it rather than duplicating
+   the date):
+   ```
+   ## YYYY-MM-DD — Headline
 
-A stale CLAUDE.md is worse than a short one — future sessions read it as authoritative and either reinvent existing systems or break them.
+   **Shipped**
+   **Decisions**
+   **Where we left off**
+   **Open questions**
+   **Watch-outs**
+   ```
+3. **Update CLAUDE.md migration ledger** if any new migrations ran this session.
+   Add the section/sub-section if a new system was introduced. Update the File
+   Layout if new files were added. Prune anything now wrong.
+4. **Update [ROADMAP.md](ROADMAP.md)** — move completed items to Recently
+   Completed (with PR link), add new Next Up items if any surfaced.
+5. **Add new items to [BACKLOG.md](BACKLOG.md)** (organized by domain) if surfaced.
+6. **Add small fixes to [BUGS.md](BUGS.md)** if surfaced.
+7. **Show docs file changes for review.** DO NOT auto-commit. Wait for explicit
+   approval.
+8. **After Matt approves**, commit the docs with message:
+   ```
+   Wrap session YYYY-MM-DD: <headline>
+   ```
+9. **Push the commit to the current branch.**
+10. **PR MERGE DECISION STEP.** If the current branch has an open PR:
+    - Check PR state: build status, Vercel preview status, any unresolved review
+      comments, any tests failing. Use `gh pr view <N> --json` for state +
+      `gh pr checks <N>` for CI.
+    - Print a concise readiness report:
+      ```
+      Branch: <name>
+      PR: #<N>
+      Build: <pass/fail>
+      Vercel preview: <URL + status>
+      Tests: <pass/fail>
+      Open review comments: <count>
+      Recommendation: MERGE / DO NOT MERGE YET
+      Reasoning: <1–2 sentences>
+      ```
+    - Ask Matt: **"Merge PR #<N> to main? (yes / no / not yet)"**
+    - If **yes**: squash-and-merge with the PR title as the commit message,
+      then delete the branch (local + remote).
+    - If **no** or **not yet**: leave the PR open. Note in the starter prompt
+      (step 11) that the PR is still pending.
+    - If no open PR on this branch: skip the merge ask; note in the starter
+      prompt that work is direct-to-main or pre-PR.
+11. **Print the next-session starter prompt** — a ready-to-copy block in this
+    exact shape (reflect PR merge status from step 10):
+    ```
+    ## Where we left off
+    [summary including PR status — merged, pending, blocked]
+    ## What's in flight
+    [current branch state, any open PRs and why]
+    ## Next thing to do
+    [literal first task]
+    ## Open questions
+    ## Watch-outs
+    ```
+    This is the deliverable Matt copies into the next session's first message so
+    the new CC instance starts with full context.
 
-The trigger pattern: when the user says "we're good for tonight" / "let's wrap up" / "ship and we're done", do the docs sweep BEFORE stopping. Don't wait to be asked.
+A stale CLAUDE.md is worse than a short one — future sessions read it as
+authoritative and either reinvent existing systems or break them. The whole
+point of this protocol is to keep the docs in lockstep with reality.

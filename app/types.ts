@@ -77,6 +77,8 @@ export interface Person {
   hypergrowth_companies_count: number
   is_current_founder: boolean
   is_former_founder: boolean
+  is_vc_backed_founder: boolean
+  is_bootstrapped_founder: boolean
   narrative_summary: string | null
   narrative_summary_generated_at: string | null
   clearance_level: ClearanceLevel

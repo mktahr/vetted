@@ -40,6 +40,8 @@ export interface DerivedFields {
   hypergrowth_companies_count: number
   is_current_founder: boolean
   is_former_founder: boolean
+  is_vc_backed_founder: boolean
+  is_bootstrapped_founder: boolean
 }
 
 // Matches "Founder", "Co-Founder", "Cofounder", "Founder & CEO", etc. but
@@ -279,6 +281,73 @@ export async function computeDerivedFields(
   const isCurrentFounder = founderExps.some(e => e.is_current === true)
   const isFormerFounder = !isCurrentFounder && founderExps.some(e => e.is_current === false)
 
+  // 8b. VC-backed vs Bootstrapped founder taxonomy.
+  //     Binary classification per locked spec. Re-runs on every scoreCandidate
+  //     so candidates auto-reclassify as funding data improves over time.
+  //
+  //     VC-backed signals (any of the following → is_vc_backed_founder=TRUE):
+  //       • Founder experience's company has 1+ rows in company_funding_rounds
+  //       • Founder experience's company has current_status IN ('acquired','public')
+  //       • Candidate has 1+ person_signals in (incubator, university_incubator_accelerator)
+  //         — proxy for "this founder went through YC / Techstars / SkyDeck / etc."
+  //         Not perfectly tied to a specific founder experience (we don't store
+  //         that linkage today) but accepted false positive rate is low.
+  //
+  //     Bootstrapped signal (default when no VC-backing signal):
+  //       • Founder experience's company has 0 funding rounds, no acquired/public status,
+  //         AND candidate has no incubator/accelerator signals
+  //       • OR founder experience's company isn't in companies table at all (better to
+  //         surface than hide — user explicit decision)
+  //
+  //     Both can be TRUE: candidate has multiple founder roles, some VC-backed
+  //     and some bootstrapped.
+  let isVcBackedFounder = false
+  let isBootstrappedFounder = false
+
+  if (founderExps.length > 0) {
+    const founderCompanyIds = Array.from(new Set(
+      founderExps.map(e => e.company_id).filter((x): x is string => !!x)
+    ))
+
+    // Check incubator/accelerator person_signals (candidate-wide, not exp-specific).
+    const { data: incubatorSignals } = await supabase
+      .from('person_signals_active')
+      .select('id')
+      .eq('person_id', personId)
+      .in('category', ['incubator', 'university_incubator_accelerator'])
+      .limit(1)
+    const candidateHasIncubatorSignal = (incubatorSignals?.length || 0) > 0
+
+    // Check company-side VC-backing signals for the founder companies.
+    let companyVcBackedIds = new Set<string>()
+    if (founderCompanyIds.length > 0) {
+      const [fundingRes, statusRes] = await Promise.all([
+        supabase.from('company_funding_rounds').select('company_id').in('company_id', founderCompanyIds),
+        supabase.from('companies').select('company_id, current_status').in('company_id', founderCompanyIds),
+      ])
+      for (const r of fundingRes.data || []) companyVcBackedIds.add((r as any).company_id)
+      for (const r of statusRes.data || []) {
+        if (['acquired', 'public'].includes((r as any).current_status)) {
+          companyVcBackedIds.add((r as any).company_id)
+        }
+      }
+    }
+
+    // Per-experience classification, then aggregate.
+    for (const exp of founderExps) {
+      const cid = exp.company_id
+      // No company_id (couldn't resolve to companies table) → bootstrapped per user spec.
+      if (!cid) { isBootstrappedFounder = true; continue }
+
+      const companySideVc = companyVcBackedIds.has(cid)
+      if (companySideVc || candidateHasIncubatorSignal) {
+        isVcBackedFounder = true
+      } else {
+        isBootstrappedFounder = true
+      }
+    }
+  }
+
   // 8. Person-level specialty aggregation (most-recent first for recency weighting)
   const experiencesRecentFirst = [...experiences].reverse()
   const specialties: PersonSpecialties = aggregatePersonSpecialties(
@@ -304,6 +373,8 @@ export async function computeDerivedFields(
     hypergrowth_companies_count: hyperCompanyIds.size,
     is_current_founder: isCurrentFounder,
     is_former_founder: isFormerFounder,
+    is_vc_backed_founder: isVcBackedFounder,
+    is_bootstrapped_founder: isBootstrappedFounder,
   }
 }
 

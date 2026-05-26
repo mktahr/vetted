@@ -1,5 +1,7 @@
 # Vetted — Getting Started on New Machine
 
+> ⚠️ **STALE** — references old build phases. Needs a refresh. Most of the content (step-by-step VS Code / Node / Git install, Supabase migrations 001-002 manual paste) is no longer how this codebase is bootstrapped. Keeping the file because the high-level flow still has onboarding value; will rewrite when there's a confirmed onboarding need.
+
 ## What's in this folder
 
 | File/Folder | What it is |

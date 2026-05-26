@@ -1,0 +1,2 @@
+canonical_name,category,subcategory,tier_group,aliases,source_field_hints,canonical_url,description,is_positive,is_active,is_searchable
+US Patent Holder,patent,patent,tier_2,us patent;uspto;patent holder;inventor,about;education_description;experience_description;activities_honors,https://www.uspto.gov,Holds at least one US patent; deep tech signal,true,true,false
