@@ -13,6 +13,7 @@ The core insight: instead of asking AI to judge a candidate, we build our own di
 This file (CLAUDE.md) is the engineering context. Other docs at repo root:
 
 - **[README.md](README.md)** — GitHub-facing project intro: what Vetted is, stack summary, data-flow paragraph.
+- **[SESSION_HANDOFF.md](SESSION_HANDOFF.md)** — Latest session's handoff block only (overwritten each `wrap session`). Read first by the Start-of-Session Protocol when Matt types "start session".
 - **[CHANGELOG.md](CHANGELOG.md)** — Reverse-chronological work-session log (shipped / decisions / where we left off / open questions / watch-outs). Updated automatically by the End-of-Session Protocol when Matt types "wrap session".
 - **[ROADMAP.md](ROADMAP.md)** — Current build, sequenced "Next Up" items, recently completed (with PR links). The "what are we shipping" doc.
 - **[BACKLOG.md](BACKLOG.md)** — Major deferred features (>0.5 day to scope/build), sub-sectioned by domain. Each entry has a trigger condition for when to build.
@@ -22,7 +23,8 @@ This file (CLAUDE.md) is the engineering context. Other docs at repo root:
 - **[GETTING_STARTED.md](GETTING_STARTED.md)** — Onboarding for a new machine. **Currently stale; references old build phases.**
 
 **When to update which:**
-- Session ends (Matt typed "wrap session") → CHANGELOG.md (per End-of-Session Protocol below)
+- Session ends (Matt typed "wrap session") → CHANGELOG.md (append) + SESSION_HANDOFF.md (overwrite) per End-of-Session Protocol below
+- Session starts (Matt typed "start session") → read SESSION_HANDOFF.md + ROADMAP + CHANGELOG top entry per Start-of-Session Protocol below
 - New deferred feature → BACKLOG.md
 - New small fix that's <0.5 day → BUGS.md
 - Item moved into active queue → ROADMAP.md "Next Up"
@@ -41,7 +43,8 @@ Matt uses plain-English phrases for common doc operations. Recognize these and a
 | "Add to backlog" | Edit BACKLOG.md (deferred features, sub-sectioned by domain) |
 | "Add to bugs" | Edit BUGS.md (small fixes) |
 | "Add to CLAUDE.md" | Add engineering context to this file |
-| "wrap session" (exact) | Execute the End-of-Session Protocol: session summary + CHANGELOG entry + migration ledger + ROADMAP + BACKLOG/BUGS + next-session starter prompt. Show diff for approval; commit only after approval. See "End-of-Session Protocol" section below. |
+| "start session" (exact) | Execute the Start-of-Session Protocol: read SESSION_HANDOFF.md + ROADMAP + most recent CHANGELOG entry, synthesize kickoff message, ask whether to proceed with the queued task or pivot. See "Start-of-Session Protocol" section below. |
+| "wrap session" (exact) | Execute the End-of-Session Protocol: session summary + CHANGELOG entry + migration ledger + ROADMAP + BACKLOG/BUGS + commit + push + PR merge decision + write SESSION_HANDOFF.md. Two approval gates (post-docs-diff, pre-merge). See "End-of-Session Protocol" section below. |
 | "Wrap up session" | Confirm everything merged to main, pushed to GitHub, deployed to prod, all docs updated. Report any gaps. (Status verification — distinct from "wrap session" which executes the docs-update protocol.) |
 | "Status check" | Report: current branch, what's in flight, last commit, what's on roadmap next |
 | "What did we ship last session?" | Report the last merged PR with contents (from `git log main` and PR titles) |
@@ -1557,6 +1560,45 @@ Without these edits, signals with the new category exist in the DB but don't ren
 
 ---
 
+## Start-of-Session Protocol
+
+**Trigger phrase: `start session`** (exact). When Matt types this at the
+beginning of a new CC session, execute:
+
+1. **Read [SESSION_HANDOFF.md](SESSION_HANDOFF.md)** — the latest handoff
+   block written by the previous session's End-of-Session Protocol.
+2. **Read [ROADMAP.md](ROADMAP.md)** — specifically the "Current Build" and
+   "Next Up" sections.
+3. **Read the most recent entry in [CHANGELOG.md](CHANGELOG.md)** (top entry,
+   reverse-chronological).
+4. **Synthesize the three sources into a brief kickoff message** in this
+   exact format:
+   ```
+   ## Last session shipped
+   [1–2 sentence summary from CHANGELOG most recent entry]
+
+   ## Picking up from
+   [Next thing to do from SESSION_HANDOFF]
+
+   ## Open questions Matt needs to decide
+   [from SESSION_HANDOFF if any; omit section if none]
+
+   ## Watch-outs for this session
+   [from SESSION_HANDOFF if any; omit section if none]
+
+   ## Current Build per ROADMAP
+   [what ROADMAP says is in flight]
+   ```
+5. **Then ask**: *"Ready to start. Want to proceed with [Next thing to do],
+   or pivot to something else?"*
+6. **Wait for Matt's response** before doing any work.
+
+Matt's first message in a new session is just `start session` — CC orients
+itself from the handoff file + roadmap + changelog rather than Matt pasting
+context manually.
+
+---
+
 ## End-of-Session Protocol
 
 **Trigger phrase: `wrap session`** (exact). When Matt types this, execute the
@@ -1612,8 +1654,14 @@ approval points (steps 7 and 10):
       (step 11) that the PR is still pending.
     - If no open PR on this branch: skip the merge ask; note in the starter
       prompt that work is direct-to-main or pre-PR.
-11. **Print the next-session starter prompt** — a ready-to-copy block in this
-    exact shape (reflect PR merge status from step 10):
+11. **Generate the next-session starter prompt.** Write it to
+    [SESSION_HANDOFF.md](SESSION_HANDOFF.md) — **overwrite** the previous
+    contents, do not append. Print it in the chat too for visibility. Include
+    SESSION_HANDOFF.md in the same commit as the other docs updates from
+    step 8 (if step 8 already shipped, this becomes its own follow-on commit
+    `Update SESSION_HANDOFF for next session`).
+
+    Format (reflect PR merge status from step 10):
     ```
     ## Where we left off
     [summary including PR status — merged, pending, blocked]
@@ -1624,8 +1672,7 @@ approval points (steps 7 and 10):
     ## Open questions
     ## Watch-outs
     ```
-    This is the deliverable Matt copies into the next session's first message so
-    the new CC instance starts with full context.
+    The next CC session reads this file via the Start-of-Session Protocol.
 
 A stale CLAUDE.md is worse than a short one — future sessions read it as
 authoritative and either reinvent existing systems or break them. The whole
