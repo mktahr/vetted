@@ -228,7 +228,7 @@ function SearchBuilderInner() {
       const sigOpts: MultiSelectOption[] = []
       // Universal one-bucket: only category-level filters; no individual signals.
       for (const cat of SIGNAL_CATEGORY_ORDER) {
-        sigOpts.push({ value: `cat:${cat}`, label: SIGNAL_CATEGORY_LABELS[cat] || cat, sublabel: 'Category' })
+        sigOpts.push({ value: `cat:${cat}`, label: SIGNAL_CATEGORY_LABELS[cat] || cat })
       }
       setSignalOptions(sigOpts)
 

@@ -544,7 +544,7 @@ export default function ProfileTable() {
         // individual signal options. Granular search (specific fellowships,
         // hackathons, etc.) happens via AI chat search workstream, not filter dropdown.
         for (const cat of SIGNAL_CATEGORY_ORDER) {
-          sigOpts.push({ value: `cat:${cat}`, label: SIGNAL_CATEGORY_LABELS[cat] || cat, sublabel: 'Category' })
+          sigOpts.push({ value: `cat:${cat}`, label: SIGNAL_CATEGORY_LABELS[cat] || cat })
         }
         // Per universal one-bucket policy (migration 063: is_searchable=FALSE on
         // all rows), no individual signal options appear. Block below is kept
