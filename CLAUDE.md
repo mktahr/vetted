@@ -1560,12 +1560,13 @@ Without these edits, signals with the new category exist in the DB but don't ren
 ## End-of-Session Protocol
 
 **Trigger phrase: `wrap session`** (exact). When Matt types this, execute the
-following without further prompting — do NOT ask for confirmation at each step,
-just do the work and present the diff at the end:
+following without further prompting — do the work, gate only at the explicit
+approval points (steps 7 and 10):
 
 1. **Generate a short session summary** (2–4 sentences max).
 2. **Append a dated entry to [CHANGELOG.md](CHANGELOG.md)** using the 6-block
-   template:
+   template (if today's entry already exists, expand it rather than duplicating
+   the date):
    ```
    ## YYYY-MM-DD — Headline
 
@@ -1582,23 +1583,49 @@ just do the work and present the diff at the end:
    Completed (with PR link), add new Next Up items if any surfaced.
 5. **Add new items to [BACKLOG.md](BACKLOG.md)** (organized by domain) if surfaced.
 6. **Add small fixes to [BUGS.md](BUGS.md)** if surfaced.
-7. **Print the next-session starter prompt** — a ready-to-copy block in this
-   exact shape:
+7. **Show docs file changes for review.** DO NOT auto-commit. Wait for explicit
+   approval.
+8. **After Matt approves**, commit the docs with message:
    ```
-   ## Where we left off
-   ## What's in flight (current branch, PR, open work)
-   ## Next thing to do
-   ## Open questions
-   ## Watch-outs
+   Wrap session YYYY-MM-DD: <headline>
    ```
-   This is the deliverable Matt copies into the next session's first message so
-   the new CC instance starts with full context.
-8. **Show all file changes for review.** DO NOT auto-commit.
-
-**After Matt approves**, commit with message:
-```
-Wrap session YYYY-MM-DD: <headline>
-```
+9. **Push the commit to the current branch.**
+10. **PR MERGE DECISION STEP.** If the current branch has an open PR:
+    - Check PR state: build status, Vercel preview status, any unresolved review
+      comments, any tests failing. Use `gh pr view <N> --json` for state +
+      `gh pr checks <N>` for CI.
+    - Print a concise readiness report:
+      ```
+      Branch: <name>
+      PR: #<N>
+      Build: <pass/fail>
+      Vercel preview: <URL + status>
+      Tests: <pass/fail>
+      Open review comments: <count>
+      Recommendation: MERGE / DO NOT MERGE YET
+      Reasoning: <1–2 sentences>
+      ```
+    - Ask Matt: **"Merge PR #<N> to main? (yes / no / not yet)"**
+    - If **yes**: squash-and-merge with the PR title as the commit message,
+      then delete the branch (local + remote).
+    - If **no** or **not yet**: leave the PR open. Note in the starter prompt
+      (step 11) that the PR is still pending.
+    - If no open PR on this branch: skip the merge ask; note in the starter
+      prompt that work is direct-to-main or pre-PR.
+11. **Print the next-session starter prompt** — a ready-to-copy block in this
+    exact shape (reflect PR merge status from step 10):
+    ```
+    ## Where we left off
+    [summary including PR status — merged, pending, blocked]
+    ## What's in flight
+    [current branch state, any open PRs and why]
+    ## Next thing to do
+    [literal first task]
+    ## Open questions
+    ## Watch-outs
+    ```
+    This is the deliverable Matt copies into the next session's first message so
+    the new CC instance starts with full context.
 
 A stale CLAUDE.md is worse than a short one — future sessions read it as
 authoritative and either reinvent existing systems or break them. The whole

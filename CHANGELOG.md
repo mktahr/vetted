@@ -6,7 +6,7 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 
 ---
 
-## 2026-05-25 — PR #3: Universal one-bucket filters + Founder taxonomy + Field of Study
+## 2026-05-25 — PR #3 + docs maintenance + End-of-Session Protocol
 
 **Shipped**
 - Migration 062 — `signal_dictionary.is_searchable BOOLEAN DEFAULT TRUE` column + dictionary cleanup (30 Under 30 removal, etc.)
@@ -14,15 +14,18 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 - Migration 064 — Seeded `field_of_study_dictionary` with 86 rows → 43 normalized values across 7 domain groups (core_engineering, advanced_engineering, software_cs, physical_sciences, life_sciences, math, design).
 - PR #3 pushed to `reference-data-restructure` (commits `d181128` + `6690217`): full UI refactor — drop "Any X" prefix from filter labels, `engineering_team` → "University Team", `competition` → "Engineering Competition", remove legacy Accelerator filter, add Founder Type + Field of Study filters. Drop "Category" sublabel from signal dropdown options.
 - VC-backed/bootstrapped derivation logic in `lib/scoring/compute-derived.ts` — auto-reclassifies on rescore.
+- **Docs maintenance commit** (`d59e4cf`): new `CHANGELOG.md` at repo root with reverse-chronological session log; CLAUDE.md Documentation Index + Vocabulary updated; `/reference/` tree synced to actual on-disk state (6 missing CSVs added, phantom incubator.csv removed, `dictionaries/` subtree added); migration ledger extended through 064; `supabase/seeds/` File Layout collapsed to deprecation pointer; formal End-of-Session Protocol introduced.
+- **Protocol revision** (this commit): expanded the End-of-Session Protocol from 8 steps to 11 — added explicit push step (9), PR merge decision step (10) with readiness-report template and merge ask, renumbered starter-prompt to step 11 so it can reflect post-merge state.
 
 **Decisions**
 - Universal one-bucket policy: ALL `signal_dictionary` entries get `is_searchable=FALSE`. Only categories surface as UI filters. Granular search (specific elite olympiads, fellowships) deferred to AI chat search workstream.
 - Founder taxonomy is binary (VC-Backed / Bootstrapped); no Unknown bucket. VC-backed gated on: funding rounds OR recorded investors OR linked incubator/accelerator signal OR `current_status IN ('acquired','public')`.
 - Field of Study aliases: EECS→ECE, CS→Computer Science, AI/ML→`artificial_intelligence_ml`, Life Sciences umbrella catches biology/biochem/microbiology/genetics; comp-bio + bioinformatics together; neuroscience kept distinct.
+- Trigger phrase for End-of-Session Protocol is lowercase exact `wrap session`. Distinct from existing "Wrap up session" status-verification phrase.
+- Protocol owns the full lifecycle: docs update → review gate → commit → push → PR-merge-decision gate → starter-prompt with merge status. Two explicit user-approval gates (steps 7 and 10) preserve human-in-the-loop control.
 
 **Where we left off**
-- PR #3 pushed, awaiting Vercel preview verification in incognito browser before merge to main.
-- Next session first task: verify preview deploy renders Founder Type + Field of Study filters correctly, then merge PR #3.
+- PR #3 ready for merge. Matt confirmed Vercel preview verified. Step 10 readiness report + merge ask is the next protocol step.
 
 **Open questions**
 - None outstanding for this workstream.
@@ -31,6 +34,7 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 - **VC-backed founder coverage gap**: backfill yielded 0 VC-backed / 21 bootstrapped because no `company_funding_rounds` rows match any founder's company today (only 41 funding rounds in DB total). Closes as Crust company-funding enrichment lands. Don't read the 0 as a derivation bug.
 - Field of study backfill only populated 22 rows — `field_of_study_raw` is sparsely populated on existing candidate base. Coverage grows with new ingests.
 - Three UI files share the `SIGNAL_CATEGORY_ORDER` + `SIGNAL_CATEGORY_LABELS` pattern (ProfileTable, ProfileDrawer, search-builder). Any new signal_dictionary category requires edits in all three.
+- Sourcing-pipeline workstream files (`app/api/admin/import/`, `docs/pdl/`, `scripts/seed-test-profiles.mjs`, `supabase/migrations/056_…`, `057_…`) remain untracked on this branch. They belong to a separate workstream — do not stage during PR #3 closeout.
 
 ---
 
