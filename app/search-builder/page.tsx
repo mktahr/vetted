@@ -202,7 +202,10 @@ function SearchBuilderInner() {
       setSpecialtyOptions((specs || []).map((d: any) => ({ value: d.specialty_normalized, label: d.specialty_normalized.replace(/_/g, ' '), sublabel: (d.parent_function || '').replace(/_/g, ' ') })))
 
       // Signal options: category-level + individual
-      const SIGNAL_CATEGORY_ORDER = ['founder','incubator','university_incubator_accelerator','university_fellowship','fellowship','university_program','student_venture_fund','military','national_lab','research_institute','university_lab','scholarship','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
+      // 'scholarship' is collapsed into 'academic_distinction' (one filter
+      // option labeled "Academic Achievement"); filter logic in the consumer
+      // (main list) matches both DB categories under that single selection.
+      const SIGNAL_CATEGORY_ORDER = ['founder','incubator','university_incubator_accelerator','university_fellowship','fellowship','university_program','student_venture_fund','military','national_lab','research_institute','university_lab','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
       // Full audit: every signal_dictionary.category enum value must have a label.
       const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
         founder:'Founder', incubator:'Incubator',
@@ -210,8 +213,8 @@ function SearchBuilderInner() {
         university_incubator_accelerator:'University Accelerator', university_lab:'University Lab',
         research_institute:'Research Institute', student_venture_fund:'Student VC',
         military:'Military', national_lab:'National Lab',
-        fellowship:'Fellowship', scholarship:'Scholarship',
-        academic_distinction:'Academic', olympiad:'Olympiad',
+        fellowship:'Fellowship', scholarship:'Academic Achievement',
+        academic_distinction:'Academic Achievement', olympiad:'Olympiad',
         publication:'Publication', patent:'Patent', open_source:'Open Source',
         speaking:'Speaking', writing:'Writing',
         competition:'Competition', hackathon:'Hackathon',
@@ -220,15 +223,21 @@ function SearchBuilderInner() {
         teaching:'Teaching', hospitality:'Hospitality',
         language:'Language', other:'Other',
       }
-      const catsWithSignals = new Set<string>()
+      // Categories surfaced as a single "Any X" filter only — no individual signals shown.
+      const COLLAPSED_INDIVIDUAL = new Set(['athletics', 'greek_life', 'academic_distinction', 'scholarship'])
+      // Fetch is_searchable for individual signal filtering (separate from person_signals_active view)
+      const { data: searchableData } = await supabase.from('signal_dictionary').select('id, is_searchable')
+      const searchableById = new Map<string, boolean>()
+      for (const r of (searchableData || []) as Array<{ id: string; is_searchable: boolean }>) {
+        searchableById.set(r.id, r.is_searchable)
+      }
       const allSignalIds = new Map<string, { name: string; cat: string }>()
       for (const s of signalsData || []) {
-        catsWithSignals.add(s.category)
         if (!allSignalIds.has(s.signal_id)) allSignalIds.set(s.signal_id, { name: s.canonical_name, cat: s.category })
       }
       const sigOpts: MultiSelectOption[] = []
+      // Always emit category-level filters (no longer gated on attached signals).
       for (const cat of SIGNAL_CATEGORY_ORDER) {
-        if (!catsWithSignals.has(cat)) continue
         sigOpts.push({ value: `cat:${cat}`, label: `Any ${SIGNAL_CATEGORY_LABELS[cat] || cat}`, sublabel: 'Category' })
       }
       const sortedSigs = Array.from(allSignalIds.entries()).sort((a, b) => {
@@ -237,6 +246,8 @@ function SearchBuilderInner() {
         return a[1].name.localeCompare(b[1].name)
       })
       for (const [id, info] of sortedSigs) {
+        if (COLLAPSED_INDIVIDUAL.has(info.cat)) continue
+        if (searchableById.get(id) === false) continue
         sigOpts.push({ value: id, label: info.name, sublabel: SIGNAL_CATEGORY_LABELS[info.cat] || info.cat })
       }
       setSignalOptions(sigOpts)

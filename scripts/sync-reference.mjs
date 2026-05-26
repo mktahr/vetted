@@ -170,6 +170,10 @@ for (const filename of SIGNAL_CSVS) {
         description: nullable(raw.description),
         is_positive: csvBool(raw.is_positive),
         is_active: csvBool(raw.is_active),
+        // is_searchable: defaults to TRUE if column missing in older CSVs.
+        // Controls whether the individual signal appears in UI filter dropdowns
+        // (category-level "Any X" options always show regardless of this flag).
+        is_searchable: raw.is_searchable === undefined || raw.is_searchable === '' ? true : csvBool(raw.is_searchable),
       }
     },
   })

@@ -1,0 +1,79 @@
+canonical_name,category,subcategory,tier_group,aliases,source_field_hints,canonical_url,description,is_positive,is_active,is_searchable
+Alpha Chi Omega,greek_life,"","",alpha chi omega;axo;a chi o,education_description;volunteer;activities_honors,https://www.alphachiomega.org,NPC sorority founded 1885 at DePauw University.,true,true,false
+Alpha Delta Pi,greek_life,"","",alpha delta pi;adpi;ad pi,education_description;volunteer;activities_honors,https://www.alphadeltapi.org,NPC sorority — first secret society for women (1851).,true,true,false
+Alpha Epsilon Phi,greek_life,"","",alpha epsilon phi;aephi;ae phi,education_description;volunteer;activities_honors,https://www.aephi.org,NPC sorority founded 1909 at Barnard College.,true,true,false
+Alpha Epsilon Pi,greek_life,"","",alpha epsilon pi;aepi;ae pi,education_description;volunteer;activities_honors,https://www.aepi.org,Jewish fraternity founded 1913 at NYU.,true,true,false
+Alpha Gamma Delta,greek_life,"","",alpha gamma delta;agd;alpha gam,education_description;volunteer;activities_honors,https://www.alphagammadelta.org,NPC sorority founded 1904 at Syracuse University.,true,true,false
+Alpha Kappa Alpha,greek_life,"","",alpha kappa alpha;aka;alpha kappa alpha sorority,education_description;volunteer;activities_honors,https://aka1908.com,"First historically African American sorority, founded 1908 at Howard.",true,true,false
+Alpha Kappa Psi,greek_life,"","",alpha kappa psi;akpsi;akp,education_description;volunteer;activities_honors,https://akpsi.org,Oldest and largest professional business fraternity.,true,true,false
+Alpha Omicron Pi,greek_life,"","",alpha omicron pi;aoii;a o pi,education_description;volunteer;activities_honors,https://www.alphaomicronpi.org,NPC sorority founded 1897 at Barnard College.,true,true,false
+Alpha Phi,greek_life,"","",a phi;aphi,education_description;volunteer;activities_honors,https://www.alphaphi.org,NPC sorority founded 1872 at Syracuse University.,true,true,false
+Alpha Phi Alpha,greek_life,"","",alpha phi alpha;alpha phi alpha fraternity,education_description;volunteer;activities_honors,https://apa1906.net,"First African American intercollegiate fraternity (1906, Cornell).",true,true,false
+Alpha Sigma Alpha,greek_life,"","",alpha sigma alpha;asa,education_description;volunteer;activities_honors,https://www.alphasigmaalpha.org,NPC sorority founded 1901.,true,true,false
+Alpha Sigma Phi,greek_life,"","",alpha sigma phi;alpha sig,education_description;volunteer;activities_honors,https://alphasigmaphi.org,Fraternity founded 1845 at Yale.,true,true,false
+Alpha Sigma Tau,greek_life,"","",alpha sigma tau;ast,education_description;volunteer;activities_honors,https://www.alphasigmatau.org,NPC sorority founded 1899.,true,true,false
+Alpha Tau Omega,greek_life,"","",alpha tau omega;ato,education_description;volunteer;activities_honors,https://www.ato.org,First fraternity founded after the Civil War (1865).,true,true,false
+Alpha Xi Delta,greek_life,"","",alpha xi delta;axid;a xi d,education_description;volunteer;activities_honors,https://www.alphaxidelta.org,NPC sorority founded 1893 at Lombard College.,true,true,false
+Beta Theta Pi,greek_life,"","",beta theta pi;btp,education_description;volunteer;activities_honors,https://www.beta.org,Fraternity founded 1839 at Miami University.,true,true,false
+Chi Omega,greek_life,"","",chi omega;chi o;chio,education_description;volunteer;activities_honors,https://www.chiomega.com,Largest NPC sorority — founded 1895 at University of Arkansas.,true,true,false
+Chi Phi,greek_life,"","",chi phi;chi phi fraternity,education_description;volunteer;activities_honors,https://www.chiphi.org,"Oldest fraternity, founded 1824.",true,true,false
+Chi Psi,greek_life,"","",chi psi;chi psi fraternity,education_description;volunteer;activities_honors,https://www.chipsi.org,Fraternity founded 1841 at Union College.,true,true,false
+Delta Chi,greek_life,"","",delta chi;d chi;dchi,education_description;volunteer;activities_honors,https://www.deltachi.org,Fraternity founded 1890 at Cornell.,true,true,false
+Delta Delta Delta,greek_life,"","",delta delta delta;tri delta;tri-delta;ddd,education_description;volunteer;activities_honors,https://www.tridelta.org,NPC sorority founded 1888 at Boston University.,true,true,false
+Delta Gamma,greek_life,"","",delta gamma;dg;dee gee,education_description;volunteer;activities_honors,https://www.deltagamma.org,NPC sorority founded 1873.,true,true,false
+Delta Kappa Epsilon,greek_life,"","",delta kappa epsilon;dke;deke,education_description;volunteer;activities_honors,https://www.dke.org,Fraternity founded 1844 at Yale — five U.S. presidents were members.,true,true,false
+Delta Phi Epsilon,greek_life,"","",delta phi epsilon;dphie;d phi e,education_description;volunteer;activities_honors,https://www.dphie.org,NPC sorority founded 1917.,true,true,false
+Delta Sigma Phi,greek_life,"","",delta sigma phi;delta sig;dsig,education_description;volunteer;activities_honors,https://www.deltasig.org,Fraternity founded 1899 at CCNY.,true,true,false
+Delta Sigma Pi,greek_life,"","",delta sigma pi;dsp;deltasig,education_description;volunteer;activities_honors,https://www.dsp.org,Professional business fraternity founded 1907 at NYU.,true,true,false
+Delta Sigma Theta,greek_life,"","",delta sigma theta;dst;delta sigma theta sorority,education_description;volunteer;activities_honors,https://www.deltasigmatheta.org,Historically African American sorority founded 1913 at Howard.,true,true,false
+Delta Tau Delta,greek_life,"","",delta tau delta;dtd;delt;delts,education_description;volunteer;activities_honors,https://www.delts.org,Fraternity founded 1858 at Bethany College.,true,true,false
+Delta Upsilon,greek_life,"","",delta upsilon;du,education_description;volunteer;activities_honors,https://www.deltau.org,Non-secret fraternity founded 1834 at Williams College.,true,true,false
+Delta Zeta,greek_life,"","",delta zeta;dz;d zeta,education_description;volunteer;activities_honors,https://www.deltazeta.org,NPC sorority founded 1902 at Miami University.,true,true,false
+Gamma Phi Beta,greek_life,"","",gamma phi beta;gpb;gamma phi,education_description;volunteer;activities_honors,https://www.gammaphibeta.org,NPC sorority founded 1874 at Syracuse University.,true,true,false
+Greek Life (generic),greek_life,"","",greek life;fraternity;sorority;fraternity member;sorority member;greek organization,education_description;volunteer;activities_honors,"",Generic catch-all for Greek affiliation when specific org is not identified.,true,true,true
+Kappa Alpha Order,greek_life,"","",kappa alpha order;ka,education_description;volunteer;activities_honors,https://www.kappaalphaorder.org,Southern fraternity founded 1865 at Washington and Lee.,true,true,false
+Kappa Alpha Psi,greek_life,"","",kappa alpha psi;kappa alpha psi fraternity;nupes,education_description;volunteer;activities_honors,https://kappaalphapsi1911.com,Historically African American fraternity founded 1911 at Indiana University.,true,true,false
+Kappa Alpha Theta,greek_life,"","",kappa alpha theta;kat;ka theta,education_description;volunteer;activities_honors,https://www.kappaalphatheta.org,First Greek-letter fraternity for women (1870).,true,true,false
+Kappa Delta,greek_life,"","",kappa delta;kd;kay dee,education_description;volunteer;activities_honors,https://www.kappadelta.org,NPC sorority founded 1897.,true,true,false
+Kappa Kappa Gamma,greek_life,"","",kappa kappa gamma;kkg,education_description;volunteer;activities_honors,https://www.kappakappagamma.org,NPC sorority founded 1870 at Monmouth College.,true,true,false
+Kappa Sigma,greek_life,"","",kappa sigma;kappa sig;ksig,education_description;volunteer;activities_honors,https://www.kappasigma.org,One of the largest fraternities — founded 1869 at UVA.,true,true,false
+Lambda Chi Alpha,greek_life,"","",lambda chi alpha;lambda chi;lca,education_description;volunteer;activities_honors,https://www.lambdachi.org,Fraternity founded 1909 at Boston University.,true,true,false
+Omega Psi Phi,greek_life,"","",omega psi phi;omega psi phi fraternity;ques,education_description;volunteer;activities_honors,https://www.oppf.org,Historically African American fraternity founded 1911 at Howard.,true,true,false
+Phi Beta Lambda,greek_life,"","",phi beta lambda;pbl,education_description;volunteer;activities_honors,https://www.fbla-pbl.org,Collegiate division of FBLA — business and leadership org.,true,true,false
+Phi Beta Sigma,greek_life,"","",phi beta sigma;phi beta sigma fraternity;sigmas,education_description;volunteer;activities_honors,https://pbs1914.org,Historically African American fraternity founded 1914 at Howard.,true,true,false
+Phi Chi Theta,greek_life,"","",phi chi theta;pct,education_description;volunteer;activities_honors,https://www.phichitheta.org,Co-ed professional business fraternity.,true,true,false
+Phi Delta Theta,greek_life,"","",phi delta theta;phi delt;pdt,education_description;volunteer;activities_honors,https://www.phideltatheta.org,Fraternity founded 1848 at Miami University (one of the Miami Triad).,true,true,false
+Phi Gamma Delta,greek_life,"","",phi gamma delta;fiji;phi gam,education_description;volunteer;activities_honors,https://www.phigam.org,Fraternity known as FIJI — founded 1848 at Jefferson College.,true,true,false
+Phi Kappa Psi,greek_life,"","",phi kappa psi;phi psi;pkp,education_description;volunteer;activities_honors,https://www.phikappapsi.com,Fraternity founded 1852 at Jefferson College.,true,true,false
+Phi Kappa Sigma,greek_life,"","",phi kappa sigma;phi kap;skulls,education_description;volunteer;activities_honors,https://www.pks.org,Fraternity founded 1850 at UPenn.,true,true,false
+Phi Kappa Tau,greek_life,"","",phi kappa tau;phi tau;pkt,education_description;volunteer;activities_honors,https://www.phikappatau.org,Fraternity founded 1906 at Miami University.,true,true,false
+Phi Kappa Theta,greek_life,"","",phi kappa theta;phi kap theta,education_description;volunteer;activities_honors,https://www.phikaps.org,Catholic fraternity formed from 1959 merger.,true,true,false
+Phi Mu,greek_life,"","",phi mu;phi mu sorority,education_description;volunteer;activities_honors,https://www.phimu.org,NPC sorority founded 1852 — second-oldest sorority.,true,true,false
+Phi Sigma Kappa,greek_life,"","",phi sigma kappa;phi sig k;psk,education_description;volunteer;activities_honors,https://phisigmakappa.org,Fraternity founded 1873 at UMass Amherst.,true,true,false
+Phi Sigma Sigma,greek_life,"","",phi sigma sigma;phi sig;phisig,education_description;volunteer;activities_honors,https://www.phisigmasigma.org,NPC sorority founded 1913 at Hunter College.,true,true,false
+Pi Beta Phi,greek_life,"","",pi beta phi;pi phi;pbp,education_description;volunteer;activities_honors,https://www.pibetaphi.org,First women's fraternity founded as a national organization (1867).,true,true,false
+Pi Kappa Alpha,greek_life,"","",pi kappa alpha;pike;pka,education_description;volunteer;activities_honors,https://www.pikes.org,One of the largest fraternities — founded 1868 at UVA.,true,true,false
+Pi Kappa Phi,greek_life,"","",pi kappa phi;pi kapp;pkp fraternity,education_description;volunteer;activities_honors,https://www.pikapp.org,Fraternity founded 1904 at College of Charleston.,true,true,false
+Pi Lambda Phi,greek_life,"","",pi lambda phi;pi lam;pilam,education_description;volunteer;activities_honors,https://www.pilambdaphi.org,"First non-sectarian fraternity (1895, Yale).",true,true,false
+Psi Upsilon,greek_life,"","",psi upsilon;psi u,education_description;volunteer;activities_honors,https://www.psiu.org,Fraternity founded 1833 at Union College.,true,true,false
+Sigma Alpha Epsilon,greek_life,"","","sigma alpha epsilon;sae;sig ep... no, sae",education_description;volunteer;activities_honors,https://www.sae.net,Largest fraternity by initiated members — founded 1856 at University of Alabama.,true,true,false
+Sigma Alpha Mu,greek_life,"","",sigma alpha mu;sammy;sam,education_description;volunteer;activities_honors,https://sam.org,Jewish fraternity founded 1909 at CCNY.,true,true,false
+Sigma Chi,greek_life,"","",sigma chi;sig chi;sigs,education_description;volunteer;activities_honors,https://sigmachi.org,Fraternity founded 1855 at Miami University.,true,true,false
+Sigma Delta Tau,greek_life,"","",sigma delta tau;sdt;sig delt,education_description;volunteer;activities_honors,https://www.sigmadeltatau.org,NPC sorority founded 1917 at Cornell.,true,true,false
+Sigma Kappa,greek_life,"","",sigma kappa;sk;sig kap,education_description;volunteer;activities_honors,https://www.sigmakappa.org,NPC sorority founded 1874 at Colby College.,true,true,false
+Sigma Lambda Beta,greek_life,"","",sigma lambda beta;slb;betas,education_description;volunteer;activities_honors,https://www.sigmalambdabeta.com,Latino fraternity founded 1986 at University of Iowa.,true,true,false
+Sigma Nu,greek_life,"","",sigma nu;sig nu;snu,education_description;volunteer;activities_honors,https://www.sigmanu.org,Fraternity founded 1869 at VMI.,true,true,false
+Sigma Phi Epsilon,greek_life,"","",sigma phi epsilon;sig ep;sigep;spe,education_description;volunteer;activities_honors,https://sigep.org,Largest fraternity by active chapters — founded 1901 at University of Richmond.,true,true,false
+Sigma Pi,greek_life,"","",sigma pi;sig pi,education_description;volunteer;activities_honors,https://www.sigmapi.org,Fraternity founded 1897 at Vincennes University.,true,true,false
+Sigma Sigma Sigma,greek_life,"","",sigma sigma sigma;tri sigma;tri-sigma,education_description;volunteer;activities_honors,https://www.trisigma.org,NPC sorority founded 1898.,true,true,false
+Sigma Tau Gamma,greek_life,"","",sigma tau gamma;sig tau;stg,education_description;volunteer;activities_honors,https://www.sigtau.org,Fraternity founded 1920.,true,true,false
+Tau Epsilon Phi,greek_life,"","",tau epsilon phi;tep,education_description;volunteer;activities_honors,"",Non-sectarian fraternity founded 1910 at Columbia.,true,true,false
+Tau Kappa Epsilon,greek_life,"","",tau kappa epsilon;tke;teke,education_description;volunteer;activities_honors,https://www.tke.org,Largest fraternity by number of chapters — founded 1899.,true,true,false
+Theta Chi,greek_life,"","",theta chi;ox;theta chi fraternity,education_description;volunteer;activities_honors,https://www.thetachi.org,Fraternity founded 1856 at Norwich University.,true,true,false
+Theta Delta Chi,greek_life,"","",theta delta chi;tdc;theta delt,education_description;volunteer;activities_honors,https://www.tdx.org,Fraternity founded 1847 at Union College.,true,true,false
+Theta Phi Alpha,greek_life,"","",theta phi alpha;tpa;theta phi,education_description;volunteer;activities_honors,https://www.thetaphialpha.org,NPC sorority founded 1912 at University of Michigan.,true,true,false
+Theta Xi,greek_life,"","",theta xi;tx;theta xi fraternity,education_description;volunteer;activities_honors,https://www.thetaxi.org,Engineering fraternity founded 1864 at RPI.,true,true,false
+Triangle Fraternity,greek_life,"","",triangle fraternity;triangle;triangle engineering,education_description;volunteer;activities_honors,https://www.triangle.org,"STEM fraternity for engineers, architects, and scientists.",true,true,false
+Zeta Beta Tau,greek_life,"","",zeta beta tau;zbt,education_description;volunteer;activities_honors,https://www.zbt.org,First Jewish fraternity (1898). Now non-sectarian and non-pledging.,true,true,false
+Zeta Psi,greek_life,"","",zeta psi;zete;zeta psi fraternity,education_description;volunteer;activities_honors,https://www.zetapsi.org,Fraternity founded 1847 at NYU.,true,true,false
+Zeta Tau Alpha,greek_life,"","",zeta tau alpha;zta,education_description;volunteer;activities_honors,https://www.zetataualpha.org,NPC sorority founded 1898 at Longwood University.,true,true,false

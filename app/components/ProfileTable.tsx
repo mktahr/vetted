@@ -363,6 +363,7 @@ export default function ProfileTable() {
           { data: roles },
           { data: rsMap },
           { data: signalsData },
+          { data: signalSearchableData },
         ] = await Promise.all([
           supabase.from('people').select('*, companies:current_company_id ( company_name )').order('created_at', { ascending: false }),
           supabase.from('candidate_bucket_assignments').select('person_id, candidate_bucket, flagged_reasons, assignment_reason, effective_at').order('effective_at', { ascending: false }),
@@ -375,6 +376,7 @@ export default function ProfileTable() {
           supabase.from('role_dictionary').select('role_id, role_name, display_order').eq('active', true).order('display_order'),
           supabase.from('role_specialty_map').select('role_id, specialty_normalized, is_primary'),
           supabase.from('person_signals_active').select('person_id, signal_id, canonical_name, category, canonical_url, evidence_url, source_text, source, confidence').order('confidence', { ascending: false }),
+          supabase.from('signal_dictionary').select('id, is_searchable'),
         ])
 
         if (peopleErr) { setError(`Database error: ${peopleErr.message}`); return }
@@ -494,18 +496,19 @@ export default function ProfileTable() {
         setSignalsByPerson(sigMap)
 
         // Signal filter options: category-level + individual signals
-        const SIGNAL_CATEGORY_ORDER = ['founder','incubator','university_incubator_accelerator','university_fellowship','fellowship','university_program','student_venture_fund','military','national_lab','research_institute','university_lab','scholarship','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
-        // Full audit: every signal_dictionary.category enum value must have a label
-        // here. Categories not in ORDER above but present on candidates fall through
-        // to the end of the list — still need a label or they render lowercase.
+        // Display order. 'scholarship' is collapsed into 'academic_distinction'
+        // (UI label "Academic Achievement"); it never appears as its own
+        // category in the dropdown. Filter logic special-cases this merge.
+        const SIGNAL_CATEGORY_ORDER = ['founder','incubator','university_incubator_accelerator','university_fellowship','fellowship','university_program','student_venture_fund','military','national_lab','research_institute','university_lab','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
+        // Full audit: every signal_dictionary.category enum value must have a label.
         const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
           founder:'Founder', incubator:'Incubator',
           university_program:'University Program', university_fellowship:'University Fellowship',
           university_incubator_accelerator:'University Accelerator', university_lab:'University Lab',
           research_institute:'Research Institute', student_venture_fund:'Student VC',
           military:'Military', national_lab:'National Lab',
-          fellowship:'Fellowship', scholarship:'Scholarship',
-          academic_distinction:'Academic', olympiad:'Olympiad',
+          fellowship:'Fellowship', scholarship:'Academic Achievement',
+          academic_distinction:'Academic Achievement', olympiad:'Olympiad',
           publication:'Publication', patent:'Patent', open_source:'Open Source',
           speaking:'Speaking', writing:'Writing',
           competition:'Competition', hackathon:'Hackathon',
@@ -514,15 +517,22 @@ export default function ProfileTable() {
           teaching:'Teaching', hospitality:'Hospitality',
           language:'Language', other:'Other',
         }
-        // Collect unique categories that have signals on any person
-        const catsWithSignals = new Set<string>()
-        for (const sigs of Object.values(sigMap)) { for (const s of sigs) catsWithSignals.add(s.category) }
+        // Categories that surface in the UI as a single "Any X" filter only —
+        // no individual signal entries shown for these. The dictionary keeps the
+        // granular rows for extraction (every fraternity, every cum laude variant)
+        // but the filter dropdown collapses them.
+        const COLLAPSED_INDIVIDUAL = new Set(['athletics', 'greek_life', 'academic_distinction', 'scholarship'])
+        const searchableById = new Map<string, boolean>()
+        for (const r of (signalSearchableData || []) as Array<{ id: string; is_searchable: boolean }>) {
+          searchableById.set(r.id, r.is_searchable)
+        }
         const sigOpts: MultiSelectOption[] = []
+        // Always emit category-level "Any X" options regardless of attached signals.
+        // Categories with no current matches still appear so admin can find them.
         for (const cat of SIGNAL_CATEGORY_ORDER) {
-          if (!catsWithSignals.has(cat)) continue
           sigOpts.push({ value: `cat:${cat}`, label: `Any ${SIGNAL_CATEGORY_LABELS[cat] || cat}`, sublabel: 'Category' })
         }
-        // Add individual signals (all unique signal_ids across all people)
+        // Individual signal options — filtered by is_searchable AND not in collapsed categories.
         const allSignalIds = new Map<string, { name: string; cat: string }>()
         for (const sigs of Object.values(sigMap)) {
           for (const s of sigs) { if (!allSignalIds.has(s.signal_id)) allSignalIds.set(s.signal_id, { name: s.canonical_name, cat: s.category }) }
@@ -533,6 +543,8 @@ export default function ProfileTable() {
           return a[1].name.localeCompare(b[1].name)
         })
         for (const [id, info] of sorted) {
+          if (COLLAPSED_INDIVIDUAL.has(info.cat)) continue
+          if (searchableById.get(id) === false) continue
           sigOpts.push({ value: id, label: info.name, sublabel: SIGNAL_CATEGORY_LABELS[info.cat] || info.cat })
         }
         setSignalOptions(sigOpts)
@@ -677,11 +689,18 @@ export default function ProfileTable() {
 
     // Signals filter (no temporal scope — achievements are timeless)
     if (signalSel.length > 0) {
-      const selectedCats = signalSel.filter(v => v.startsWith('cat:')).map(v => v.slice(4))
+      const rawSelectedCats = signalSel.filter(v => v.startsWith('cat:')).map(v => v.slice(4))
       const selectedIds = new Set(signalSel.filter(v => !v.startsWith('cat:')))
+      // 'academic_distinction' as a filter selection matches BOTH academic_distinction
+      // AND scholarship person_signals (single "Academic Achievement" filter that spans both DB categories).
+      const expandedCats = new Set<string>()
+      for (const c of rawSelectedCats) {
+        expandedCats.add(c)
+        if (c === 'academic_distinction') expandedCats.add('scholarship')
+      }
       rows = rows.filter(p => {
         const personSigs = signalsByPerson[p.person_id] || []
-        return personSigs.some(s => selectedIds.has(s.signal_id) || selectedCats.includes(s.category))
+        return personSigs.some(s => selectedIds.has(s.signal_id) || expandedCats.has(s.category))
       })
     }
 
