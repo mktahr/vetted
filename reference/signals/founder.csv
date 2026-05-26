@@ -1,0 +1,4 @@
+canonical_name,category,subcategory,tier_group,aliases,source_field_hints,canonical_url,description,is_positive,is_active,is_searchable
+Bootstrapped Founder,founder,bootstrapped,"",bootstrapped founder;self-funded founder;bootstrapped company,title;experience_description,"",Founded and self-funded a company without external investment.,true,true,false
+Funded Founder,founder,funded,"",funded founder;venture-backed founder;vc-backed founder;raised funding,title;experience_description,"","Founded a company that received external investment (VC, angel, seed, etc.).",true,true,false
+Non-Funded Founder,founder,non_funded,"",non-funded founder;unfunded founder;founder no funding,title;experience_description,"",Founded a company that did not receive significant funding.,true,true,false

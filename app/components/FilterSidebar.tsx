@@ -58,12 +58,13 @@ export interface FilterSidebarProps {
   schoolGroupSel: string[];     setSchoolGroupSel: (v: string[]) => void
   schoolGroupOptions: MultiSelectOption[]
   degreeSel: string[];          setDegreeSel: (v: string[]) => void
+  fieldOfStudySel: string[];    setFieldOfStudySel: (v: string[]) => void
+  fieldOfStudyOptions: MultiSelectOption[]
+  founderTypeSel: string[];     setFounderTypeSel: (v: string[]) => void
   companyGroupSel: string[];    setCompanyGroupSel: (v: string[]) => void
   companyGroupOptions: MultiSelectOption[]
   signalSel: string[];          setSignalSel: (v: string[]) => void
   signalOptions: MultiSelectOption[]
-  acceleratorSel: string[];    setAcceleratorSel: (v: string[]) => void
-  acceleratorOptions: MultiSelectOption[]
   titleBoolean: string;          setTitleBoolean: (v: string) => void
   experienceBoolean: string;     setExperienceBoolean: (v: string) => void
   // Tenure filters
@@ -89,6 +90,10 @@ const DEGREE_OPTIONS: MultiSelectOption[] = [
   { value: 'jd',       label: 'JD' },
   { value: 'md',       label: 'MD' },
   { value: 'phd',      label: 'PhD' },
+]
+const FOUNDER_TYPE_OPTIONS: MultiSelectOption[] = [
+  { value: 'vc_backed',    label: 'VC-Backed Founder' },
+  { value: 'bootstrapped', label: 'Bootstrapped Founder' },
 ]
 const STAGE_OPTIONS: MultiSelectOption[] = [
   { value: 'pre_career', label: 'Pre-Career' }, { value: 'early_career', label: 'Early Career' },
@@ -242,6 +247,7 @@ export default function FilterSidebar(props: FilterSidebarProps) {
           )}
         </div>
         <div style={{ marginBottom: 12 }}><MultiSelect label="Bucket" options={BUCKET_OPTIONS} selected={props.bucketSel} onChange={props.setBucketSel} placeholder="Any bucket" /></div>
+        <div style={{ marginBottom: 12 }}><MultiSelect label="Founder type" options={FOUNDER_TYPE_OPTIONS} selected={props.founderTypeSel} onChange={props.setFounderTypeSel} placeholder="Any founder type" /></div>
         <div style={{ marginBottom: 12 }}><MultiSelect label="Career stage" options={STAGE_OPTIONS} selected={props.stageSel} onChange={props.setStageSel} placeholder="Any stage" /></div>
         <div style={{ marginBottom: 12 }}>
           <Lbl>Years of experience</Lbl>
@@ -341,8 +347,8 @@ export default function FilterSidebar(props: FilterSidebarProps) {
           <div style={{ marginBottom: 12 }}><MultiSelect label="School group" options={props.schoolGroupOptions} selected={props.schoolGroupSel} onChange={props.setSchoolGroupSel} placeholder="Any school group" /></div>
         )}
         <div style={{ marginBottom: 12 }}><MultiSelect label="Degree" options={DEGREE_OPTIONS} selected={props.degreeSel} onChange={props.setDegreeSel} placeholder="Any degree" /></div>
-        {props.acceleratorOptions.length > 0 && (
-          <div style={{ marginBottom: 12 }}><MultiSelect label="Accelerator" options={props.acceleratorOptions} selected={props.acceleratorSel} onChange={props.setAcceleratorSel} placeholder="Any accelerator" /></div>
+        {props.fieldOfStudyOptions.length > 0 && (
+          <div style={{ marginBottom: 12 }}><MultiSelect label="Field of study" options={props.fieldOfStudyOptions} selected={props.fieldOfStudySel} onChange={props.setFieldOfStudySel} placeholder="Any field" /></div>
         )}
         {props.schoolConditionCount > 0 && (
           <div style={{ marginBottom: 16, padding: '6px 10px', background: 'var(--accent-950)', border: '1px solid var(--accent-900)', borderRadius: 'var(--r-chip)', fontSize: 'var(--fs-12)', color: 'var(--accent-400)', fontFamily: 'var(--font-sans)' }}>

@@ -145,7 +145,9 @@ function SearchBuilderInner() {
   const [schoolGroupScope, setSchoolGroupScope] = useState<TemporalScope>('ever')
   const [companyGroupSel, setCompanyGroupSel] = useState<string[]>([])
   const [companyGroupScope, setCompanyGroupScope] = useState<TemporalScope>('ever')
-  const [acceleratorSel, setAcceleratorSel] = useState<string[]>([])
+  // accelerator filter removed in PR #4 (legacy duplicate of incubator category)
+  const [fieldOfStudySel, setFieldOfStudySel] = useState<string[]>([])
+  const [founderTypeSel, setFounderTypeSel] = useState<string[]>([])
   const [currentTenureMin, setCurrentTenureMin] = useState('')
   const [currentTenureMax, setCurrentTenureMax] = useState('')
   const [avgTenureMin, setAvgTenureMin] = useState('')
@@ -167,7 +169,7 @@ function SearchBuilderInner() {
   const [signalOptions, setSignalOptions] = useState<MultiSelectOption[]>([])
   const [schoolGroupOptions, setSchoolGroupOptions] = useState<MultiSelectOption[]>([])
   const [companyGroupOptions, setCompanyGroupOptions] = useState<MultiSelectOption[]>([])
-  const [acceleratorOptions, setAcceleratorOptions] = useState<MultiSelectOption[]>([])
+  const [fieldOfStudyOptions, setFieldOfStudyOptions] = useState<MultiSelectOption[]>([])
   const [industryOptions, setIndustryOptions] = useState<MultiSelectOption[]>([])
   const [categoryFilterOptions, setCategoryFilterOptions] = useState<MultiSelectOption[]>([])
   const [companyNameMap, setCompanyNameMap] = useState<Record<string, string>>({})
@@ -198,17 +200,16 @@ function SearchBuilderInner() {
         sublabel: c.primary_industry || c.legacy_primary_industry_tag || undefined,
       })))
       setSchoolOptions((schools || []).filter((s: any) => s.school_score != null).map((s: any) => ({ value: s.school_id, label: s.school_name, sublabel: s.is_foreign ? "Int'l" : undefined })))
-      setAcceleratorOptions((schools || []).filter((s: any) => s.school_type === 'accelerator').map((s: any) => ({ value: s.school_id, label: s.school_name })))
+      // Accelerator options removed in PR #4 — Y Combinator now lives in signal_dictionary.incubator with full aliases.
       setSpecialtyOptions((specs || []).map((d: any) => ({ value: d.specialty_normalized, label: d.specialty_normalized.replace(/_/g, ' '), sublabel: (d.parent_function || '').replace(/_/g, ' ') })))
 
-      // Signal options: category-level + individual
-      // 'scholarship' is collapsed into 'academic_distinction' (one filter
-      // option labeled "Academic Achievement"); filter logic in the consumer
-      // (main list) matches both DB categories under that single selection.
-      const SIGNAL_CATEGORY_ORDER = ['founder','incubator','university_incubator_accelerator','university_fellowship','fellowship','university_program','student_venture_fund','military','national_lab','research_institute','university_lab','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
-      // Full audit: every signal_dictionary.category enum value must have a label.
+      // Signal options: category-level only (universal one-bucket policy).
+      // 'founder' removed (replaced by VC-Backed / Bootstrapped founder type filter).
+      // 'scholarship' collapses into 'academic_distinction' (Academic Achievement).
+      const SIGNAL_CATEGORY_ORDER = ['incubator','university_incubator_accelerator','university_fellowship','fellowship','university_program','student_venture_fund','military','national_lab','research_institute','university_lab','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
+      // Labels — no "Any X" prefix.
       const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
-        founder:'Founder', incubator:'Incubator',
+        incubator:'Incubator',
         university_program:'University Program', university_fellowship:'University Fellowship',
         university_incubator_accelerator:'University Accelerator', university_lab:'University Lab',
         research_institute:'Research Institute', student_venture_fund:'Student VC',
@@ -217,40 +218,30 @@ function SearchBuilderInner() {
         academic_distinction:'Academic Achievement', olympiad:'Olympiad',
         publication:'Publication', patent:'Patent', open_source:'Open Source',
         speaking:'Speaking', writing:'Writing',
-        competition:'Competition', hackathon:'Hackathon',
-        athletics:'Athletics', engineering_team:'Eng. Team', student_leadership:'Leadership', greek_life:'Greek Life',
+        competition:'Engineering Competition', hackathon:'Hackathon',
+        athletics:'Athletics', engineering_team:'University Team', student_leadership:'Leadership', greek_life:'Greek Life',
         career_changer:'Career Changer', self_taught:'Self-Taught',
         teaching:'Teaching', hospitality:'Hospitality',
         language:'Language', other:'Other',
-      }
-      // Categories surfaced as a single "Any X" filter only — no individual signals shown.
-      const COLLAPSED_INDIVIDUAL = new Set(['athletics', 'greek_life', 'academic_distinction', 'scholarship'])
-      // Fetch is_searchable for individual signal filtering (separate from person_signals_active view)
-      const { data: searchableData } = await supabase.from('signal_dictionary').select('id, is_searchable')
-      const searchableById = new Map<string, boolean>()
-      for (const r of (searchableData || []) as Array<{ id: string; is_searchable: boolean }>) {
-        searchableById.set(r.id, r.is_searchable)
-      }
-      const allSignalIds = new Map<string, { name: string; cat: string }>()
-      for (const s of signalsData || []) {
-        if (!allSignalIds.has(s.signal_id)) allSignalIds.set(s.signal_id, { name: s.canonical_name, cat: s.category })
+        founder:'Founder',  // legacy label for old saved-search references
       }
       const sigOpts: MultiSelectOption[] = []
-      // Always emit category-level filters (no longer gated on attached signals).
+      // Universal one-bucket: only category-level filters; no individual signals.
       for (const cat of SIGNAL_CATEGORY_ORDER) {
-        sigOpts.push({ value: `cat:${cat}`, label: `Any ${SIGNAL_CATEGORY_LABELS[cat] || cat}`, sublabel: 'Category' })
-      }
-      const sortedSigs = Array.from(allSignalIds.entries()).sort((a, b) => {
-        const catA = SIGNAL_CATEGORY_ORDER.indexOf(a[1].cat), catB = SIGNAL_CATEGORY_ORDER.indexOf(b[1].cat)
-        if (catA !== catB) return catA - catB
-        return a[1].name.localeCompare(b[1].name)
-      })
-      for (const [id, info] of sortedSigs) {
-        if (COLLAPSED_INDIVIDUAL.has(info.cat)) continue
-        if (searchableById.get(id) === false) continue
-        sigOpts.push({ value: id, label: info.name, sublabel: SIGNAL_CATEGORY_LABELS[info.cat] || info.cat })
+        sigOpts.push({ value: `cat:${cat}`, label: SIGNAL_CATEGORY_LABELS[cat] || cat, sublabel: 'Category' })
       }
       setSignalOptions(sigOpts)
+
+      // Field of study options (new filter).
+      const { data: fosData } = await supabase.from('field_of_study_dictionary').select('field_of_study_normalized, domain_group')
+      const fosByNorm = new Map<string, string>()
+      for (const r of (fosData || []) as Array<{ field_of_study_normalized: string; domain_group: string | null }>) {
+        if (!fosByNorm.has(r.field_of_study_normalized)) {
+          const label = r.field_of_study_normalized.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ').replace(/\bMl\b/g, 'ML').replace(/\bAi\b/g, 'AI')
+          fosByNorm.set(r.field_of_study_normalized, label)
+        }
+      }
+      setFieldOfStudyOptions(Array.from(fosByNorm.entries()).map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label)))
 
       // School groups
       const sgVals = new Set<string>()
@@ -330,7 +321,8 @@ function SearchBuilderInner() {
           if (f.schoolGroupScope) setSchoolGroupScope(f.schoolGroupScope)
           if (f.companyGroupSel) setCompanyGroupSel(f.companyGroupSel)
           if (f.companyGroupScope) setCompanyGroupScope(f.companyGroupScope)
-          if (f.acceleratorSel) setAcceleratorSel(f.acceleratorSel)
+          if (f.fieldOfStudySel) setFieldOfStudySel(f.fieldOfStudySel)
+          if (f.founderTypeSel) setFounderTypeSel(f.founderTypeSel)
           if (f.currentTenureMin) setCurrentTenureMin(f.currentTenureMin)
           if (f.currentTenureMax) setCurrentTenureMax(f.currentTenureMax)
           if (f.avgTenureMin) setAvgTenureMin(f.avgTenureMin)
@@ -352,8 +344,8 @@ function SearchBuilderInner() {
       bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, categoryScope, reviewStatusScope,
       compoundCompanyPills: compoundCompany.map(v => ({ value: v, scope: compoundCompanyScope })),
       compoundSpecialties, compoundYearMin, compoundYearMax,
-      schoolSel, schoolTemporalScope, degreeSel, titleBoolean, titleBooleanScope, experienceBoolean,
-      signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel,
+      schoolSel, schoolTemporalScope, degreeSel, fieldOfStudySel, founderTypeSel, titleBoolean, titleBooleanScope, experienceBoolean,
+      signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope,
       currentTenureMin, currentTenureMax, avgTenureMin, avgTenureMax, avgTenureIncludeCurrent,
       cc: companyConditions.map(conditionToCompact),
       sc: schoolConditions.map(conditionToCompact),
@@ -415,7 +407,11 @@ function SearchBuilderInner() {
               {seniorityPills.length > 0 && <PillScopeRow pills={seniorityPills} setPills={setSeniorityPills} formatLabel={v => v.replace(/_/g, ' ')} />}
             </div>
             <MultiSelect label="Bucket" options={BUCKET_OPTIONS} selected={bucketSel} onChange={setBucketSel} placeholder="Any bucket" />
+            <MultiSelect label="Founder Type" options={[{ value: 'vc_backed', label: 'VC-Backed Founder' }, { value: 'bootstrapped', label: 'Bootstrapped Founder' }]} selected={founderTypeSel} onChange={setFounderTypeSel} placeholder="Any founder type" />
             <MultiSelect label="Degree" options={DEGREE_OPTIONS} selected={degreeSel} onChange={setDegreeSel} placeholder="Any degree" />
+            {fieldOfStudyOptions.length > 0 && (
+              <MultiSelect label="Field of Study" options={fieldOfStudyOptions} selected={fieldOfStudySel} onChange={setFieldOfStudySel} placeholder="Any field" />
+            )}
             <MultiSelect label="Career Stage" options={STAGE_OPTIONS} selected={stageSel} onChange={setStageSel} placeholder="Any stage" />
             <div>
               <label style={lblStyle}>Years of Experience</label>
@@ -486,11 +482,6 @@ function SearchBuilderInner() {
             {schoolGroupOptions.length > 0 && (
               <div style={{ minWidth: 240, flex: 1, maxWidth: 400 }}>
                 <MultiSelect label="School group" options={schoolGroupOptions} selected={schoolGroupSel} onChange={setSchoolGroupSel} placeholder="Any school group" />
-              </div>
-            )}
-            {acceleratorOptions.length > 0 && (
-              <div style={{ minWidth: 240, flex: 1, maxWidth: 400 }}>
-                <MultiSelect label="Accelerator" options={acceleratorOptions} selected={acceleratorSel} onChange={setAcceleratorSel} placeholder="Any accelerator" />
               </div>
             )}
           </div>

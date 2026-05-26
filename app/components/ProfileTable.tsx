@@ -62,6 +62,7 @@ interface EducationLite {
   degree_raw: string | null
   degree_level: string | null
   field_of_study_raw: string | null
+  field_of_study_normalized: string | null
   start_year: number | null
   end_year: number | null
 }
@@ -172,6 +173,11 @@ export default function ProfileTable() {
   const [stageSel, setStageSel] = useState<string[]>([])
   const [schoolSel, setSchoolSel] = useState<string[]>([])
   const [degreeSel, setDegreeSel] = useState<string[]>([])
+  const [fieldOfStudySel, setFieldOfStudySel] = useState<string[]>([])
+  // Founder type filter: replaces old "Any Founder" category filter. Multi-select with 2 options.
+  //   'vc_backed'    → matches people.is_vc_backed_founder = TRUE
+  //   'bootstrapped' → matches people.is_bootstrapped_founder = TRUE
+  const [founderTypeSel, setFounderTypeSel] = useState<string[]>([])
   const [locationSel, setLocationSel] = useState<string[]>([])
   const [clearanceSel, setClearanceSel] = useState<string[]>([])
   // Per-pill scope: each selected value has its own temporal scope
@@ -256,8 +262,9 @@ export default function ProfileTable() {
   const [schoolGroupOptions, setSchoolGroupOptions] = useState<MultiSelectOption[]>([])
   const [companyGroupSel, setCompanyGroupSel] = useState<string[]>([])
   const [companyGroupOptions, setCompanyGroupOptions] = useState<MultiSelectOption[]>([])
-  const [acceleratorSel, setAcceleratorSel] = useState<string[]>([])
-  const [acceleratorOptions, setAcceleratorOptions] = useState<MultiSelectOption[]>([])
+  // Accelerator filter removed (PR #4 cleanup) — was a legacy duplicate of incubator category.
+  // Y Combinator now lives in signal_dictionary.incubator with full aliases.
+  const [fieldOfStudyOptions, setFieldOfStudyOptions] = useState<MultiSelectOption[]>([])
   // Lookup: school_id → school_groups[], company_id → company_groups[]
   const [schoolGroupsMap, setSchoolGroupsMap] = useState<Record<string, string[]>>({})
   const [companyGroupsMap, setCompanyGroupsMap] = useState<Record<string, string[]>>({})
@@ -329,7 +336,7 @@ export default function ProfileTable() {
       if (f.schoolGroupScope) setSchoolGroupScope(f.schoolGroupScope)
       if (f.companyGroupSel) setCompanyGroupSel(f.companyGroupSel)
       if (f.companyGroupScope) setCompanyGroupScope(f.companyGroupScope)
-      if (f.acceleratorSel) setAcceleratorSel(f.acceleratorSel)
+      // accelerator filter removed (PR #4); accept legacy saved-search key as no-op
       if (f.currentTenureMin) setCurrentTenureMin(f.currentTenureMin)
       if (f.currentTenureMax) setCurrentTenureMax(f.currentTenureMax)
       if (f.avgTenureMin) setAvgTenureMin(f.avgTenureMin)
@@ -364,11 +371,12 @@ export default function ProfileTable() {
           { data: rsMap },
           { data: signalsData },
           { data: signalSearchableData },
+          { data: fieldOfStudyData },
         ] = await Promise.all([
           supabase.from('people').select('*, companies:current_company_id ( company_name )').order('created_at', { ascending: false }),
           supabase.from('candidate_bucket_assignments').select('person_id, candidate_bucket, flagged_reasons, assignment_reason, effective_at').order('effective_at', { ascending: false }),
           supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, seniority_normalized, start_date, end_date, is_current, employment_type_normalized, title_raw, description_raw'),
-          supabase.from('person_education').select('person_id, school_id, school_name_raw, degree_raw, degree_level, field_of_study_raw, start_year, end_year'),
+          supabase.from('person_education').select('person_id, school_id, school_name_raw, degree_raw, degree_level, field_of_study_raw, field_of_study_normalized, start_year, end_year'),
           supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
           fetchAllRows<any>('companies', 'company_id, company_name, primary_industry, industries, category, review_status, legacy_primary_industry_tag, company_groups', 'company_name').then(data => ({ data })),
           fetchAllRows<any>('schools', 'school_id, school_name, school_score, is_foreign, school_groups, school_type', 'school_name').then(data => ({ data })),
@@ -377,6 +385,7 @@ export default function ProfileTable() {
           supabase.from('role_specialty_map').select('role_id, specialty_normalized, is_primary'),
           supabase.from('person_signals_active').select('person_id, signal_id, canonical_name, category, canonical_url, evidence_url, source_text, source, confidence').order('confidence', { ascending: false }),
           supabase.from('signal_dictionary').select('id, is_searchable'),
+          supabase.from('field_of_study_dictionary').select('field_of_study_normalized, domain_group'),
         ])
 
         if (peopleErr) { setError(`Database error: ${peopleErr.message}`); return }
@@ -433,6 +442,7 @@ export default function ProfileTable() {
               school_type: schoolRecord?.school_type ?? null,
               degree_raw: (r as any).degree_raw ?? null, degree_level: (r as any).degree_level ?? null,
               field_of_study_raw: (r as any).field_of_study_raw ?? null,
+              field_of_study_normalized: (r as any).field_of_study_normalized ?? null,
               start_year: (r as any).start_year ?? null, end_year: (r as any).end_year ?? null,
             })
           }
@@ -475,7 +485,7 @@ export default function ProfileTable() {
         setSchoolNameMap(snMap)
 
         // Accelerator options (school_type = 'accelerator')
-        setAcceleratorOptions((schools || []).filter((s: any) => s.school_type === 'accelerator').map((s: any) => ({ value: s.school_id, label: s.school_name })))
+        // Accelerator options removed — Y Combinator now lives in signal_dictionary.incubator.
 
         // Signals: group by person, deduplicate by signal_id (keep highest confidence)
         const sigMap: Record<string, DrawerSignal[]> = {}
@@ -498,11 +508,15 @@ export default function ProfileTable() {
         // Signal filter options: category-level + individual signals
         // Display order. 'scholarship' is collapsed into 'academic_distinction'
         // (UI label "Academic Achievement"); it never appears as its own
-        // category in the dropdown. Filter logic special-cases this merge.
-        const SIGNAL_CATEGORY_ORDER = ['founder','incubator','university_incubator_accelerator','university_fellowship','fellowship','university_program','student_venture_fund','military','national_lab','research_institute','university_lab','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
-        // Full audit: every signal_dictionary.category enum value must have a label.
+        // 'founder' removed: replaced by VC-Backed / Bootstrapped founder type
+        // filter (driven by people.is_vc_backed_founder + is_bootstrapped_founder,
+        // not signal_dictionary). 'scholarship' rolls into 'academic_distinction'
+        // (single Academic Achievement filter).
+        const SIGNAL_CATEGORY_ORDER = ['incubator','university_incubator_accelerator','university_fellowship','fellowship','university_program','student_venture_fund','military','national_lab','research_institute','university_lab','academic_distinction','olympiad','competition','hackathon','athletics','engineering_team','student_leadership','greek_life']
+        // Filter labels — no "Any X" prefix per universal one-bucket policy.
+        // engineering_team / competition relabeled per category-rename spec.
         const SIGNAL_CATEGORY_LABELS: Record<string, string> = {
-          founder:'Founder', incubator:'Incubator',
+          incubator:'Incubator',
           university_program:'University Program', university_fellowship:'University Fellowship',
           university_incubator_accelerator:'University Accelerator', university_lab:'University Lab',
           research_institute:'Research Institute', student_venture_fund:'Student VC',
@@ -511,28 +525,31 @@ export default function ProfileTable() {
           academic_distinction:'Academic Achievement', olympiad:'Olympiad',
           publication:'Publication', patent:'Patent', open_source:'Open Source',
           speaking:'Speaking', writing:'Writing',
-          competition:'Competition', hackathon:'Hackathon',
-          athletics:'Athletics', engineering_team:'Eng. Team', student_leadership:'Leadership', greek_life:'Greek Life',
+          competition:'Engineering Competition', hackathon:'Hackathon',
+          athletics:'Athletics', engineering_team:'University Team', student_leadership:'Leadership', greek_life:'Greek Life',
           career_changer:'Career Changer', self_taught:'Self-Taught',
           teaching:'Teaching', hospitality:'Hospitality',
           language:'Language', other:'Other',
+          // Legacy 'founder' label kept for any old saved-search references that
+          // still encode cat:founder — won't appear in the dropdown but profile
+          // chip code can still resolve the label.
+          founder:'Founder',
         }
-        // Categories that surface in the UI as a single "Any X" filter only —
-        // no individual signal entries shown for these. The dictionary keeps the
-        // granular rows for extraction (every fraternity, every cum laude variant)
-        // but the filter dropdown collapses them.
-        const COLLAPSED_INDIVIDUAL = new Set(['athletics', 'greek_life', 'academic_distinction', 'scholarship'])
         const searchableById = new Map<string, boolean>()
         for (const r of (signalSearchableData || []) as Array<{ id: string; is_searchable: boolean }>) {
           searchableById.set(r.id, r.is_searchable)
         }
         const sigOpts: MultiSelectOption[] = []
-        // Always emit category-level "Any X" options regardless of attached signals.
-        // Categories with no current matches still appear so admin can find them.
+        // Universal one-bucket policy: emit ONLY category-level filters, no
+        // individual signal options. Granular search (specific fellowships,
+        // hackathons, etc.) happens via AI chat search workstream, not filter dropdown.
         for (const cat of SIGNAL_CATEGORY_ORDER) {
-          sigOpts.push({ value: `cat:${cat}`, label: `Any ${SIGNAL_CATEGORY_LABELS[cat] || cat}`, sublabel: 'Category' })
+          sigOpts.push({ value: `cat:${cat}`, label: SIGNAL_CATEGORY_LABELS[cat] || cat, sublabel: 'Category' })
         }
-        // Individual signal options — filtered by is_searchable AND not in collapsed categories.
+        // Per universal one-bucket policy (migration 063: is_searchable=FALSE on
+        // all rows), no individual signal options appear. Block below is kept
+        // structurally but produces no output today — defensive in case any row
+        // is manually set is_searchable=TRUE in DB.
         const allSignalIds = new Map<string, { name: string; cat: string }>()
         for (const sigs of Object.values(sigMap)) {
           for (const s of sigs) { if (!allSignalIds.has(s.signal_id)) allSignalIds.set(s.signal_id, { name: s.canonical_name, cat: s.category }) }
@@ -543,11 +560,25 @@ export default function ProfileTable() {
           return a[1].name.localeCompare(b[1].name)
         })
         for (const [id, info] of sorted) {
-          if (COLLAPSED_INDIVIDUAL.has(info.cat)) continue
-          if (searchableById.get(id) === false) continue
+          if (searchableById.get(id) !== true) continue
           sigOpts.push({ value: id, label: info.name, sublabel: SIGNAL_CATEGORY_LABELS[info.cat] || info.cat })
         }
         setSignalOptions(sigOpts)
+
+        // Field of study options: distinct normalized values from the dictionary.
+        const fosByNorm = new Map<string, string>()  // norm → display label
+        for (const r of (fieldOfStudyData || []) as Array<{ field_of_study_normalized: string; domain_group: string | null }>) {
+          if (!fosByNorm.has(r.field_of_study_normalized)) {
+            // Display label = title-cased version of the snake_case norm
+            const label = r.field_of_study_normalized
+              .split('_')
+              .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+              .join(' ')
+              .replace(/\bMl\b/g, 'ML').replace(/\bAi\b/g, 'AI').replace(/\bEcs\b/g, 'ECS')
+            fosByNorm.set(r.field_of_study_normalized, label)
+          }
+        }
+        setFieldOfStudyOptions(Array.from(fosByNorm.entries()).map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label)))
 
         // School groups: build options from distinct values + lookup map
         const sgMap: Record<string, string[]> = {}
@@ -652,6 +683,20 @@ export default function ProfileTable() {
       rows = rows.filter(p => p.education_lite?.some(e => e.degree_level && s.has(e.degree_level)))
     }
 
+    // Field of study — match candidates with at least one education entry whose
+    // normalized field_of_study matches the selection. Backfilled via dictionary join.
+    if (fieldOfStudySel.length > 0) {
+      const s = new Set(fieldOfStudySel)
+      rows = rows.filter(p => p.education_lite?.some(e => e.field_of_study_normalized && s.has(e.field_of_study_normalized)))
+    }
+
+    // Founder type — VC-Backed and/or Bootstrapped (multi-select; OR semantics).
+    if (founderTypeSel.length > 0) {
+      const wantVc = founderTypeSel.includes('vc_backed')
+      const wantBoot = founderTypeSel.includes('bootstrapped')
+      rows = rows.filter(p => (wantVc && p.is_vc_backed_founder) || (wantBoot && p.is_bootstrapped_founder))
+    }
+
     // Location
     if (locationSel.length > 0) {
       rows = rows.filter(p => { if (!p.location_name) return false; return locationSel.some(sel => p.location_name!.toLowerCase().includes(sel.toLowerCase())) })
@@ -739,11 +784,7 @@ export default function ProfileTable() {
       }
     }
 
-    // Accelerator filter: candidates who attended a selected accelerator
-    if (acceleratorSel.length > 0) {
-      const selAccel = new Set(acceleratorSel)
-      rows = rows.filter(p => p.education_lite.some(e => selAccel.has(e.school_id)))
-    }
+    // Accelerator filter removed (PR #4 cleanup).
 
     // V1 (Option C): both scopes default to 'all' so candidate visibility isn't silently
     // filtered after migration. Admin can opt into stricter scopes via FilterSidebar.
@@ -925,7 +966,7 @@ export default function ProfileTable() {
       })
     }
     return rows
-  }, [people, searchQuery, bucketSel, stageSel, rolePills, seniorityPills, schoolSel, schoolTemporalScope, locationSel, specialtyPills, clearanceSel, categoryScope, reviewStatusScope, compoundCompanyPills, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel, degreeSel, companyConditions, schoolConditions, companiesRaw, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap, currentTenureMin, currentTenureMax, avgTenureMin, avgTenureMax, avgTenureIncludeCurrent])
+  }, [people, searchQuery, bucketSel, stageSel, rolePills, seniorityPills, schoolSel, schoolTemporalScope, locationSel, specialtyPills, clearanceSel, categoryScope, reviewStatusScope, compoundCompanyPills, compoundSpecialties, compoundYearMin, compoundYearMax, yearsMin, yearsMax, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, degreeSel, fieldOfStudySel, founderTypeSel, companyConditions, schoolConditions, companiesRaw, signalsByPerson, schoolGroupsMap, companyGroupsMap, sortField, sortDirection, roleSpecialtyMap, currentTenureMin, currentTenureMax, avgTenureMin, avgTenureMax, avgTenureIncludeCurrent])
 
   const activeFilterCount =
     (roleSel.length > 0 ? 1 : 0) + (bucketSel.length > 0 ? 1 : 0) + (stageSel.length > 0 ? 1 : 0) +
@@ -934,7 +975,7 @@ export default function ProfileTable() {
     (categoryScope !== 'all' ? 1 : 0) + (reviewStatusScope !== 'all' ? 1 : 0) +
     (compoundCompany.length > 0 ? 1 : 0) + (yearsMin || yearsMax ? 1 : 0) + (titleBoolean ? 1 : 0) + (experienceBoolean ? 1 : 0) +
     (signalSel.length > 0 ? 1 : 0) + (schoolGroupSel.length > 0 ? 1 : 0) + (companyGroupSel.length > 0 ? 1 : 0) +
-    (acceleratorSel.length > 0 ? 1 : 0) + (degreeSel.length > 0 ? 1 : 0) +
+    (degreeSel.length > 0 ? 1 : 0) + (fieldOfStudySel.length > 0 ? 1 : 0) + (founderTypeSel.length > 0 ? 1 : 0) +
     (companyConditions.length > 0 ? 1 : 0) + (schoolConditions.length > 0 ? 1 : 0) +
     (currentTenureMin || currentTenureMax ? 1 : 0) + (avgTenureMin || avgTenureMax ? 1 : 0)
 
@@ -944,7 +985,7 @@ export default function ProfileTable() {
     setClearanceSel([]); setCategoryScope('all'); setReviewStatusScope('all'); setCompoundCompany([]); setCompoundSpecialties([])
     setCompoundYearMin(''); setCompoundYearMax('')
     setYearsMin(''); setYearsMax(''); setTitleBoolean(''); setTitleBooleanScope('ever'); setExperienceBoolean('')
-    setSignalSel([]); setSchoolGroupSel([]); setCompanyGroupSel([]); setAcceleratorSel([]); setDegreeSel([])
+    setSignalSel([]); setSchoolGroupSel([]); setCompanyGroupSel([]); setDegreeSel([]); setFieldOfStudySel([]); setFounderTypeSel([])
     setCompanyConditions([]); setSchoolConditions([])
     setRolePills([]); setSpecialtyPills([]); setSeniorityPills([]); setCompoundCompanyPills([])
     setSchoolTemporalScope('ever'); setSchoolGroupScope('ever'); setCompanyGroupScope('ever')
@@ -1023,9 +1064,10 @@ export default function ProfileTable() {
         schoolScope={schoolScope} setSchoolScope={setSchoolScope}
         schoolGroupSel={schoolGroupSel} setSchoolGroupSel={setSchoolGroupSel} schoolGroupOptions={schoolGroupOptions}
         degreeSel={degreeSel} setDegreeSel={setDegreeSel}
+        fieldOfStudySel={fieldOfStudySel} setFieldOfStudySel={setFieldOfStudySel} fieldOfStudyOptions={fieldOfStudyOptions}
+        founderTypeSel={founderTypeSel} setFounderTypeSel={setFounderTypeSel}
         companyGroupSel={companyGroupSel} setCompanyGroupSel={setCompanyGroupSel} companyGroupOptions={companyGroupOptions}
         signalSel={signalSel} setSignalSel={setSignalSel} signalOptions={signalOptions}
-        acceleratorSel={acceleratorSel} setAcceleratorSel={setAcceleratorSel} acceleratorOptions={acceleratorOptions}
         companyConditionCount={companyConditions.length}
         schoolConditionCount={schoolConditions.length}
         titleBoolean={titleBoolean} setTitleBoolean={setTitleBoolean}
@@ -1039,7 +1081,7 @@ export default function ProfileTable() {
         onOpenBuilder={() => {
           // Encode current filter state as JSON in URL param
           const state = {
-            rolePills, specialtyPills, seniorityPills, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, categoryScope, reviewStatusScope, compoundCompanyPills, compoundSpecialties, compoundYearMin, compoundYearMax, schoolSel, schoolTemporalScope, degreeSel, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope, acceleratorSel,
+            rolePills, specialtyPills, seniorityPills, bucketSel, stageSel, yearsMin, yearsMax, clearanceSel, locationSel, categoryScope, reviewStatusScope, compoundCompanyPills, compoundSpecialties, compoundYearMin, compoundYearMax, schoolSel, schoolTemporalScope, degreeSel, fieldOfStudySel, founderTypeSel, titleBoolean, titleBooleanScope, experienceBoolean, signalSel, schoolGroupSel, schoolGroupScope, companyGroupSel, companyGroupScope,
             currentTenureMin, currentTenureMax, avgTenureMin, avgTenureMax, avgTenureIncludeCurrent,
             cc: companyConditions.map(conditionToCompact),
             sc: schoolConditions.map(conditionToCompact),

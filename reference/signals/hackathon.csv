@@ -1,53 +1,53 @@
-canonical_name,category,subcategory,tier_group,aliases,source_field_hints,canonical_url,description,is_positive,is_active
-AGI House Hackathon,hackathon,industry,tier_2,agi house;agi house hackathon,activities_honors;education_description;experience_description,https://agihouse.org,SF Bay Area AI hackathon hub,true,true
-Anthropic Builder Hackathons,hackathon,industry,tier_2,anthropic hackathon;anthropic builder,activities_honors;education_description;experience_description,https://anthropic.com,Anthropic-sponsored builder events,true,true
-AthenaHacks,hackathon,"","",athenahacks;athena hacks;usc women hackathon,projects;experience_description;activities_honors,"",USC's women-focused hackathon.,true,true
-BigRed Hacks,hackathon,student,tier_2,bigred hacks;bigred//hacks;cornell hackathon,activities_honors;education_description;experience_description,https://bigredhacks.com,Cornell; product + applied engineering,true,true
-Bitcamp,hackathon,"","",bitcamp;umd hackathon;bitcamp umd,projects;experience_description;activities_honors,https://bitcamp.org,University of Maryland's annual hackathon.,true,true
-Boilermake,hackathon,"","",boilermake;boiler make;purdue hackathon,projects;experience_description;activities_honors,https://boilermake.org,Purdue University's annual hackathon.,true,true
-Cal Hacks Cubstart,hackathon,"","",cubstart;cal hacks cubstart;calhacks cubstart,projects;experience_description;activities_honors,"",CalHacks' beginner-friendly accelerator program.,true,true
-CalHacks,hackathon,student,tier_3,calhacks;cal hacks;berkeley hackathon,activities_honors;education_description;experience_description,https://calhacks.io,UC Berkeley; largest US student hackathon,true,true
-Codeforces,hackathon,competitive_programming,tier_2,codeforces;codeforces grandmaster;codeforces red,activities_honors;education_description;experience_description;about,https://codeforces.com,Competitive programming; ratings color-coded; red/legendary = elite,true,true
-DubHacks,hackathon,student,tier_2,dubhacks;uw hackathon,activities_honors;education_description;experience_description,https://dubhacks.co,University of Washington; PNW flagship,true,true
-Global Game Jam,hackathon,"","",global game jam;ggj;game jam,projects;experience_description,https://globalgamejam.org,World's largest game creation event — 48-hour jam at 800+ locations.,true,true
-Grace Hopper Hackathon,hackathon,"","",grace hopper hackathon;ghc hackathon;grace hopper celebration hackathon,projects;experience_description;activities_honors,"",Hackathon events at the Grace Hopper Celebration conference.,true,true
-Hack the North,hackathon,student,tier_3,hackthenorth;hack the north,activities_honors;education_description;experience_description,https://hackthenorth.com,Waterloo (Canada); MIT/Stanford-tier global pull,true,true
-Hackathon (generic),hackathon,"","",hackathon;hackathon participant;hackathon winner;hackathon finalist;won a hackathon;hackathon project,projects;experience_description;activities_honors,"",Generic catch-all for hackathon participation when no specific event is identified.,true,true
-HackCMU,hackathon,"","",hackcmu;hack cmu;cmu hackathon;carnegie mellon hackathon,projects;experience_description;activities_honors,"",Carnegie Mellon's annual hackathon.,true,true
-HackDavis,hackathon,"","",hackdavis;hack davis;uc davis hackathon,projects;experience_description;activities_honors,https://hackdavis.io,UC Davis social-good focused hackathon.,true,true
-HackGT,hackathon,student,tier_2,hackgt;hack gt;georgia tech hackathon,activities_honors;education_description;experience_description,https://hack.gt,Georgia Tech hackathon,true,true
-HackHarvard,hackathon,student,tier_2,hackharvard;hack harvard,activities_honors;education_description;experience_description,https://hackharvard.io,Harvard; mid-Atlantic strong,true,true
-HackIllinois,hackathon,student,tier_2,hackillinois;hack illinois;uiuc hackathon,activities_honors;education_description;experience_description,https://hackillinois.org,UIUC hackathon,true,true
-HackMIT,hackathon,student,tier_3,hackmit;hack mit,activities_honors;education_description;experience_description,https://hackmit.org,MIT; strong engineering rigor,true,true
-HackNY,hackathon,"","",hackny;hack ny;hackny fellowship;hack new york,projects;experience_description;activities_honors,https://hackny.org,NYC-based hackathon and fellows program.,true,true
-HackPrinceton,hackathon,student,tier_2,hackprinceton;hack princeton,activities_honors;education_description;experience_description,https://www.hackprinceton.com,Princeton hackathon,true,true
-HackPSU,hackathon,"","",hackpsu;hack psu;penn state hackathon,projects;experience_description;activities_honors,"",Penn State's annual hackathon.,true,true
-HackRU,hackathon,"","",hackru;hack ru;rutgers hackathon,projects;experience_description;activities_honors,https://hackru.org,Rutgers University's biannual hackathon.,true,true
-HackSC,hackathon,"","",hacksc;hack sc;usc hackathon,projects;experience_description;activities_honors,"",USC's annual hackathon.,true,true
-HackTX,hackathon,student,tier_2,hacktx;hack tx;ut austin hackathon,activities_honors;education_description;experience_description,https://www.hacktx.com,UT Austin hackathon,true,true
-HackUMass,hackathon,"","",hackumass;hack umass;umass hackathon,projects;experience_description;activities_honors,"",UMass Amherst's annual hackathon.,true,true
-HackYale,hackathon,"","",hackyale;hack yale;yale hackathon;yhack,projects;experience_description;activities_honors,"",Yale's annual hackathon.,true,true
-HackZurich,hackathon,"","",hackzurich;hack zurich;hackers at eth,projects;experience_description,https://hackzurich.com,Europe's largest hackathon at ETH Zurich.,true,true
-ICPC,hackathon,competitive_programming,tier_3,icpc;international collegiate programming contest;acm icpc,activities_honors;education_description;experience_description,https://icpc.global,Premier college programming competition; World Finals = elite,true,true
-Junction Helsinki,hackathon,"","",junction;junction helsinki;junction hackathon,projects;experience_description,https://www.junction.tech,"Europe's largest hackathon, held annually in Helsinki.",true,true
-Kaggle Competition Winner,hackathon,ml,tier_3,kaggle;kaggle competition;kaggle grandmaster;kaggle master,activities_honors;education_description;experience_description;about,https://www.kaggle.com,Kaggle competition top placements; Grandmaster/Master are elite signals,true,true
-LA Hacks,hackathon,student,tier_2,lahacks;la hacks;ucla hackathon,activities_honors;education_description;experience_description,https://lahacks.com,UCLA; product + design focus,true,true
-LAHacks,hackathon,"","",lahacks;la hacks;ucla hackathon,projects;experience_description;activities_honors,https://lahacks.com,UCLA's annual hackathon.,true,true
-Major League Hacking Event,hackathon,"","",mlh;major league hacking;mlh hackathon;mlh event,projects;experience_description;activities_honors,https://mlh.io,Any hackathon sanctioned by Major League Hacking.,true,true
-MakeHarvard,hackathon,"","",makeharvard;make harvard;harvard makeathon,projects;experience_description;activities_honors,"",Harvard's hardware-focused makeathon.,true,true
-MakeUC,hackathon,"","",makeuc;make uc;university of cincinnati hackathon,projects;experience_description;activities_honors,"",University of Cincinnati's annual hackathon.,true,true
-MHacks,hackathon,student,tier_3,mhacks;michigan hackathon,activities_honors;education_description;experience_description,https://mhacks.org,Michigan; strong systems and ME focus,true,true
-MLH Local Hack Day,hackathon,"","",mlh local hack day;local hack day;mlh lhd,projects;experience_description;activities_honors,https://localhackday.mlh.io,Major League Hacking's distributed hackathon events.,true,true
-NASA Space Apps Challenge,hackathon,applied,tier_3,nasa space apps;space apps challenge,activities_honors;education_description;experience_description,https://www.spaceappschallenge.org,Largest applied science hackathon; finals-level signal,true,true
-OpenAI Hackathon,hackathon,industry,tier_2,openai hackathon,activities_honors;education_description;experience_description,https://openai.com,OpenAI-sponsored events,true,true
-PennApps,hackathon,student,tier_3,pennapps;penn apps,activities_honors;education_description;experience_description,https://pennapps.com,UPenn; oldest college hackathon; prestigious,true,true
-SheHacks,hackathon,"","",shehacks;she hacks;shehacks boston,projects;experience_description;activities_honors,"",Women-focused hackathon series.,true,true
-TartanHacks,hackathon,student,tier_2,tartanhacks;cmu hackathon,activities_honors;education_description;experience_description,https://tartanhacks.com,CMU; robotics + HCI + systems,true,true
-TechCrunch Disrupt Hackathon,hackathon,"","",techcrunch disrupt hackathon;tc disrupt hackathon;techcrunch hackathon;disrupt hackathon,projects;experience_description,https://techcrunch.com/events/disrupt/,Hackathon at TechCrunch's annual Disrupt conference.,true,true
-TigerHacks,hackathon,"","",tigerhacks;tiger hacks;mizzou hackathon,projects;experience_description;activities_honors,"",University of Missouri's annual hackathon.,true,true
-Topcoder,hackathon,competitive_programming,tier_2,topcoder;topcoder srm,activities_honors;education_description;experience_description;about,https://www.topcoder.com,Algorithmic competitive programming; SRM ratings,true,true
-TreeHacks,hackathon,student,tier_3,treehacks;treehacks stanford,activities_honors;education_description;experience_description,https://www.treehacks.com,Stanford flagship; product + startup bias; very selective,true,true
-uOttaHack,hackathon,"","",uottahack;uotta hack;ottawa hackathon,projects;experience_description;activities_honors,"",University of Ottawa's annual hackathon.,true,true
-WildHacks,hackathon,"","",wildhacks;wild hacks;northwestern hackathon,projects;experience_description;activities_honors,"",Northwestern University's annual hackathon.,true,true
-YC AI Startup Hackathon,hackathon,industry,tier_3,yc ai hackathon;y combinator ai hackathon,activities_honors;education_description;experience_description,https://www.ycombinator.com,Recent YC-sponsored AI hackathons; founder pipeline,true,true
-YHack,hackathon,"","",yhack;y hack;yale hack,projects;experience_description;activities_honors,"",Yale's annual hackathon (alternate branding).,true,true
+canonical_name,category,subcategory,tier_group,aliases,source_field_hints,canonical_url,description,is_positive,is_active,is_searchable
+AGI House Hackathon,hackathon,industry,tier_2,agi house;agi house hackathon,activities_honors;education_description;experience_description,https://agihouse.org,SF Bay Area AI hackathon hub,true,true,false
+Anthropic Builder Hackathons,hackathon,industry,tier_2,anthropic hackathon;anthropic builder,activities_honors;education_description;experience_description,https://anthropic.com,Anthropic-sponsored builder events,true,true,false
+AthenaHacks,hackathon,"","",athenahacks;athena hacks;usc women hackathon,projects;experience_description;activities_honors,"",USC's women-focused hackathon.,true,true,false
+BigRed Hacks,hackathon,student,tier_2,bigred hacks;bigred//hacks;cornell hackathon,activities_honors;education_description;experience_description,https://bigredhacks.com,Cornell; product + applied engineering,true,true,false
+Bitcamp,hackathon,"","",bitcamp;umd hackathon;bitcamp umd,projects;experience_description;activities_honors,https://bitcamp.org,University of Maryland's annual hackathon.,true,true,false
+Boilermake,hackathon,"","",boilermake;boiler make;purdue hackathon,projects;experience_description;activities_honors,https://boilermake.org,Purdue University's annual hackathon.,true,true,false
+Cal Hacks Cubstart,hackathon,"","",cubstart;cal hacks cubstart;calhacks cubstart,projects;experience_description;activities_honors,"",CalHacks' beginner-friendly accelerator program.,true,true,false
+CalHacks,hackathon,student,tier_3,calhacks;cal hacks;berkeley hackathon,activities_honors;education_description;experience_description,https://calhacks.io,UC Berkeley; largest US student hackathon,true,true,false
+Codeforces,hackathon,competitive_programming,tier_2,codeforces;codeforces grandmaster;codeforces red,activities_honors;education_description;experience_description;about,https://codeforces.com,Competitive programming; ratings color-coded; red/legendary = elite,true,true,false
+DubHacks,hackathon,student,tier_2,dubhacks;uw hackathon,activities_honors;education_description;experience_description,https://dubhacks.co,University of Washington; PNW flagship,true,true,false
+Global Game Jam,hackathon,"","",global game jam;ggj;game jam,projects;experience_description,https://globalgamejam.org,World's largest game creation event — 48-hour jam at 800+ locations.,true,true,false
+Grace Hopper Hackathon,hackathon,"","",grace hopper hackathon;ghc hackathon;grace hopper celebration hackathon,projects;experience_description;activities_honors,"",Hackathon events at the Grace Hopper Celebration conference.,true,true,false
+Hack the North,hackathon,student,tier_3,hackthenorth;hack the north,activities_honors;education_description;experience_description,https://hackthenorth.com,Waterloo (Canada); MIT/Stanford-tier global pull,true,true,false
+Hackathon (generic),hackathon,"","",hackathon;hackathon participant;hackathon winner;hackathon finalist;won a hackathon;hackathon project,projects;experience_description;activities_honors,"",Generic catch-all for hackathon participation when no specific event is identified.,true,true,false
+HackCMU,hackathon,"","",hackcmu;hack cmu;cmu hackathon;carnegie mellon hackathon,projects;experience_description;activities_honors,"",Carnegie Mellon's annual hackathon.,true,true,false
+HackDavis,hackathon,"","",hackdavis;hack davis;uc davis hackathon,projects;experience_description;activities_honors,https://hackdavis.io,UC Davis social-good focused hackathon.,true,true,false
+HackGT,hackathon,student,tier_2,hackgt;hack gt;georgia tech hackathon,activities_honors;education_description;experience_description,https://hack.gt,Georgia Tech hackathon,true,true,false
+HackHarvard,hackathon,student,tier_2,hackharvard;hack harvard,activities_honors;education_description;experience_description,https://hackharvard.io,Harvard; mid-Atlantic strong,true,true,false
+HackIllinois,hackathon,student,tier_2,hackillinois;hack illinois;uiuc hackathon,activities_honors;education_description;experience_description,https://hackillinois.org,UIUC hackathon,true,true,false
+HackMIT,hackathon,student,tier_3,hackmit;hack mit,activities_honors;education_description;experience_description,https://hackmit.org,MIT; strong engineering rigor,true,true,false
+HackNY,hackathon,"","",hackny;hack ny;hackny fellowship;hack new york,projects;experience_description;activities_honors,https://hackny.org,NYC-based hackathon and fellows program.,true,true,false
+HackPrinceton,hackathon,student,tier_2,hackprinceton;hack princeton,activities_honors;education_description;experience_description,https://www.hackprinceton.com,Princeton hackathon,true,true,false
+HackPSU,hackathon,"","",hackpsu;hack psu;penn state hackathon,projects;experience_description;activities_honors,"",Penn State's annual hackathon.,true,true,false
+HackRU,hackathon,"","",hackru;hack ru;rutgers hackathon,projects;experience_description;activities_honors,https://hackru.org,Rutgers University's biannual hackathon.,true,true,false
+HackSC,hackathon,"","",hacksc;hack sc;usc hackathon,projects;experience_description;activities_honors,"",USC's annual hackathon.,true,true,false
+HackTX,hackathon,student,tier_2,hacktx;hack tx;ut austin hackathon,activities_honors;education_description;experience_description,https://www.hacktx.com,UT Austin hackathon,true,true,false
+HackUMass,hackathon,"","",hackumass;hack umass;umass hackathon,projects;experience_description;activities_honors,"",UMass Amherst's annual hackathon.,true,true,false
+HackYale,hackathon,"","",hackyale;hack yale;yale hackathon;yhack,projects;experience_description;activities_honors,"",Yale's annual hackathon.,true,true,false
+HackZurich,hackathon,"","",hackzurich;hack zurich;hackers at eth,projects;experience_description,https://hackzurich.com,Europe's largest hackathon at ETH Zurich.,true,true,false
+ICPC,hackathon,competitive_programming,tier_3,icpc;international collegiate programming contest;acm icpc,activities_honors;education_description;experience_description,https://icpc.global,Premier college programming competition; World Finals = elite,true,true,false
+Junction Helsinki,hackathon,"","",junction;junction helsinki;junction hackathon,projects;experience_description,https://www.junction.tech,"Europe's largest hackathon, held annually in Helsinki.",true,true,false
+Kaggle Competition Winner,hackathon,ml,tier_3,kaggle;kaggle competition;kaggle grandmaster;kaggle master,activities_honors;education_description;experience_description;about,https://www.kaggle.com,Kaggle competition top placements; Grandmaster/Master are elite signals,true,true,false
+LA Hacks,hackathon,student,tier_2,lahacks;la hacks;ucla hackathon,activities_honors;education_description;experience_description,https://lahacks.com,UCLA; product + design focus,true,true,false
+LAHacks,hackathon,"","",lahacks;la hacks;ucla hackathon,projects;experience_description;activities_honors,https://lahacks.com,UCLA's annual hackathon.,true,true,false
+Major League Hacking Event,hackathon,"","",mlh;major league hacking;mlh hackathon;mlh event,projects;experience_description;activities_honors,https://mlh.io,Any hackathon sanctioned by Major League Hacking.,true,true,false
+MakeHarvard,hackathon,"","",makeharvard;make harvard;harvard makeathon,projects;experience_description;activities_honors,"",Harvard's hardware-focused makeathon.,true,true,false
+MakeUC,hackathon,"","",makeuc;make uc;university of cincinnati hackathon,projects;experience_description;activities_honors,"",University of Cincinnati's annual hackathon.,true,true,false
+MHacks,hackathon,student,tier_3,mhacks;michigan hackathon,activities_honors;education_description;experience_description,https://mhacks.org,Michigan; strong systems and ME focus,true,true,false
+MLH Local Hack Day,hackathon,"","",mlh local hack day;local hack day;mlh lhd,projects;experience_description;activities_honors,https://localhackday.mlh.io,Major League Hacking's distributed hackathon events.,true,true,false
+NASA Space Apps Challenge,hackathon,applied,tier_3,nasa space apps;space apps challenge,activities_honors;education_description;experience_description,https://www.spaceappschallenge.org,Largest applied science hackathon; finals-level signal,true,true,false
+OpenAI Hackathon,hackathon,industry,tier_2,openai hackathon,activities_honors;education_description;experience_description,https://openai.com,OpenAI-sponsored events,true,true,false
+PennApps,hackathon,student,tier_3,pennapps;penn apps,activities_honors;education_description;experience_description,https://pennapps.com,UPenn; oldest college hackathon; prestigious,true,true,false
+SheHacks,hackathon,"","",shehacks;she hacks;shehacks boston,projects;experience_description;activities_honors,"",Women-focused hackathon series.,true,true,false
+TartanHacks,hackathon,student,tier_2,tartanhacks;cmu hackathon,activities_honors;education_description;experience_description,https://tartanhacks.com,CMU; robotics + HCI + systems,true,true,false
+TechCrunch Disrupt Hackathon,hackathon,"","",techcrunch disrupt hackathon;tc disrupt hackathon;techcrunch hackathon;disrupt hackathon,projects;experience_description,https://techcrunch.com/events/disrupt/,Hackathon at TechCrunch's annual Disrupt conference.,true,true,false
+TigerHacks,hackathon,"","",tigerhacks;tiger hacks;mizzou hackathon,projects;experience_description;activities_honors,"",University of Missouri's annual hackathon.,true,true,false
+Topcoder,hackathon,competitive_programming,tier_2,topcoder;topcoder srm,activities_honors;education_description;experience_description;about,https://www.topcoder.com,Algorithmic competitive programming; SRM ratings,true,true,false
+TreeHacks,hackathon,student,tier_3,treehacks;treehacks stanford,activities_honors;education_description;experience_description,https://www.treehacks.com,Stanford flagship; product + startup bias; very selective,true,true,false
+uOttaHack,hackathon,"","",uottahack;uotta hack;ottawa hackathon,projects;experience_description;activities_honors,"",University of Ottawa's annual hackathon.,true,true,false
+WildHacks,hackathon,"","",wildhacks;wild hacks;northwestern hackathon,projects;experience_description;activities_honors,"",Northwestern University's annual hackathon.,true,true,false
+YC AI Startup Hackathon,hackathon,industry,tier_3,yc ai hackathon;y combinator ai hackathon,activities_honors;education_description;experience_description,https://www.ycombinator.com,Recent YC-sponsored AI hackathons; founder pipeline,true,true,false
+YHack,hackathon,"","",yhack;y hack;yale hack,projects;experience_description;activities_honors,"",Yale's annual hackathon (alternate branding).,true,true,false

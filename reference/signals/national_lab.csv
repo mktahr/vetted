@@ -1,25 +1,25 @@
 canonical_name,category,subcategory,tier_group,aliases,source_field_hints,canonical_url,description,is_positive,is_active,is_searchable
-Air Force Research Laboratory,national_lab,defense,tier_3,afrl;air force research laboratory,title;company_name,https://www.afrl.af.mil,USAF R&D; aerospace + directed energy,true,true,true
-Argonne National Laboratory,national_lab,energy,tier_3,argonne;anl,title;company_name,https://www.anl.gov,DOE multi-domain research,true,true,true
-Army Research Laboratory,national_lab,defense,tier_2,arl;army research laboratory,title;company_name,https://arl.devcom.army.mil,US Army R&D,true,true,true
-Brookhaven National Laboratory,national_lab,energy,tier_3,brookhaven;bnl,title;company_name,https://www.bnl.gov,DOE physics + materials,true,true,true
-DARPA,national_lab,defense,tier_3,darpa;defense advanced research projects agency,title;company_name,https://www.darpa.mil,DoD frontier R&D agency,true,true,true
-Fermilab,national_lab,energy,tier_3,fermilab;fermi national accelerator laboratory,title;company_name,https://www.fnal.gov,DOE particle physics,true,true,true
-Idaho National Laboratory,national_lab,energy,tier_2,inl;idaho national lab,title;company_name,https://inl.gov,DOE nuclear research,true,true,true
-Johns Hopkins Applied Physics Laboratory,national_lab,defense,tier_3,jhuapl;jhu apl;applied physics laboratory;johns hopkins apl,title;company_name,https://www.jhuapl.edu,DoD/NASA R&D; space + defense systems,true,true,true
-Lawrence Livermore National Laboratory,national_lab,energy,tier_3,llnl;lawrence livermore,title;company_name,https://www.llnl.gov,DOE national security + fusion research,true,true,true
-Los Alamos National Laboratory,national_lab,energy,tier_3,lanl;los alamos,title;company_name,https://www.lanl.gov,DOE national security + materials,true,true,true
-MIT Lincoln Laboratory,national_lab,defense,tier_3,mit lincoln lab;lincoln laboratory;mit ll,title;company_name,https://www.ll.mit.edu,DoD-funded R&D; radar/comms/signals; clearance pipeline,true,true,true
-NASA Ames Research Center,national_lab,space,tier_3,nasa ames;ames research center,title;company_name,https://www.nasa.gov/ames,NASA aerospace + AI research,true,true,true
-NASA Glenn Research Center,national_lab,space,tier_2,nasa glenn;glenn research center,title;company_name,https://www.nasa.gov/glenn,NASA aerospace propulsion + power,true,true,true
-NASA Goddard Space Flight Center,national_lab,space,tier_3,nasa goddard;goddard space flight center,title;company_name,https://www.nasa.gov/goddard,NASA earth science + astrophysics + spacecraft,true,true,true
-NASA Jet Propulsion Laboratory,national_lab,space,tier_3,jpl;nasa jpl;jet propulsion laboratory,title;company_name,https://www.jpl.nasa.gov,NASA spacecraft + planetary mission lab; Caltech-managed,true,true,true
-NASA Langley Research Center,national_lab,space,tier_3,nasa langley;langley research center,title;company_name,https://www.nasa.gov/langley,NASA aeronautics R&D,true,true,true
-NASA Marshall Space Flight Center,national_lab,space,tier_3,nasa marshall;marshall space flight center,title;company_name,https://www.nasa.gov/marshall,NASA propulsion + launch vehicles,true,true,true
-Naval Research Laboratory,national_lab,defense,tier_3,nrl;naval research laboratory,title;company_name,https://www.nrl.navy.mil,US Navy R&D,true,true,true
-NIST,national_lab,science,tier_2,nist;national institute of standards and technology,title;company_name,https://www.nist.gov,Department of Commerce; metrology + standards,true,true,true
-NREL,national_lab,energy,tier_3,nrel;national renewable energy laboratory,title;company_name,https://www.nrel.gov,DOE renewable energy R&D,true,true,true
-Oak Ridge National Laboratory,national_lab,energy,tier_3,ornl;oak ridge,title;company_name,https://www.ornl.gov,DOE materials + computing + nuclear,true,true,true
-Pacific Northwest National Laboratory,national_lab,energy,tier_2,pnnl;pacific northwest,title;company_name,https://www.pnnl.gov,DOE energy + national security,true,true,true
-Sandia National Laboratories,national_lab,energy,tier_3,sandia;sandia national labs,title;company_name,https://www.sandia.gov,DOE engineering + national security; large hardware programs,true,true,true
-SLAC National Accelerator Laboratory,national_lab,energy,tier_3,slac;stanford linear accelerator,title;company_name,https://www.slac.stanford.edu,DOE particle physics + photon science,true,true,true
+Air Force Research Laboratory,national_lab,defense,tier_3,afrl;air force research laboratory,title;company_name,https://www.afrl.af.mil,USAF R&D; aerospace + directed energy,true,true,false
+Argonne National Laboratory,national_lab,energy,tier_3,argonne;anl,title;company_name,https://www.anl.gov,DOE multi-domain research,true,true,false
+Army Research Laboratory,national_lab,defense,tier_2,arl;army research laboratory,title;company_name,https://arl.devcom.army.mil,US Army R&D,true,true,false
+Brookhaven National Laboratory,national_lab,energy,tier_3,brookhaven;bnl,title;company_name,https://www.bnl.gov,DOE physics + materials,true,true,false
+DARPA,national_lab,defense,tier_3,darpa;defense advanced research projects agency,title;company_name,https://www.darpa.mil,DoD frontier R&D agency,true,true,false
+Fermilab,national_lab,energy,tier_3,fermilab;fermi national accelerator laboratory,title;company_name,https://www.fnal.gov,DOE particle physics,true,true,false
+Idaho National Laboratory,national_lab,energy,tier_2,inl;idaho national lab,title;company_name,https://inl.gov,DOE nuclear research,true,true,false
+Johns Hopkins Applied Physics Laboratory,national_lab,defense,tier_3,jhuapl;jhu apl;applied physics laboratory;johns hopkins apl,title;company_name,https://www.jhuapl.edu,DoD/NASA R&D; space + defense systems,true,true,false
+Lawrence Livermore National Laboratory,national_lab,energy,tier_3,llnl;lawrence livermore,title;company_name,https://www.llnl.gov,DOE national security + fusion research,true,true,false
+Los Alamos National Laboratory,national_lab,energy,tier_3,lanl;los alamos,title;company_name,https://www.lanl.gov,DOE national security + materials,true,true,false
+MIT Lincoln Laboratory,national_lab,defense,tier_3,mit lincoln lab;lincoln laboratory;mit ll,title;company_name,https://www.ll.mit.edu,DoD-funded R&D; radar/comms/signals; clearance pipeline,true,true,false
+NASA Ames Research Center,national_lab,space,tier_3,nasa ames;ames research center,title;company_name,https://www.nasa.gov/ames,NASA aerospace + AI research,true,true,false
+NASA Glenn Research Center,national_lab,space,tier_2,nasa glenn;glenn research center,title;company_name,https://www.nasa.gov/glenn,NASA aerospace propulsion + power,true,true,false
+NASA Goddard Space Flight Center,national_lab,space,tier_3,nasa goddard;goddard space flight center,title;company_name,https://www.nasa.gov/goddard,NASA earth science + astrophysics + spacecraft,true,true,false
+NASA Jet Propulsion Laboratory,national_lab,space,tier_3,jpl;nasa jpl;jet propulsion laboratory,title;company_name,https://www.jpl.nasa.gov,NASA spacecraft + planetary mission lab; Caltech-managed,true,true,false
+NASA Langley Research Center,national_lab,space,tier_3,nasa langley;langley research center,title;company_name,https://www.nasa.gov/langley,NASA aeronautics R&D,true,true,false
+NASA Marshall Space Flight Center,national_lab,space,tier_3,nasa marshall;marshall space flight center,title;company_name,https://www.nasa.gov/marshall,NASA propulsion + launch vehicles,true,true,false
+Naval Research Laboratory,national_lab,defense,tier_3,nrl;naval research laboratory,title;company_name,https://www.nrl.navy.mil,US Navy R&D,true,true,false
+NIST,national_lab,science,tier_2,nist;national institute of standards and technology,title;company_name,https://www.nist.gov,Department of Commerce; metrology + standards,true,true,false
+NREL,national_lab,energy,tier_3,nrel;national renewable energy laboratory,title;company_name,https://www.nrel.gov,DOE renewable energy R&D,true,true,false
+Oak Ridge National Laboratory,national_lab,energy,tier_3,ornl;oak ridge,title;company_name,https://www.ornl.gov,DOE materials + computing + nuclear,true,true,false
+Pacific Northwest National Laboratory,national_lab,energy,tier_2,pnnl;pacific northwest,title;company_name,https://www.pnnl.gov,DOE energy + national security,true,true,false
+Sandia National Laboratories,national_lab,energy,tier_3,sandia;sandia national labs,title;company_name,https://www.sandia.gov,DOE engineering + national security; large hardware programs,true,true,false
+SLAC National Accelerator Laboratory,national_lab,energy,tier_3,slac;stanford linear accelerator,title;company_name,https://www.slac.stanford.edu,DOE particle physics + photon science,true,true,false
