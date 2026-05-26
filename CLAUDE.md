@@ -12,6 +12,8 @@ The core insight: instead of asking AI to judge a candidate, we build our own di
 
 This file (CLAUDE.md) is the engineering context. Other docs at repo root:
 
+- **[README.md](README.md)** — GitHub-facing project intro: what Vetted is, stack summary, data-flow paragraph.
+- **[CHANGELOG.md](CHANGELOG.md)** — Reverse-chronological work-session log (shipped / decisions / where we left off / open questions / watch-outs). Updated automatically by the End-of-Session Protocol when Matt types "wrap session".
 - **[ROADMAP.md](ROADMAP.md)** — Current build, sequenced "Next Up" items, recently completed (with PR links). The "what are we shipping" doc.
 - **[BACKLOG.md](BACKLOG.md)** — Major deferred features (>0.5 day to scope/build), sub-sectioned by domain. Each entry has a trigger condition for when to build.
 - **[BUGS.md](BUGS.md)** — Small fixes (<0.5 day each). Items move here from BACKLOG when they're scoped down or surface during build.
@@ -20,6 +22,7 @@ This file (CLAUDE.md) is the engineering context. Other docs at repo root:
 - **[GETTING_STARTED.md](GETTING_STARTED.md)** — Onboarding for a new machine. **Currently stale; references old build phases.**
 
 **When to update which:**
+- Session ends (Matt typed "wrap session") → CHANGELOG.md (per End-of-Session Protocol below)
 - New deferred feature → BACKLOG.md
 - New small fix that's <0.5 day → BUGS.md
 - Item moved into active queue → ROADMAP.md "Next Up"
@@ -38,7 +41,8 @@ Matt uses plain-English phrases for common doc operations. Recognize these and a
 | "Add to backlog" | Edit BACKLOG.md (deferred features, sub-sectioned by domain) |
 | "Add to bugs" | Edit BUGS.md (small fixes) |
 | "Add to CLAUDE.md" | Add engineering context to this file |
-| "Wrap up session" | Confirm everything merged to main, pushed to GitHub, deployed to prod, all docs updated. Report any gaps. |
+| "wrap session" (exact) | Execute the End-of-Session Protocol: session summary + CHANGELOG entry + migration ledger + ROADMAP + BACKLOG/BUGS + next-session starter prompt. Show diff for approval; commit only after approval. See "End-of-Session Protocol" section below. |
+| "Wrap up session" | Confirm everything merged to main, pushed to GitHub, deployed to prod, all docs updated. Report any gaps. (Status verification — distinct from "wrap session" which executes the docs-update protocol.) |
 | "Status check" | Report: current branch, what's in flight, last commit, what's on roadmap next |
 | "What did we ship last session?" | Report the last merged PR with contents (from `git log main` and PR titles) |
 | "What's next on the roadmap?" | Read ROADMAP.md "Current Build" + top of "Next Up" |
@@ -56,17 +60,22 @@ Reference data (dictionaries, lookup tables, curated lists) lives in **`/referen
 
 ```
 /reference/
-├── signals/                          # one CSV per signal_dictionary.category
-│   ├── athletics.csv                 # 6 rows (post-revision: D1/Pro/Olympic = tier_3; JrOlympic/D2/D3 = tier_2)
+├── signals/                          # one CSV per signal_dictionary.category (post-063: all is_searchable=FALSE)
+│   ├── academic_distinction.csv      # PBK, Latin honors, valedictorian, etc.
+│   ├── athletics.csv                 # 6 rows (D1/Pro/Olympic = tier_3; JrOlympic/D2/D3 = tier_2)
+│   ├── competition.csv               # engineering competition leagues (FSAE, IREC, RoboCup, IAC, etc.)
+│   ├── engineering_team.csv          # category-row only (141 specific teams seeded via import-teams.mjs)
 │   ├── fellowship.csv                # non-university only (Hertz, KP, Thiel, etc.)
+│   ├── founder.csv                   # 3 rows after migration 063 (Side Project Founder dropped)
+│   ├── greek_life.csv
 │   ├── hackathon.csv
-│   ├── incubator.csv                 # independent only (YC, Techstars, HAX, Antler, etc.)
 │   ├── military.csv
 │   ├── national_lab.csv              # federal R&D centers ONLY (JPL, Lincoln Lab, MITRE, etc.)
 │   ├── olympiad.csv
 │   ├── patent.csv
 │   ├── publication.csv               # conferences + tag-style ("Has Conference Publication")
 │   ├── research_institute.csv        # Allen AI, Arc, Santa Fe, CSET, RAND, Broad
+│   ├── scholarship.csv               # Rhodes, Marshall, Truman, etc.
 │   ├── student_leadership.csv
 │   ├── student_venture_fund.csv      # Dorm Room Fund, RDV, Prospect, Harvard Ventures Alpha
 │   ├── university_fellowship.csv     # Mayfield, Kessler, HUTIF, ELITE, Viterbi, Tsai CITY
@@ -81,6 +90,8 @@ Reference data (dictionaries, lookup tables, curated lists) lives in **`/referen
 │   └── company_scores.csv            # company year-scores source (moved from ~/Downloads on 2026-05-20)
 ├── investors/
 │   └── investor_tiers.csv            # 70 rows: 44 VC firms + 26 individual angels (post-migration 061)
+├── dictionaries/
+│   └── field_of_study.csv            # 86 rows → 43 normalized values (added migration 064)
 ├── schools/                          # canonical school list + aliases (TBD — not yet CSV-driven)
 └── search_intents/
     └── intent_signal_map.csv         # reference-only; not DB-loaded (AI chat search workstream will consume)
@@ -624,7 +635,7 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 
 ---
 
-## Database: Final Schema State (after migrations 001–047)
+## Database: Final Schema State (after migrations 001–064)
 
 **Migration ledger** (full per-migration descriptions live in `supabase/migrations/*.sql` headers):
 - 001 — Phase 1 normalized schema + enums
@@ -673,6 +684,9 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 - 059 — fix `seniority_dictionary` rank ordering: founder bumped from rank 6 → 8 (now the highest active rank); manager 7→6; executive 8→7. Locked spec: `intern(1) < junior_ic(2) < individual_contributor(3) < senior_ic(4) < lead_ic(5) < manager(6) < executive(7) < founder(8)`. Affects `highest_seniority_reached` derivation; scoring engine's executive override is gated on `=executive` and is unaffected.
 - 060 — extend `signal_dictionary.category` CHECK with **6 net-new categories** for university-affiliated and research-org signal coverage: `university_program`, `university_fellowship`, `university_incubator_accelerator`, `university_lab`, `research_institute`, `student_venture_fund`. Total: 31 categories in CHECK constraint. Data load via `scripts/sync-reference.mjs` from `/reference/signals/*.csv`.
 - 061 — add `investor_tiers.investor_type` column (`vc_firm` / `angel`, default `vc_firm`) so VC firms and individual angels coexist with a clear distinction. Existing rows defaulted to `vc_firm`; sync from `/reference/investors/investor_tiers.csv` corrected the 19 rows that should be `angel` (kept from older `kind='angel'` tagging) and seeded 7 new angels (Alana Goyal, Charlie Cheever, Daniel Gross, Jack Altman, Mike Vernal, Sahil Lavingia, Sriram Krishnan).
+- 062 — add `signal_dictionary.is_searchable BOOLEAN DEFAULT TRUE` column + cleanup pass on dictionary entries (30 Under 30 removal, naming cleanups). Wired into UI filter dropdown so individual signals can be flagged out of the searchable set without deletion. (Universal one-bucket policy in 063 then flips ALL rows to FALSE.)
+- 063 — universal one-bucket filter policy: `UPDATE signal_dictionary SET is_searchable = FALSE` on all rows. Only categories surface as UI filters today; granular per-signal search deferred to AI chat workstream. Added `people.is_vc_backed_founder` + `is_bootstrapped_founder` BOOLEAN columns with partial indexes. Dropped Side Project Founder from signal_dictionary (founder category 4 → 3 rows). VC-backed gated on: funding rounds OR recorded investors OR linked incubator/accelerator signal OR `current_status IN ('acquired','public')`; bootstrapped is the default for founders. Auto-reclassifies on rescore via `computeAndWriteDerivedFields()`. Backfill yields 0 VC-backed / 21 bootstrapped today (data-quality gap — see CHANGELOG 2026-05-25 watch-out).
+- 064 — seeded `field_of_study_dictionary` with 86 rows → 43 distinct `field_of_study_normalized` values across 7 domain groups: core_engineering, advanced_engineering, software_cs, physical_sciences, life_sciences, math, design. Aliases include EECS→ECE, Mech E→Mechanical Engineering, CS→Computer Science, AI/ML→`artificial_intelligence_ml`, Life Sciences catch-all (biology/biochem/microbiology/genetics roll up), comp-bio/bioinformatics together, neuroscience kept distinct. Wired as multi-select in FilterSidebar + search-builder. Backfill populated 22 `person_education` rows (sparse `field_of_study_raw` coverage on existing base).
 
 The "Normalized tables" / "Dictionary tables" lists below describe the post-migration state. They name the most-used columns; consult the actual schema for exhaustive column lists.
 
@@ -706,7 +720,7 @@ The "Normalized tables" / "Dictionary tables" lists below describe the post-migr
 - `title_dictionary` — ~175 patterns, populated by migration 002 + `scripts/seed-recruiting-titles.mjs` (16 recruiting titles). **Stores title_normalized + function_normalized + specialty_normalized + confidence only — seniority comes from `seniority_rules`.**
 - `employment_type_dictionary` — 20 patterns (full-time, contract, freelance, part-time, internship, board, advisory variants)
 - `degree_dictionary` — 32 patterns (BS, BA, MS, MA, MBA, PhD, JD, MD, Certificate, Bootcamp, Coursework, etc.)
-- `field_of_study_dictionary` — empty (declared in migration, no seeds yet)
+- `field_of_study_dictionary` — 86 rows → 43 normalized values (seeded migration 064). Domain groups: core_engineering, advanced_engineering, software_cs, physical_sciences, life_sciences, math, design.
 - `seniority_dictionary` — 11 rows (9 active + 2 deprecated, with rank_order 0–8)
 - `seniority_rules` — 400+ rows, exact case-insensitive matching (see Seniority System section above)
 - `title_level_dictionary` — ~85 patterns mapping title substrings to numeric levels (1–10). Level scale: 1=intern, 2=junior, 3=mid-IC, 4=IC-II, 5=senior/IC-III, 6=staff/lead, 7=principal, 8=distinguished, 9=VP/director, 10=C-suite. Per-experience `title_level` stored on `person_experiences`; trajectory across roles → `people.title_level_slope`.
@@ -729,17 +743,8 @@ The "Normalized tables" / "Dictionary tables" lists below describe the post-migr
 │   ├── 07-person-enrich.md                      ← /person/enrich (cached / IN-DB) + add-on cost model
 │   ├── 08-person-autocomplete.md                ← /person/search/autocomplete (FREE)
 │   └── 09-person-live-enrich.md                 ← /person/professional_network/enrich/live (5 credits, real-time scrape)
-├── supabase/migrations/                         ← see "Database: Final Schema State" for full migration set 001–047
-├── supabase/seeds/                              ← CSV source-of-truth for migration 043, 044, 045 data + import-teams.mjs
-│   ├── README.md                                ← run order + diagnostics + idempotency notes
-│   ├── olympiads_signals.csv                    ← 17 rows → signal_dictionary category='olympiad'
-│   ├── national_labs_signals.csv                ← 24 rows → signal_dictionary category='national_lab'
-│   ├── tags_signals.csv                         ← 12 rows (4 ROTC + 6 veteran + 1 patent + 1 publication)
-│   ├── hackathons_signals.csv                   ← 24 rows → signal_dictionary category='hackathon'
-│   ├── conferences_signals.csv                  ← 49 rows → signal_dictionary category='publication'
-│   ├── fellowships_signals.csv                  ← 45 rows → signal_dictionary category='fellowship' (UPSERT MERGE)
-│   ├── vetted_competitions.csv                  ← 21 rows → competitions table + signal_dictionary
-│   └── vetted_teams.csv                         ← 142 rows → 141 teams + 142 team_competition_map + 17 domain tags
+├── supabase/migrations/                         ← see "Database: Final Schema State" for full migration set 001–064
+├── supabase/seeds/                              ← DEPRECATED post-migration 060. Source of truth is now /reference/. README.md is a deprecation pointer; legacy CSVs (olympiads_signals, national_labs_signals, tags_signals, hackathons_signals, conferences_signals, fellowships_signals, vetted_competitions, vetted_teams) live on for historical replay only.
 │
 ├── app/                                         ← Next.js 14 App Router
 │   ├── page.tsx                                 ← "/" renders ProfileTable
@@ -1070,7 +1075,7 @@ A curl response of HTTP 200 is NOT proof a page works. Next.js often prerenders 
 
 ### End-of-session docs update — MUST DO
 
-Before wrapping a session that shipped any feature, migration, or architectural change, update CLAUDE.md so the next Claude session starts with accurate ground truth. Bump the migration ledger, add/revise the relevant section, update the File Layout if new files were added, and prune anything now wrong. See the "End-of-session docs update" section near the bottom of this file for the specific trigger pattern.
+Before wrapping a session that shipped any feature, migration, or architectural change, update CLAUDE.md + CHANGELOG.md + ROADMAP.md so the next Claude session starts with accurate ground truth. The full procedure (trigger phrase `wrap session`, the 8 steps, the next-session starter-prompt template) lives in the "End-of-Session Protocol" section near the bottom of this file.
 
 A stale CLAUDE.md is worse than a short one — future sessions read it as authoritative.
 
@@ -1552,15 +1557,49 @@ Without these edits, signals with the new category exist in the DB but don't ren
 
 ---
 
-## End-of-session docs update — read this before closing a session
+## End-of-Session Protocol
 
-Before closing a session that shipped a feature, migration, or architectural change, **update CLAUDE.md so the next Claude has accurate ground truth.** Specifically:
+**Trigger phrase: `wrap session`** (exact). When Matt types this, execute the
+following without further prompting — do NOT ask for confirmation at each step,
+just do the work and present the diff at the end:
 
-- Bump the migration ledger if migrations were added.
-- Add or revise the relevant section (or create one if a new system was introduced).
-- Update the File Layout if files were added.
-- Prune anything that's now wrong.
+1. **Generate a short session summary** (2–4 sentences max).
+2. **Append a dated entry to [CHANGELOG.md](CHANGELOG.md)** using the 6-block
+   template:
+   ```
+   ## YYYY-MM-DD — Headline
 
-A stale CLAUDE.md is worse than a short one — future sessions read it as authoritative and either reinvent existing systems or break them.
+   **Shipped**
+   **Decisions**
+   **Where we left off**
+   **Open questions**
+   **Watch-outs**
+   ```
+3. **Update CLAUDE.md migration ledger** if any new migrations ran this session.
+   Add the section/sub-section if a new system was introduced. Update the File
+   Layout if new files were added. Prune anything now wrong.
+4. **Update [ROADMAP.md](ROADMAP.md)** — move completed items to Recently
+   Completed (with PR link), add new Next Up items if any surfaced.
+5. **Add new items to [BACKLOG.md](BACKLOG.md)** (organized by domain) if surfaced.
+6. **Add small fixes to [BUGS.md](BUGS.md)** if surfaced.
+7. **Print the next-session starter prompt** — a ready-to-copy block in this
+   exact shape:
+   ```
+   ## Where we left off
+   ## What's in flight (current branch, PR, open work)
+   ## Next thing to do
+   ## Open questions
+   ## Watch-outs
+   ```
+   This is the deliverable Matt copies into the next session's first message so
+   the new CC instance starts with full context.
+8. **Show all file changes for review.** DO NOT auto-commit.
 
-The trigger pattern: when the user says "we're good for tonight" / "let's wrap up" / "ship and we're done", do the docs sweep BEFORE stopping. Don't wait to be asked.
+**After Matt approves**, commit with message:
+```
+Wrap session YYYY-MM-DD: <headline>
+```
+
+A stale CLAUDE.md is worse than a short one — future sessions read it as
+authoritative and either reinvent existing systems or break them. The whole
+point of this protocol is to keep the docs in lockstep with reality.
