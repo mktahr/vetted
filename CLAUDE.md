@@ -1088,6 +1088,14 @@ When you create a table — even with `DISABLE ROW LEVEL SECURITY` in the same m
 
 If a migration creates admin tables and you forget the follow-up, your reads will silently return empty result sets even with the service-role key (because RLS-on + no policies = no rows visible).
 
+### Non-additive migrations gated on dev/prod Supabase split
+
+All migrations 001–066 have been applied to a single Supabase project that serves as both dev and prod. This is acceptable while migrations stay **purely additive**: `CREATE TABLE` for new tables, `ADD COLUMN`, `INSERT` seeds, `CHECK` constraint extensions on previously-empty values, `ALTER TABLE … DISABLE RLS` on tables created in the same workstream.
+
+**The next migration that is NOT purely additive — any FK constraint addition referencing an existing table, any column modification on an existing table (rename, retype, drop, NOT NULL flip), any data migration on existing rows, any RLS change on a previously-existing table — must NOT be applied to prod until a dev/prod Supabase split exists and the migration has been verified on dev first.**
+
+See ROADMAP "Set up dev/prod Supabase environment split" — that work is a hard prerequisite. For the sourcing pipeline specifically, this gates the future migration adding `sourced_prospects.candidate_id REFERENCES people(person_id)`.
+
 ### Don't propose options the user has explicitly rejected
 
 When an approach fails or needs revision, do NOT silently fall back to an option the user already turned down earlier in the same workstream. Reread the conversation, identify the rejected option, and find a third path. (Incident: 2026-05-05, candidate name hover — user rejected underline in favor of subtle accent; when accent failed I retreated to underline.)
