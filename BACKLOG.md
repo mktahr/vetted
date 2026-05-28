@@ -54,6 +54,16 @@ These were intentionally cut from PR A scope. All have hooks in the already-ship
 - **Trigger:** when team-role granularity affects scoring outcomes meaningfully
 - **Scope:** extend the regex set. `team_role_text` already preserves source text so re-classification doesn't require re-fetching from `raw_ingest_events`
 
+### Founder experience validation (real company gate)
+- **Status:** identified during PR #5 seniority-split review (2026-05-28). Today, "Co-Founder" / "Founder" in a title triggers founder status from the title string alone, with no check that the entity is a real company. Meetups, clubs, side projects with "founder" in the title falsely trigger founder status (e.g. "Co-Founder/Organizer, Meetups @ Mercedes-Benz R&D")
+- **Trigger:** ties to Company data enrichment landing (above) — both depend on `company_funding_rounds`, investor data, headcount, and domain signal coverage being populated. Resolve together
+- **Scope:** gate founder status on **structured company signals FIRST** — does the company exist in our DB with funding rounds, recorded investors, headcount data, or a real domain? No structured footprint → flag for review, don't count as founder experience. LLM web lookup ONLY as a fallback when zero structured data exists, and only to flag-for-review (never as the primary gate — live lookups return unreliable/conflicting data). Ties to the VC-backed derivation gap: real funded companies (e.g. Auradine, $314M raised) currently show as bootstrapped because `company_funding_rounds` is unpopulated — same enrichment unblocks both
+
+### Specialty dictionary cleanup — title-like specialty names
+- **Status:** identified during PR #5 seniority-split review (2026-05-28). `specialty_dictionary` has entries that read as titles rather than specialties — e.g. `chief_engineer` (parent_function=engineering). Jennifer Tran's "VP of Engineering" current role resolves to `specialty=chief_engineer`, which is semantically odd ("Chief Engineer" is a title, not a specialty). Collides with the new `c_suite` seniority value
+- **Trigger:** before specialty matching becomes a primary search vector (overlaps with Comprehensive `specialty_normalized` dictionary above)
+- **Scope:** audit `specialty_dictionary` for title-like entries. Decide each: keep as specialty (e.g. if it captures a real sub-discipline), rename to a clearer specialty name, or delete and let title carry the meaning. Specifically revisit `chief_engineer` — likely belongs in `seniority_normalized=c_suite` territory now, not in specialty
+
 ---
 
 ## UI / Search
@@ -76,6 +86,11 @@ These were intentionally cut from PR A scope. All have hooks in the already-ship
   - **(a) Enrich-at-ingest:** every new candidate gets enriched immediately. Blanket coverage; ~$0.01–0.03 per candidate
   - **(b) Enrich-on-promote:** fire enrich when a recruiter signals interest (added to list, opened detail). Lazy, cheaper, more targeted
   - **(c) Enrich-backfill:** one-time pass over existing corpus. Solves history; doesn't help future
+
+### Function taxonomy consistency — promote disciplines from specialty to function
+- **Status:** identified during PR #5 seniority-split review (2026-05-28). The current taxonomy is internally inconsistent — for **software**, the discipline lives at FUNCTION level (`function=engineering`, `specialty=backend/frontend/fullstack`); for **mechanical/electrical/etc.**, the discipline lives at SPECIALTY level (`function=engineering`, `specialty=mechanical_engineering`). So "Software Engineer" and "Mechanical Engineer" both end up as `function=engineering`, with their actual discipline buried in `specialty` for one and not the other
+- **Trigger:** feeds the future **three-layer title/role/domain search** (ROADMAP #3 V1: specific-title match + normalized-role match + domain inference). That search needs consistent role normalization — same kind of work classified the same way regardless of stack. Should land before AI chat search V1 if possible
+- **Scope:** domain-by-domain refactor — promote disciplines from specialty to function level (`software_engineering`, `mechanical_engineering`, `electrical_engineering`, `chemical_engineering`, etc. become first-class functions); specialty becomes uniformly the sub-discipline within (embedded, ML, infra, backend, controls, RF, etc.). Touches: `function_dictionary` seed, `specialty_dictionary` re-parenting, every `title_dictionary` row's function_normalized, scoring engine's function override gates, role↔specialty mapping in `role_specialty_map`, ingest pipeline title→function/specialty resolution, all UI filter dropdowns. Multi-day refactor; needs migration + data backfill + cross-file edits. Don't start until three-layer search scope is locked
 
 ---
 
