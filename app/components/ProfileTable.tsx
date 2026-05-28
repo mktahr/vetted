@@ -1015,7 +1015,7 @@ export default function ProfileTable() {
   if (reviewStatusScope !== 'all') chips.push({ label: `Visibility: ${reviewStatusScope}`, onRemove: () => setReviewStatusScope('all') })
   for (const pill of rolePills) { const r = roleOptions.find(o => o.value === pill.value); chips.push({ label: `Role: ${r?.label || pill.value}${pill.scope !== 'ever' ? ` · ${pill.scope}` : ''}`, onRemove: () => setRolePills(rolePills.filter(p => p.value !== pill.value)) }) }
   for (const pill of specialtyPills) chips.push({ label: `Specialty: ${pill.value.replace(/_/g, ' ')}${pill.scope !== 'ever' ? ` · ${pill.scope}` : ''}`, onRemove: () => setSpecialtyPills(specialtyPills.filter(p => p.value !== pill.value)) })
-  for (const pill of seniorityPills) chips.push({ label: `Seniority: ${pill.value.replace(/_/g, ' ')}${pill.scope !== 'ever' ? ` · ${pill.scope}` : ''}`, onRemove: () => setSeniorityPills(seniorityPills.filter(p => p.value !== pill.value)) })
+  for (const pill of seniorityPills) chips.push({ label: `Seniority: ${formatSeniorityLabel(pill.value)}${pill.scope !== 'ever' ? ` · ${pill.scope}` : ''}`, onRemove: () => setSeniorityPills(seniorityPills.filter(p => p.value !== pill.value)) })
   for (const v of bucketSel) chips.push({ label: `Bucket: ${v.replace(/_/g, ' ')}`, onRemove: () => setBucketSel(bucketSel.filter(x => x !== v)) })
   for (const v of stageSel) chips.push({ label: `Stage: ${v.replace(/_/g, ' ')}`, onRemove: () => setStageSel(stageSel.filter(x => x !== v)) })
   if (yearsMin || yearsMax) chips.push({ label: `Yrs: ${yearsMin || '0'}–${yearsMax || '∞'}`, onRemove: () => { setYearsMin(''); setYearsMax('') } })

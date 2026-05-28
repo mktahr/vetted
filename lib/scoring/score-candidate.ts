@@ -759,7 +759,7 @@ export async function scoreCandidate(
     thresholds,
   );
 
-  const overrideTag = applyRecruiting ? ' [recruiting]' : applyExecutive ? ' [executive]' : '';
+  const overrideTag = applyRecruiting ? ' [recruiting]' : applyExecutive ? ' [senior-leader]' : '';
   const flagSummary = flagged_reasons.length > 0 ? ` flags=[${flagged_reasons.join(',')}]` : '';
   const reasoning = `${stage.replace('_', ' ')} (${years ?? '?'}y) core=${coreScore.toFixed(1)} bonus=${bonusScore.toFixed(1)} penalty=${penaltyScore.toFixed(1)} → ${Math.round(total * 100) / 100}/${bucket}${overrideTag}${flagSummary}`;
 
