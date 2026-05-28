@@ -18,6 +18,7 @@ import FilterSidebar from './FilterSidebar'
 import { buildLocationOptions } from '@/lib/locations/us-locations'
 import { computeTenureSummary, type FtExperience, type FtEducation, type TenureSummary } from '@/lib/tenure/helpers'
 import { filterEducationForDisplay } from '@/lib/education/display-filter'
+import { formatSeniorityLabel } from '@/lib/normalize/seniority'
 
 function cleanCompanyName(name: string | null | undefined): string | null {
   if (!name) return null
@@ -468,7 +469,7 @@ export default function ProfileTable() {
           ),
         })))
 
-        setSeniorityOptions((srs || []).map(s => ({ value: s.seniority_normalized, label: s.seniority_normalized.replace(/_/g, ' ') })))
+        setSeniorityOptions((srs || []).map(s => ({ value: s.seniority_normalized, label: formatSeniorityLabel(s.seniority_normalized) })))
         // V1: filter the company autocomplete to vetted+unreviewed (exclude excluded companies).
         // The unreviewed-tier auto-creates need to surface so admin can use them in compound filters
         // even before they're tagged. Excluded companies are explicitly out of scope for searches.

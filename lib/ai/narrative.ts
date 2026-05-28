@@ -23,13 +23,13 @@ export interface NarrativeContext {
   career_stage: string | null
   career_progression: string | null            // company-tier movement: rising/flat/declining/insufficient_data
   title_level_slope: string | null             // title-level movement: rising/flat/declining/insufficient_data
-  highest_seniority_reached: string | null     // executive/manager/lead/IC/student/unknown
+  highest_seniority_reached: string | null     // c_suite/vp/director/manager/lead_ic/senior_ic/individual_contributor/junior_ic/intern/founder/unknown (post-067)
   experiences: Array<{
     title: string | null
     company: string | null
     company_tier: number | null                // 1-5 from company_year_scores, only if known
     title_level: number | null                 // 1-10 extracted from title text
-    seniority_normalized: string | null        // executive/manager/lead/individual_contributor/student/unknown
+    seniority_normalized: string | null        // c_suite/vp/director/manager/lead_ic/senior_ic/individual_contributor/junior_ic/intern/founder/unknown (post-067)
     start_date: string | null
     end_date: string | null
     is_current: boolean
