@@ -24,7 +24,15 @@ A separate sourcing layer for discovering high-signal early-career talent via pu
 5. **Kebab dropdown / recruiter view** — admin/recruiter view toggle via `?view=` URL param + global nav toggle. Hides admin-only signals (bucket badges, score breakdown, flagged_reasons, clearance section, Bucket column on main list) when in recruiter view. Affects ProfileTable, ProfileDrawer, profile/[id]/page.tsx, admin/companies/*. Scope ~0.5 day.
 6. **Signals column on the main candidate table** — currently signals only render in the drawer + profile page. Recruiters scanning the list need to see why a candidate is interesting at a glance. Pattern: top 3–5 chips per row + `+N` overflow popover (mirroring the Company column's multi-subcategory pattern). Scope tight — 2–3 days max. Should NOT slip the AI chat search project; signals column is table stakes, AI chat is the actual product moment.
 7. **Modular columns** — admin-selected column visibility on the main list. Phased: (a) localStorage-persisted column-visibility checklist behind a "Columns" button in the table toolbar (~100 LOC); (b) DB-persisted preference once auth lands; (c) per-user role defaults. User has repeatedly asked — high latent value.
-8. **PhD Researcher bucket** — only if time permits before launch. Dedicated bucket / classification for academic researchers (PhDs, postdocs, faculty). Distinct scoring profile from operators. Lower priority than items 1–7.
+8. **Agentic layer (user + admin) — distinct from AI chat search**
+   A natural-language agent that *takes actions*, not just answers. Different from AI chat search (item 3), which is read-only (NL → search filters) and sits earlier on the roadmap. The agent mutates data and performs in-app tasks.
+
+   **Admin agent — priority, build first.** Operate the business at scale via natural language instead of manual clicking: bulk record operations, company curation, rescoring, batch edits. Example: "Tag every aerospace company founded before 2015 as hard_tech and rescore candidates who worked there." How we run the admin side AI-natively in production; useful before we have users.
+
+   **User agent — later, post-launch.** Users take in-app actions over their own workspace (lists, saved searches, starred items) via natural language. Example: "Add the top 15 results to a new list called 'Embedded — West Coast' and save this search to re-run weekly."
+
+   Both need a defined set of callable actions plus human-in-the-loop confirmation for anything that changes or sends data. Depends on auth / user-admin split (item 4).
+9. **PhD Researcher bucket** — only if time permits before launch. Dedicated bucket / classification for academic researchers (PhDs, postdocs, faculty). Distinct scoring profile from operators. Lower priority than items 1–7.
 
 ---
 
