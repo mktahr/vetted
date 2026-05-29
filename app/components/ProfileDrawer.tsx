@@ -239,6 +239,9 @@ export default function ProfileDrawer({ person, experiences, education, signals,
                 {person.title_level_slope && person.title_level_slope !== 'insufficient_data' && (
                   <><span style={{ color: 'var(--fg-tertiary)' }}>Progression</span><span style={{ color: 'var(--fg-primary)' }}>{person.title_level_slope}</span></>
                 )}
+                {person.slope_score !== null && person.slope_score !== undefined && (
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Slope</span><span style={{ color: 'var(--fg-primary)' }}>{person.slope_score}</span></>
+                )}
               </div>
             )}
 

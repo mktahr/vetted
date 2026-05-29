@@ -67,6 +67,7 @@ export interface Person {
   career_progression: 'rising' | 'flat' | 'declining' | 'insufficient_data' | null
   highest_seniority_reached: string | null
   title_level_slope: 'rising' | 'flat' | 'declining' | 'insufficient_data' | null
+  slope_score: number | null
   primary_specialty: string | null
   secondary_specialty: string | null
   historical_specialty: string | null

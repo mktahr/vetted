@@ -64,6 +64,11 @@ These were intentionally cut from PR A scope. All have hooks in the already-ship
 - **Trigger:** before specialty matching becomes a primary search vector (overlaps with Comprehensive `specialty_normalized` dictionary above)
 - **Scope:** audit `specialty_dictionary` for title-like entries. Decide each: keep as specialty (e.g. if it captures a real sub-discipline), rename to a clearer specialty name, or delete and let title carry the meaning. Specifically revisit `chief_engineer` — likely belongs in `seniority_normalized=c_suite` territory now, not in specialty
 
+### Industry-specific title normalization
+- **Status:** identified during PR #6 slope-score build (2026-05-29). Titles map to seniority/function differently across industries. A "VP" at an investment bank (Morgan Stanley, Goldman) is NOT a management title — it's roughly equivalent to Senior IC / early Lead in tech. Associate/Analyst at consultancies (McKinsey, Bain) and law firms map to junior-to-mid IC. Military ranks have their own ladder (Lieutenant → Captain → Major → Lt Col → Colonel) that maps to IC → manager → director → VP equivalents. Currently `seniority_rules` assumes a startup/tech mapping uniformly — every "VP" resolves to `vp`, every "Associate" resolves to `junior_ic`, etc.
+- **Trigger:** out of scope until Vetted expands beyond engineering. The schema decision (industry-conditional title rules) should be made BEFORE expanding so we don't ship industry-bias to non-tech recruiters
+- **Scope:** industry-conditional rules — same `title_pattern` resolves to different `seniority_level` based on the company's industry/sub-industry. Schema options: (a) extend `seniority_rules` with optional `industry_scope` column (TEXT[] or single value); (b) separate `seniority_rules_overrides` table keyed on `(title_pattern, industry)`; (c) per-industry rule sets composed at lookup time. Also relevant: "forward-deployed engineer" and similar hybrid technical-but-not-traditional-eng roles at banks/consultancies need to surface in engineering searches via specialty/function bridging. Pick approach at design time, not now
+
 ---
 
 ## UI / Search

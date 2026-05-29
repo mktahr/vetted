@@ -30,11 +30,13 @@ import {
   isAmbiguousHeadOfTitle,
   headcountAtRoleEnd,
 } from '@/lib/normalize/seniority'
+import { computeSlopeScore } from '@/lib/scoring/slope'
 
 export interface DerivedFields {
   career_progression: 'rising' | 'flat' | 'declining' | 'insufficient_data' | null
   highest_seniority_reached: string | null
   title_level_slope: 'rising' | 'flat' | 'declining' | 'insufficient_data' | null
+  slope_score: number | null
   primary_specialty: string | null
   secondary_specialty: string | null
   historical_specialty: string | null
@@ -159,9 +161,15 @@ export async function computeDerivedFields(
     metrics = mRes.data || []
   }
 
-  const { data: seniorityDict } = await supabase
-    .from('seniority_dictionary')
-    .select('seniority_normalized, rank_order')
+  // Fetch in parallel — seniority_dictionary for rank lookup, person_education
+  // for slope_score's getFtExperiences filter (graduation date anchors the
+  // pre-graduation override that excludes intern-period roles from FT set).
+  const [seniorityDictRes, educationRes] = await Promise.all([
+    supabase.from('seniority_dictionary').select('seniority_normalized, rank_order'),
+    supabase.from('person_education').select('start_year, end_year, degree_raw, degree_level').eq('person_id', personId),
+  ])
+  const seniorityDict = seniorityDictRes.data
+  const education = educationRes.data || []
 
   const companyById: Record<string, {
     founding_year: number | null
@@ -421,10 +429,29 @@ export async function computeDerivedFields(
     })),
   )
 
+  // 9. slope_score — continuous candidate slope (0-100, NULL for insufficient data).
+  //    Replaces the binary title_level_slope='rising' signal in the scoring
+  //    engine's career_slope bonus. title_level_slope still computed above
+  //    (step 5) and kept populated for lib/ai/narrative.ts until deprecation.
+  //    Idempotent / pure — re-derives on every rescore.
+  const slopeScore = computeSlopeScore(
+    experiences.map(e => ({
+      company_id: e.company_id,
+      title_raw: e.title_raw,
+      start_date: e.start_date,
+      end_date: e.end_date,
+      is_current: e.is_current,
+      seniority_normalized: e.seniority_normalized,
+      employment_type_normalized: e.employment_type_normalized,
+    })),
+    education,
+  )
+
   return {
     career_progression: careerProgression,
     highest_seniority_reached: highestSeniority,
     title_level_slope: titleLevelSlope,
+    slope_score: slopeScore,
     primary_specialty: specialties.primary_specialty,
     secondary_specialty: specialties.secondary_specialty,
     historical_specialty: specialties.historical_specialty,
