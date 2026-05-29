@@ -550,6 +550,9 @@ export default function ProfilePage() {
           {person.title_level_slope && person.title_level_slope !== 'insufficient_data' && (
             <><span className="text-muted-foreground">Progression</span><span>{person.title_level_slope}</span></>
           )}
+          {person.slope_score !== null && person.slope_score !== undefined && (
+            <><span className="text-muted-foreground">Slope</span><span>{person.slope_score}</span></>
+          )}
           {person.has_early_stage_experience && (
             <><span className="text-muted-foreground">Early-stage</span><span>{person.early_stage_companies_count} companies</span></>
           )}

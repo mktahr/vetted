@@ -404,7 +404,7 @@ export async function scoreCandidate(
   // Person (with derived fields)
   const { data: person, error: personErr } = await supabase
     .from('people')
-    .select('person_id, full_name, years_experience_estimate, current_function_normalized, career_progression, title_level_slope, highest_seniority_reached, has_early_stage_experience, has_hypergrowth_experience, is_current_founder, is_former_founder')
+    .select('person_id, full_name, years_experience_estimate, current_function_normalized, career_progression, title_level_slope, slope_score, highest_seniority_reached, has_early_stage_experience, has_hypergrowth_experience, is_current_founder, is_former_founder')
     .eq('person_id', personId)
     .single();
 
@@ -641,17 +641,24 @@ export async function scoreCandidate(
     });
   }
 
-  // ─── BONUS: career_slope (synthetic — reads people.title_level_slope) ───
+  // ─── BONUS: career_slope (synthetic — reads people.slope_score) ───
+  //   Continuous formula (post-migration 068):
+  //     bonus = careerSlopeMax * (slope_score / 100)
+  //   slope_score=100 → full bonus; 75 → 75%; NULL → 0.
+  //   Replaces the binary 'rising' gate that previously read title_level_slope.
+  //   title_level_slope still computed for lib/ai/narrative.ts but no longer
+  //   feeds this bonus.
   {
     const careerSlopeMax = signalWeights.get(`career_slope|__flat__|${stage}`) ?? 0;
     if (careerSlopeMax > 0) {
-      const isRising = person.title_level_slope === 'rising';
+      const slope = (person as { slope_score: number | null }).slope_score;
+      const raw = slope === null || slope === undefined ? 0 : Math.max(0, Math.min(1, slope / 100));
       components.push({
         name: 'career_slope', category: 'bonus',
         weight: careerSlopeMax,
-        raw: isRising ? 1.0 : 0,
-        points: isRising ? careerSlopeMax : 0,
-        note: `title_level_slope=${person.title_level_slope ?? 'none'}`,
+        raw,
+        points: raw * careerSlopeMax,
+        note: `slope_score=${slope ?? 'null'}`,
       });
     }
   }
