@@ -223,6 +223,9 @@ Four separate outputs:
 - All new tables are additions
 - Link back to existing tables where needed
 
+### Rule 6: Data State During Build Phase
+The database holds a small, sparse set of real candidates and companies — enough to test logic and verify features work, but not a robust or complete corpus. It will be expanded and enriched later (companies need enrichment, dedup, additions/removals; candidate volume grows over time). When building features: build the logic to be correct against the full corpus it will eventually hold, and use the existing data only to validate that the logic runs and behaves correctly on a sample. Do NOT flag sparse or empty data as a blocker or concern — we already know the data is thin and are populating it separately. Only flag data state if it affects the correctness of the logic itself (e.g. a calculation that would break, not merely return few results).
+
 ---
 
 ## Companies V1 Taxonomy (Post-Migration 031)
