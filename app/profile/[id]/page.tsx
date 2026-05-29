@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { Person, Experience, Education, BucketAssignment, CandidateBucket, FlaggedReason, ClearanceLevel, ScoreComponent } from '../../types'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from '../../components/CompanyLogo'
 import { filterEducationForDisplay } from '@/lib/education/display-filter'
+import { formatSeniorityLabel } from '@/lib/normalize/seniority'
 
 function cleanCompanyName(name: string | null | undefined): string | null {
   if (!name) return null
@@ -539,10 +540,10 @@ export default function ProfilePage() {
             const currentSen = currentExp?.seniority_normalized ?? null
             return <>
               {currentSen && (
-                <><span className="text-muted-foreground">Seniority</span><span>{currentSen.replace(/_/g, ' ')}</span></>
+                <><span className="text-muted-foreground">Seniority</span><span>{formatSeniorityLabel(currentSen)}</span></>
               )}
               {person.highest_seniority_reached && person.highest_seniority_reached !== currentSen && (
-                <><span className="text-muted-foreground">Highest seniority</span><span>{person.highest_seniority_reached.replace(/_/g, ' ')}</span></>
+                <><span className="text-muted-foreground">Highest seniority</span><span>{formatSeniorityLabel(person.highest_seniority_reached)}</span></>
               )}
             </>
           })()}
@@ -790,7 +791,7 @@ function ScoreBreakdownTable({ bucket }: { bucket: BucketAssignment }) {
             <td className="px-3 py-2 text-tertiary">
               stage: {b.scoring_stage}
               {b.applied_recruiting_override && <span className="ml-2 text-indigo-600">[recruiting override]</span>}
-              {b.applied_executive_override && <span className="ml-2 text-watch">[executive override]</span>}
+              {b.applied_executive_override && <span className="ml-2 text-watch">[senior-leader override]</span>}
             </td>
           </tr>
         </tfoot>

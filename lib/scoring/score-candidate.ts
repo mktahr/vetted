@@ -89,8 +89,13 @@ const EXECUTIVE_OVERRIDE_CORE: CoreWeights = {
   core: { company_quality_recent: 55, company_quality_average: 30, role_scope: 10, degree_relevance: 3, education: 2 },
 };
 
+// Post-migration 067 ranks: c_suite=1.0, vp=0.85, director=0.7, manager=0.7
+// (manager unchanged). Founder stays at 0.7 — separate axis from seniority.
+// Legacy 'executive' kept at 1.0 so any stored row still scores cleanly.
 const ROLE_SCOPE_BY_SENIORITY: Record<string, number> = {
-  executive: 1.0,
+  c_suite: 1.0,
+  vp: 0.85,
+  director: 0.7,
   manager: 0.7,
   founder: 0.7,
   lead_ic: 0.5,
@@ -101,7 +106,17 @@ const ROLE_SCOPE_BY_SENIORITY: Record<string, number> = {
   entry: 0.2,           // legacy fallback (enum value renamed to junior_ic in 048)
   intern: 0.1,
   student: 0.1,
+  executive: 1.0,       // deprecated post-067; kept for any legacy stored rows
 };
+
+// Senior-leader override fires for these highest_seniority_reached values.
+// (Renamed conceptually from "executive override" to "senior-leader override"
+// in migration 067, but the field name `applied_executive_override` is kept
+// for backward compat with stored breakdowns.)
+const SENIOR_LEADER_OVERRIDE_SENIORITIES = new Set<string>([
+  'director', 'vp', 'c_suite',
+  'executive',  // legacy — any stored 'executive' rows still trigger the override
+]);
 
 // ─── Stage determination ──────────────────────────────────────────────────
 
@@ -468,9 +483,12 @@ export async function scoreCandidate(
     loadBucketThresholds(supabase),
   ]);
 
-  // Decide weight set (recruiting > executive > stage-default)
+  // Decide weight set (recruiting > senior-leader > stage-default).
+  // Senior-leader override fires for director / vp / c_suite (post-migration 067).
+  // Field name applied_executive_override kept for backward compat (semantic intact).
   const applyRecruiting = functionName === 'recruiting';
-  const applyExecutive = !applyRecruiting && person.highest_seniority_reached === 'executive';
+  const applyExecutive = !applyRecruiting
+    && SENIOR_LEADER_OVERRIDE_SENIORITIES.has(person.highest_seniority_reached ?? '');
   const coreWeights: CoreWeights = applyRecruiting
     ? RECRUITING_OVERRIDE_CORE
     : applyExecutive
@@ -741,7 +759,7 @@ export async function scoreCandidate(
     thresholds,
   );
 
-  const overrideTag = applyRecruiting ? ' [recruiting]' : applyExecutive ? ' [executive]' : '';
+  const overrideTag = applyRecruiting ? ' [recruiting]' : applyExecutive ? ' [senior-leader]' : '';
   const flagSummary = flagged_reasons.length > 0 ? ` flags=[${flagged_reasons.join(',')}]` : '';
   const reasoning = `${stage.replace('_', ' ')} (${years ?? '?'}y) core=${coreScore.toFixed(1)} bonus=${bonusScore.toFixed(1)} penalty=${penaltyScore.toFixed(1)} → ${Math.round(total * 100) / 100}/${bucket}${overrideTag}${flagSummary}`;
 

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { Person, CandidateBucket } from '../types'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from './CompanyLogo'
+import { formatSeniorityLabel } from '@/lib/normalize/seniority'
 
 export interface DrawerExperience {
   company_id: string | null
@@ -230,10 +231,10 @@ export default function ProfileDrawer({ person, experiences, education, signals,
                   <><span style={{ color: 'var(--fg-tertiary)' }}>Function</span><span style={{ color: 'var(--fg-primary)' }}>{person.current_function_normalized.replace(/_/g, ' ')}</span></>
                 )}
                 {currentSeniority && (
-                  <><span style={{ color: 'var(--fg-tertiary)' }}>Seniority</span><span style={{ color: 'var(--fg-primary)' }}>{currentSeniority.replace(/_/g, ' ')}</span></>
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Seniority</span><span style={{ color: 'var(--fg-primary)' }}>{formatSeniorityLabel(currentSeniority)}</span></>
                 )}
                 {person.highest_seniority_reached && person.highest_seniority_reached !== currentSeniority && (
-                  <><span style={{ color: 'var(--fg-tertiary)' }}>Highest seniority</span><span style={{ color: 'var(--fg-primary)' }}>{person.highest_seniority_reached.replace(/_/g, ' ')}</span></>
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Highest seniority</span><span style={{ color: 'var(--fg-primary)' }}>{formatSeniorityLabel(person.highest_seniority_reached)}</span></>
                 )}
                 {person.title_level_slope && person.title_level_slope !== 'insufficient_data' && (
                   <><span style={{ color: 'var(--fg-tertiary)' }}>Progression</span><span style={{ color: 'var(--fg-primary)' }}>{person.title_level_slope}</span></>

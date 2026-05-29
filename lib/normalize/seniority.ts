@@ -4,9 +4,13 @@
 // seniority_rules table as the source of truth. Called by the ingest
 // pipeline for every experience row.
 //
-// Post-migration-010 enum (9 active values):
-//   unknown < intern < entry < individual_contributor < senior_ic <
-//   lead_ic < founder < manager < executive
+// Post-migration-067 enum (active values, ascending rank):
+//   intern(1) < junior_ic(2) < individual_contributor(3) < senior_ic(4) <
+//   lead_ic(5) < manager(6) < director(7) < vp(8) < c_suite(9) < founder(10)
+//
+// Deprecated (kept for backward compat): student, lead, entry, executive.
+// Founder is NOT in the slope/scoring leveling math — it's tracked as a
+// separate role/function axis via is_current_founder / is_former_founder.
 //
 // Algorithm:
 //   1. If employment_type is internship (normalized or raw matches /intern/) → intern
@@ -14,6 +18,12 @@
 //   3. Case-insensitive exact match against seniority_rules (sorted by priority)
 //   4. If no rule matches and title is non-empty → individual_contributor
 //   5. If title is empty → unknown
+//
+// "Head of X" titles are AMBIGUOUS and not classified by exact rules — they
+// are reclassified by company headcount in compute-derived.ts via
+// resolveHeadOfByHeadcount() below. Migration 067 deleted the two old
+// exact rules (head of people / head of talent) so the headcount path is
+// the sole source of truth for these titles.
 
 import { SupabaseClient } from '@supabase/supabase-js'
 import { getFtExperiences, type FtExperience, type FtEducation } from '@/lib/tenure/helpers'
@@ -25,10 +35,13 @@ export type SeniorityLevel =
   | 'individual_contributor'
   | 'senior_ic'
   | 'lead_ic'
-  | 'founder'
   | 'manager'
-  | 'executive'
+  | 'director'
+  | 'vp'
+  | 'c_suite'
+  | 'founder'
   // Deprecated but kept for backward compat with old data
+  | 'executive'
   | 'student'
   | 'lead'
   | 'entry'  // renamed to junior_ic in migration 048; type kept so older code paths compile
@@ -153,15 +166,20 @@ export interface SeniorityResult {
 }
 
 // Ordered by rank (highest first) so the scan returns the highest match.
+// Ranks match seniority_dictionary.rank_order post-migration 067.
 const DESCRIPTION_SENIORITY_SIGNALS: Array<{ pattern: RegExp; level: SeniorityLevel; rank: number }> = [
-  { pattern: /\bvice president\b/i, level: 'executive', rank: 8 },
-  { pattern: /\bvp\b/i, level: 'executive', rank: 8 },
-  { pattern: /\bmanaging director\b/i, level: 'executive', rank: 8 },
-  { pattern: /\bdirector\b/i, level: 'manager', rank: 7 },
-  { pattern: /\bengineering manager\b/i, level: 'manager', rank: 7 },
-  { pattern: /\bmanager\b/i, level: 'manager', rank: 7 },
-  { pattern: /\bfounder\b/i, level: 'founder', rank: 6 },
-  { pattern: /\bco-founder\b/i, level: 'founder', rank: 6 },
+  { pattern: /\bchief \w+ officer\b/i, level: 'c_suite', rank: 9 },
+  { pattern: /\b(ceo|cfo|cto|coo|cmo|cro|ciso|chro|cpo|cio)\b/i, level: 'c_suite', rank: 9 },
+  { pattern: /\b(svp|evp)\b/i, level: 'vp', rank: 8 },
+  { pattern: /\b(senior|executive) vice president\b/i, level: 'vp', rank: 8 },
+  { pattern: /\bvice president\b/i, level: 'vp', rank: 8 },
+  { pattern: /\bvp\b/i, level: 'vp', rank: 8 },
+  { pattern: /\bmanaging director\b/i, level: 'vp', rank: 8 },
+  { pattern: /\b(senior |associate )?director\b/i, level: 'director', rank: 7 },
+  { pattern: /\bengineering manager\b/i, level: 'manager', rank: 6 },
+  { pattern: /\bmanager\b/i, level: 'manager', rank: 6 },
+  { pattern: /\bfounder\b/i, level: 'founder', rank: 10 },
+  { pattern: /\bco-founder\b/i, level: 'founder', rank: 10 },
   { pattern: /\bprincipal\b/i, level: 'lead_ic', rank: 5 },
   { pattern: /\bstaff\b/i, level: 'lead_ic', rank: 5 },
   { pattern: /\btech lead\b/i, level: 'lead_ic', rank: 5 },
@@ -200,7 +218,9 @@ export function scanDescriptionForSeniority(
 // Seniority levels where a description scan should NOT override.
 // If the title already gave a specific signal, trust it.
 const TITLE_IS_AUTHORITATIVE = new Set<SeniorityLevel>([
-  'intern', 'junior_ic', 'senior_ic', 'lead_ic', 'founder', 'manager', 'executive',
+  'intern', 'junior_ic', 'senior_ic', 'lead_ic', 'founder', 'manager',
+  'director', 'vp', 'c_suite',
+  'executive',  // legacy — kept so any stored row still resolves authoritatively
 ])
 
 /**
@@ -274,6 +294,128 @@ export async function resolveSeniority(
 ): Promise<SeniorityLevel> {
   const rules = await loadSeniorityRules(supabase)
   return resolveSeniorityFromRules(ctx, rules)
+}
+
+// ─── Head Of headcount-based resolver ──────────────────────────────────────
+//
+// "Head of X" titles are ambiguous in isolation — Head of Engineering at a
+// 30-person startup is a founding IC; Head of Engineering at a 5000-person
+// company is a VP-equivalent. Title-based exact rules can't capture this,
+// so we route ambiguous "head of X" titles through this headcount-based
+// classifier.
+//
+// TIME-AWARE — the headcount used depends on whether the role is current:
+//   • current (is_current=true)  → use the company's LATEST headcount.
+//     Person is still in the seat; they level against today's company size.
+//     A candidate hired as Head of Eng at 40 people who's still in the role
+//     while the company grew to 500 must re-level upward on the next rescore.
+//   • past (is_current=false)    → use the headcount AT end_date from the
+//     company's headcount_timeseries. Person operated at that scope and
+//     left; later company growth does NOT retroactively promote their level.
+//
+// Bucketing (per locked spec):
+//   ≤50        → lead_ic   (founding-IC running a function, usually no real team)
+//   51–250     → manager   (real people-manager, org not yet big enough for director layer)
+//   251–1000   → director  (structured org, director-of-function layer)
+//   >1000      → vp        (function head = VP-equivalent owning a whole org)
+//   unknown    → lead_ic   (default; ambiguous Head-of skews IC by convention)
+//
+// IMPORTANT: this function ONLY classifies the per-experience seniority for
+// the ambiguous "Head of X" role. It does NOT touch highest_seniority_reached
+// — that's still derived by max-rank across all experiences (see
+// compute-derived.ts). A candidate who was previously a Director at a 2000-
+// person company and is currently "Head of X" at a 40-person startup gets
+// the current role classed as lead_ic, but highest_seniority_reached stays
+// at director (the max rank across all experiences).
+//
+// IDEMPOTENT — same inputs always produce the same output. title_raw is the
+// immutable source; seniority_normalized is fully derived and re-derives on
+// each rescore. Self-corrects as headcount data lands.
+export function resolveHeadOfByHeadcount(headcount: number | null | undefined): SeniorityLevel {
+  if (headcount == null) return 'lead_ic'
+  if (headcount <= 50)   return 'lead_ic'
+  if (headcount <= 250)  return 'manager'
+  if (headcount <= 1000) return 'director'
+  return 'vp'
+}
+
+/** True if the title is an ambiguous "Head of X" — owned by the headcount classifier. */
+export function isAmbiguousHeadOfTitle(title: string | null | undefined): boolean {
+  if (!title) return false
+  return /\bhead of\b/i.test(title)
+}
+
+/**
+ * Find a company's headcount AT or BEFORE a given role end_date by scanning a
+ * stored headcount_timeseries (JSONB array of `{ date, count }` from Crust enrich,
+ * shape defined by lib/companies/firmographics.ts::HeadcountPoint).
+ *
+ * Returns the count from the latest timeseries point whose date <= endDate.
+ *
+ * Returns null when:
+ *   • timeseries is null / undefined / empty (no data ever loaded)
+ *   • endDate is null (open-ended role; caller should not call this for is_current=true)
+ *   • all timeseries points are AFTER endDate (role ended before data starts)
+ *
+ * IMPORTANT: when this returns null for a past role, the caller must NOT fall
+ * back to headcount_latest. That would retroactively promote past roles to
+ * today's company size — exactly the bug this time-aware logic exists to
+ * avoid. Null → resolveHeadOfByHeadcount(null) → lead_ic default per spec.
+ *
+ * Date comparison uses ISO string lexicographic order (YYYY-MM-DD), which is
+ * equivalent to chronological order for that format.
+ */
+export function headcountAtRoleEnd(
+  timeseries: Array<{ date: string; count: number }> | null | undefined,
+  endDate: string | null | undefined,
+): number | null {
+  if (!Array.isArray(timeseries) || timeseries.length === 0) return null
+  if (!endDate || typeof endDate !== 'string') return null
+  let best: { date: string; count: number } | null = null
+  for (const p of timeseries) {
+    if (!p || typeof p.date !== 'string' || typeof p.count !== 'number') continue
+    if (p.date <= endDate && (best === null || p.date > best.date)) {
+      best = p
+    }
+  }
+  return best ? best.count : null
+}
+
+// ─── Display label map ─────────────────────────────────────────────────────
+//
+// Default UI rendering uses .replace(/_/g, ' ') which produces "c suite" /
+// "lead ic" / "junior ic" — readable but unloved. This map gives proper
+// recruiter-facing labels. Applied at the four render sites:
+//   • app/components/ProfileTable.tsx (sidebar seniority chip)
+//   • app/components/ProfileDrawer.tsx (drawer metadata)
+//   • app/profile/[id]/page.tsx (profile detail metadata)
+//   • app/search-builder/page.tsx (search-builder seniority chip)
+//
+// Falls back to underscore-replace for any value not in the map (covers
+// 'unknown', deprecated values, future additions).
+export const SENIORITY_LABEL_MAP: Record<string, string> = {
+  intern: 'Intern',
+  junior_ic: 'Junior IC',
+  individual_contributor: 'IC',
+  senior_ic: 'Senior IC',
+  lead_ic: 'Lead IC',
+  manager: 'Manager',
+  director: 'Director',
+  vp: 'VP',
+  c_suite: 'CXO',
+  founder: 'Founder',
+  // Legacy / deprecated — still renders cleanly if encountered
+  executive: 'Executive',
+  lead: 'Lead',
+  student: 'Student',
+  entry: 'Junior IC',
+  unknown: 'Unknown',
+}
+
+/** Render a seniority value for the UI. Falls back to underscore-replace for unknown values. */
+export function formatSeniorityLabel(value: string | null | undefined): string {
+  if (!value) return ''
+  return SENIORITY_LABEL_MAP[value] ?? value.replace(/_/g, ' ')
 }
 
 // ─── Kept for backward compat — these were exported before migration 010 ──

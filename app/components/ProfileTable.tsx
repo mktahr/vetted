@@ -18,6 +18,7 @@ import FilterSidebar from './FilterSidebar'
 import { buildLocationOptions } from '@/lib/locations/us-locations'
 import { computeTenureSummary, type FtExperience, type FtEducation, type TenureSummary } from '@/lib/tenure/helpers'
 import { filterEducationForDisplay } from '@/lib/education/display-filter'
+import { formatSeniorityLabel } from '@/lib/normalize/seniority'
 
 function cleanCompanyName(name: string | null | undefined): string | null {
   if (!name) return null
@@ -468,7 +469,7 @@ export default function ProfileTable() {
           ),
         })))
 
-        setSeniorityOptions((srs || []).map(s => ({ value: s.seniority_normalized, label: s.seniority_normalized.replace(/_/g, ' ') })))
+        setSeniorityOptions((srs || []).map(s => ({ value: s.seniority_normalized, label: formatSeniorityLabel(s.seniority_normalized) })))
         // V1: filter the company autocomplete to vetted+unreviewed (exclude excluded companies).
         // The unreviewed-tier auto-creates need to surface so admin can use them in compound filters
         // even before they're tagged. Excluded companies are explicitly out of scope for searches.
@@ -1014,7 +1015,7 @@ export default function ProfileTable() {
   if (reviewStatusScope !== 'all') chips.push({ label: `Visibility: ${reviewStatusScope}`, onRemove: () => setReviewStatusScope('all') })
   for (const pill of rolePills) { const r = roleOptions.find(o => o.value === pill.value); chips.push({ label: `Role: ${r?.label || pill.value}${pill.scope !== 'ever' ? ` · ${pill.scope}` : ''}`, onRemove: () => setRolePills(rolePills.filter(p => p.value !== pill.value)) }) }
   for (const pill of specialtyPills) chips.push({ label: `Specialty: ${pill.value.replace(/_/g, ' ')}${pill.scope !== 'ever' ? ` · ${pill.scope}` : ''}`, onRemove: () => setSpecialtyPills(specialtyPills.filter(p => p.value !== pill.value)) })
-  for (const pill of seniorityPills) chips.push({ label: `Seniority: ${pill.value.replace(/_/g, ' ')}${pill.scope !== 'ever' ? ` · ${pill.scope}` : ''}`, onRemove: () => setSeniorityPills(seniorityPills.filter(p => p.value !== pill.value)) })
+  for (const pill of seniorityPills) chips.push({ label: `Seniority: ${formatSeniorityLabel(pill.value)}${pill.scope !== 'ever' ? ` · ${pill.scope}` : ''}`, onRemove: () => setSeniorityPills(seniorityPills.filter(p => p.value !== pill.value)) })
   for (const v of bucketSel) chips.push({ label: `Bucket: ${v.replace(/_/g, ' ')}`, onRemove: () => setBucketSel(bucketSel.filter(x => x !== v)) })
   for (const v of stageSel) chips.push({ label: `Stage: ${v.replace(/_/g, ' ')}`, onRemove: () => setStageSel(stageSel.filter(x => x !== v)) })
   if (yearsMin || yearsMax) chips.push({ label: `Yrs: ${yearsMin || '0'}–${yearsMax || '∞'}`, onRemove: () => { setYearsMin(''); setYearsMax('') } })

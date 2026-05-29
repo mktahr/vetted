@@ -15,6 +15,7 @@ import { ConditionRowList } from '../components/condition-rows'
 import type { ConditionRow } from '../components/condition-rows/types'
 import { conditionToCompact, compactToCondition } from '../components/condition-rows/types'
 import { buildLocationOptions } from '@/lib/locations/us-locations'
+import { formatSeniorityLabel } from '@/lib/normalize/seniority'
 
 export default function SearchBuilderPage() {
   return (
@@ -192,7 +193,7 @@ function SearchBuilderInner() {
       ])
 
       setRoleOptions((roles || []).map((r: any) => ({ value: r.role_id, label: r.role_name })))
-      setSeniorityOptions((srs || []).map(s => ({ value: s.seniority_normalized, label: s.seniority_normalized.replace(/_/g, ' ') })))
+      setSeniorityOptions((srs || []).map(s => ({ value: s.seniority_normalized, label: formatSeniorityLabel(s.seniority_normalized) })))
       // V1: include all non-excluded companies (vetted + unreviewed). Excluded are hidden.
       setCompanyOptions((companies || []).filter((c: any) => c.review_status !== 'excluded').map((c: any) => ({
         value: c.company_id,

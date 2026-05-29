@@ -25,6 +25,11 @@
 
 import { SupabaseClient } from '@supabase/supabase-js'
 import { aggregatePersonSpecialties, type PersonSpecialties } from '@/lib/normalize/specialty'
+import {
+  resolveHeadOfByHeadcount,
+  isAmbiguousHeadOfTitle,
+  headcountAtRoleEnd,
+} from '@/lib/normalize/seniority'
 
 export interface DerivedFields {
   career_progression: 'rising' | 'flat' | 'declining' | 'insufficient_data' | null
@@ -55,6 +60,7 @@ function isFounderExperience(exp: ExperienceRow): boolean {
 }
 
 interface ExperienceRow {
+  person_experience_id: string
   company_id: string | null
   title_raw: string | null
   title_level: number | null
@@ -107,7 +113,7 @@ export async function computeDerivedFields(
   // 1. Fetch this person's experiences, ordered oldest → newest
   const { data: expRaw } = await supabase
     .from('person_experiences')
-    .select('company_id, title_raw, title_level, specialty_normalized, seniority_normalized, employment_type_normalized, start_date, end_date, is_current')
+    .select('person_experience_id, company_id, title_raw, title_level, specialty_normalized, seniority_normalized, employment_type_normalized, start_date, end_date, is_current')
     .eq('person_id', personId)
     .order('start_date', { ascending: true, nullsFirst: false })
 
@@ -125,7 +131,12 @@ export async function computeDerivedFields(
   )
 
   let yearScores: Array<{ company_id: string; year: number; company_score: number }> = []
-  let companies: Array<{ company_id: string; founding_year: number | null }> = []
+  let companies: Array<{
+    company_id: string
+    founding_year: number | null
+    headcount_latest: number | null
+    headcount_timeseries: Array<{ date: string; count: number }> | null
+  }> = []
   let metrics: Array<{ company_id: string; year: number; headcount_estimate: number | null }> = []
 
   if (companyIds.length > 0) {
@@ -136,7 +147,7 @@ export async function computeDerivedFields(
         .in('company_id', companyIds),
       supabase
         .from('companies')
-        .select('company_id, founding_year')
+        .select('company_id, founding_year, headcount_latest, headcount_timeseries')
         .in('company_id', companyIds),
       supabase
         .from('company_metrics_by_year')
@@ -152,8 +163,74 @@ export async function computeDerivedFields(
     .from('seniority_dictionary')
     .select('seniority_normalized, rank_order')
 
-  const companyById: Record<string, { founding_year: number | null }> = {}
+  const companyById: Record<string, {
+    founding_year: number | null
+    headcount_latest: number | null
+    headcount_timeseries: Array<{ date: string; count: number }> | null
+  }> = {}
   for (const c of companies) companyById[c.company_id] = c
+
+  // ─── 1b. Head-Of headcount reclassification pass (time-aware) ───────────
+  //   Ambiguous "Head of X" titles classify by company headcount rather than
+  //   by exact-rule lookup (the two old exact rules `head of people` / `head
+  //   of talent` were deleted in migration 067). For each experience matching
+  //   /\bhead of\b/, compute the headcount-derived seniority and write it back
+  //   to person_experiences.seniority_normalized so it's the single source of
+  //   truth downstream (UI, search filters, max-rank derivation below).
+  //
+  //   TIME-AWARE branching:
+  //     • Current role (is_current=true)  → use companies.headcount_latest.
+  //       Person is in the seat; level against today's company size. They
+  //       re-level on each rescore as the company grows.
+  //     • Past role    (is_current=false) → use headcountAtRoleEnd() against
+  //       companies.headcount_timeseries with the role's end_date. They
+  //       operated at that scope and left; subsequent company growth does
+  //       NOT retroactively promote their level.
+  //
+  //   IMPORTANT: when the timeseries has no point at or before end_date for
+  //   a past role, we do NOT fall back to headcount_latest — that would
+  //   reintroduce the retroactive-promotion problem this logic exists to
+  //   avoid. Null → resolveHeadOfByHeadcount(null) → lead_ic default per spec.
+  //
+  //   Guardrail: this only changes the per-experience classification of the
+  //   Head Of role. The max-across-experiences derivation of
+  //   highest_seniority_reached (step 4 below) preserves a candidate's peak
+  //   rank from prior roles — Head-of-at-startup does NOT reduce
+  //   highest_seniority_reached for someone who was previously a Director.
+  //
+  //   IDEMPOTENT — same (title_raw, is_current, end_date, company headcount
+  //   data) inputs always produce the same output. title_raw never mutates;
+  //   seniority_normalized is fully derived and re-derives on each rescore.
+  //   Self-corrects as Crust company enrichment lands.
+  //
+  //   Headcount data fill rate is currently ~0.4% (6/1508 companies). Almost
+  //   every Head Of will resolve to lead_ic (the default for unknown). The
+  //   logic still applies cleanly once Crust company enrichment lands.
+  const headOfUpdates: Array<{ id: string; newSeniority: string }> = []
+  for (const e of experiences) {
+    if (!isAmbiguousHeadOfTitle(e.title_raw)) continue
+    const co = e.company_id ? companyById[e.company_id] : null
+    let hc: number | null = null
+    if (co) {
+      hc = e.is_current
+        ? (co.headcount_latest ?? null)
+        : headcountAtRoleEnd(co.headcount_timeseries, e.end_date)
+    }
+    const newSeniority = resolveHeadOfByHeadcount(hc)
+    if (e.seniority_normalized !== newSeniority) {
+      headOfUpdates.push({ id: e.person_experience_id, newSeniority })
+      e.seniority_normalized = newSeniority  // mutate for downstream derivations in this run
+    }
+  }
+  if (headOfUpdates.length > 0) {
+    // Sequential to keep this dependency-free; Head Of titles are rare per person.
+    for (const u of headOfUpdates) {
+      await supabase
+        .from('person_experiences')
+        .update({ seniority_normalized: u.newSeniority })
+        .eq('person_experience_id', u.id)
+    }
+  }
 
   const seniorityRank: Record<string, number> = {}
   for (const s of seniorityDict || []) seniorityRank[s.seniority_normalized] = s.rank_order
@@ -181,7 +258,14 @@ export async function computeDerivedFields(
     else careerProgression = 'flat'
   }
 
-  // 4. highest_seniority_reached — max rank across experiences
+  // 4. highest_seniority_reached — max rank across experiences.
+  //    Note: per-experience Head Of titles have already been reclassified by
+  //    the headcount pass above (step 1b), so this max-rank derivation reads
+  //    the headcount-aware values. The previous "head of + 9+ years →
+  //    executive" interim rule was removed in migration 067 — the headcount-
+  //    based logic supersedes it. Guardrail: a candidate who was a Director
+  //    elsewhere retains highest_seniority_reached=director even if their
+  //    current Head Of role resolves down to lead_ic (small-startup default).
   let maxRank = 0
   let highestSeniority: string | null = null
   for (const e of experiences) {
@@ -192,29 +276,7 @@ export async function computeDerivedFields(
       highestSeniority = e.seniority_normalized
     }
   }
-
-  // 4b. INTERIM RULE: "head of" + 9+ years → executive override.
-  //     The dictionary maps "head of" titles to manager (correct for small
-  //     startups), but experienced "head of" leaders at established companies
-  //     are executive-level. Until company-size data is available, use years
-  //     of experience as the proxy. This override runs at derivation time,
-  //     not in the dictionary, so the seniority_rules table stays clean.
-  if (
-    highestSeniority !== 'executive' &&
-    yearsExperience !== null &&
-    yearsExperience >= 9
-  ) {
-    const hasHeadOfTitle = experiences.some(e =>
-      e.title_raw && /\bhead of\b/i.test(e.title_raw)
-    )
-    if (hasHeadOfTitle) {
-      const execRank = seniorityRank['executive']
-      if (execRank && execRank > maxRank) {
-        maxRank = execRank
-        highestSeniority = 'executive'
-      }
-    }
-  }
+  void yearsExperience  // retained in fetch above for potential future use; no longer consumed here
 
   // 5. title_level_slope — trajectory of title_level across recent FT roles.
   //    Same algorithm as career_progression but reading title_level instead
