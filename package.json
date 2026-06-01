@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "migrate:dev": "./scripts/apply-migration.sh dev",
+    "migrate:prod": "./scripts/apply-migration.sh prod",
+    "migrate:replay-dev": "./scripts/replay-migrations-to-dev.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",

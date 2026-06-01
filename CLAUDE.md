@@ -1091,13 +1091,43 @@ When you create a table — even with `DISABLE ROW LEVEL SECURITY` in the same m
 
 If a migration creates admin tables and you forget the follow-up, your reads will silently return empty result sets even with the service-role key (because RLS-on + no policies = no rows visible).
 
-### Non-additive migrations gated on dev/prod Supabase split
+### Dev/prod Supabase split — workflow (live as of 2026-06-01)
 
-All migrations 001–066 have been applied to a single Supabase project that serves as both dev and prod. This is acceptable while migrations stay **purely additive**: `CREATE TABLE` for new tables, `ADD COLUMN`, `INSERT` seeds, `CHECK` constraint extensions on previously-empty values, `ALTER TABLE … DISABLE RLS` on tables created in the same workstream.
+Two Supabase projects: **prod** (the original, serving `vetted-self.vercel.app`) and **dev** (free-tier, used for migration testing only — data layer stays empty). Migrations land on dev first, get verified, then apply to prod.
 
-**The next migration that is NOT purely additive — any FK constraint addition referencing an existing table, any column modification on an existing table (rename, retype, drop, NOT NULL flip), any data migration on existing rows, any RLS change on a previously-existing table — must NOT be applied to prod until a dev/prod Supabase split exists and the migration has been verified on dev first.**
+**Env var convention** (in `.env.local`):
+- App code reads prod vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`
+- Scripts read dev vars when targeting dev: same names + `_DEV` suffix (`DATABASE_URL_DEV`, etc.)
+- Vercel env (production) untouched — only has the prod vars.
 
-See ROADMAP "Set up dev/prod Supabase environment split" — that work is a hard prerequisite. For the sourcing pipeline specifically, this gates the future migration adding `sourced_prospects.candidate_id REFERENCES people(person_id)`.
+**Workflow for any new migration:**
+```bash
+# Always apply to dev first:
+npm run migrate:dev -- supabase/migrations/0NN_filename.sql
+
+# Verify on dev (psql query, app behavior in dev mode, etc.)
+
+# Then apply to prod:
+npm run migrate:prod -- supabase/migrations/0NN_filename.sql
+```
+
+Both commands wrap `scripts/apply-migration.sh` which uses `psql -v ON_ERROR_STOP=1`. A failure on dev halts before prod ever gets the change.
+
+**Non-additive migrations MUST go through dev first** — any FK constraint addition referencing an existing table, any column modification on an existing table (rename, retype, drop, NOT NULL flip), any data migration on existing rows, any RLS change on a previously-existing table. Purely additive migrations (`CREATE TABLE` for new tables, `ADD COLUMN` nullable, `INSERT` seeds, `CHECK` constraint extensions, `ALTER TABLE … DISABLE RLS` on same-workstream tables) can technically go straight to prod but the workflow above applies them to both anyway for consistency.
+
+**Fresh dev DB bootstrap** (one-time, already done for current dev project):
+```bash
+./scripts/replay-migrations-to-dev.sh
+```
+
+This applies all migrations in order against an empty dev DB. **Known caveats** observed during the initial 2026-06-01 replay — keep in mind if/when re-bootstrapping a new dev project:
+- Migration 027 contains `INSERT INTO school_aliases` statements with hardcoded school UUIDs from prod's seed data. On empty dev, these FK to non-existent schools and fail. The migration's earlier statements (ALTER TABLE, INSERTs of military academies + their aliases) apply cleanly before the failure, so the SCHEMA part of 027 is correct on dev; only the prod-UUID-dependent alias rows are absent.
+- Migrations 062 and 063 contain verification DO blocks (`RAISE EXCEPTION IF count != expected`) that fail on empty dev because they assume prod's seed data exists. The whole migration rolls back, dropping the schema columns it would have added (`is_searchable`, `is_vc_backed_founder`, `is_bootstrapped_founder`). One-off catchup is at `scripts/_dev-catchup-062-063.sql` (schema-only, no verification, idempotent).
+- Migrations 056 / 057 don't exist (numbers reserved during the sourcing-pipeline workstream and ultimately renumbered to 065/066 — see migration ledger).
+
+**Going-forward rule for new migrations:** avoid hardcoded UUIDs from prod data; verification DO blocks must be tolerant of empty DBs (e.g., check schema-level invariants, not specific row counts). Otherwise future re-bootstraps of dev will hit the same friction.
+
+**What lives on dev today:** schema only. No reference data (no schools, companies, signal_dictionary entries, etc.). Per Rule 6 (Data State During Build Phase), sparse dev data is expected and not a blocker. If a future migration needs reference data to validate, seed it on dev manually via the existing seed scripts (which currently target prod by default — env-awareness of seed scripts is a follow-up).
 
 ### Don't propose options the user has explicitly rejected
 
