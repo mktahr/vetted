@@ -92,12 +92,28 @@ export type FtMode = 'yoe' | 'tenure'
 // "Soft" non-FT patterns — excluded only when overlapping a longer concurrent
 // company span. Standalone post-grad consulting/advisory roles count.
 // Note: \bconsultant\b is handled separately with a consulting-firms allowlist.
+//
+// Founder added 2026-06-01 (sub-PR 1 of four-axis taxonomy work). Rationale:
+// "Founder" / "Co-Founder" at a side project should yield to a concurrent FT
+// day job. Without this entry, a candidate's main FT company could be filtered
+// out as secondary when a long-running founder side project's span runs
+// longer than the FT job — wrong outcome. Pass-2 overlap logic handles the
+// no-concurrent-FT case correctly: a founder-only candidate's company has no
+// non-soft peer to lose to → stays as primary. The `is_current_founder` /
+// `is_former_founder` boolean derivations are NOT affected by this filter
+// (they read title_raw directly, not the FT-filtered set).
+//
+// Regex \b(co-?)?founder\b matches "Founder" / "Co-Founder" / "Co-founder" /
+// "Cofounder" / "Founder & CEO". Does NOT match "Founding Partner" (VC role),
+// "Founding Engineer" (early-startup IC), or "Founders Fund" — `founding` and
+// `founders` are different word stems.
 const SOFT_NON_FT_TITLE_PATTERNS = [
   /\badvisor\b/i,
   /\badvisory\b(?!\s+(services|group))/i,
   /\bboard\s+(member|director|observer|of\s+directors)\b/i,
   /\bcontractor\b/i,
   /\bfreelance[r]?\b/i,
+  /\b(co-?)?founder\b/i,
 ]
 
 // "Consultant" titles are soft-non-FT UNLESS at a known consulting firm.
