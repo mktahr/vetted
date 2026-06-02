@@ -14,6 +14,7 @@
 // What this handles:
 //   • signal_dictionary  (reference/signals/*.csv — one CSV per category)
 //   • investor_tiers     (reference/investors/investor_tiers.csv)
+//   • skills_dictionary  (reference/skills/*.csv — one CSV per category)
 //
 // What this does NOT handle (yet):
 //   • companies + company_year_scores  (use scripts/reseed-companies.mjs)
@@ -179,6 +180,38 @@ for (const filename of SIGNAL_CSVS) {
   })
 }
 
+// One handler per skills CSV. Mirror of the signals pattern — each CSV's
+// category is in its filename. Added 2026-06-01 (sub-PR 2a of four-axis
+// taxonomy build). UNIQUE conflict on canonical_name alone (a skill exists
+// once across the whole dictionary, not duplicated per category).
+
+const SKILLS_CSVS = (() => {
+  const dir = join(REFERENCE_DIR, 'skills')
+  if (!statSync(dir, { throwIfNoEntry: false })) return []
+  return readdirSync(dir).filter(f => f.endsWith('.csv'))
+})()
+
+for (const filename of SKILLS_CSVS) {
+  const categoryName = filename.replace(/\.csv$/, '')
+  handlers.push({
+    path: `skills/${filename}`,
+    table: 'skills_dictionary',
+    conflictKey: ['canonical_name'],
+    categoryFilter: categoryName,
+    parseRow(raw) {
+      return {
+        canonical_name: raw.canonical_name.trim(),
+        category: raw.category?.trim() || categoryName,
+        aliases: semiArray(raw.aliases),
+        primary_specialty: semiArray(raw.primary_specialty),
+        description: nullable(raw.description),
+        is_active: raw.is_active === undefined || raw.is_active === '' ? true : csvBool(raw.is_active),
+        is_searchable: raw.is_searchable === undefined || raw.is_searchable === '' ? true : csvBool(raw.is_searchable),
+      }
+    },
+  })
+}
+
 // investor_tiers
 handlers.push({
   path: 'investors/investor_tiers.csv',
@@ -201,7 +234,11 @@ handlers.push({
 
 async function fetchExisting(table, categoryFilter) {
   let q = supabase.from(table).select('*')
-  if (categoryFilter && table === 'signal_dictionary') {
+  // Category-scoped diff: signal_dictionary and skills_dictionary use a
+  // category column, so a per-CSV diff stays scoped to its own category
+  // (preventing athletics.csv from accidentally "deleting" rows belonging
+  // to fellowship.csv etc.).
+  if (categoryFilter && (table === 'signal_dictionary' || table === 'skills_dictionary')) {
     q = q.eq('category', categoryFilter)
   }
   const { data, error } = await q
@@ -237,7 +274,7 @@ function diffRow(csvRow, dbRow) {
 }
 
 async function syncHandler(h) {
-  if (ONLY_FILES && !ONLY_FILES.some(f => h.path === f || h.path.endsWith(`/${f}`) || h.path === `signals/${f}` || h.path === `investors/${f}`)) {
+  if (ONLY_FILES && !ONLY_FILES.some(f => h.path === f || h.path.endsWith(`/${f}`) || h.path === `signals/${f}` || h.path === `investors/${f}` || h.path === `skills/${f}`)) {
     return { skipped: true }
   }
   if (ONLY_TABLE && h.table !== ONLY_TABLE) {

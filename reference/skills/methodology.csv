@@ -1,0 +1,3 @@
+canonical_name,category,aliases,primary_specialty,description,is_active,is_searchable
+HIL (hardware-in-the-loop),methodology,hardware-in-the-loop;hardware in the loop;hil testing,electrical_engineering;embedded;controls_engineering;hardware_in_loop,"Test methodology where hardware-under-test is interfaced with simulated/real plant components. Cross-disciplinary — EE, embedded, and controls all use HIL.",true,true
+CI/CD,methodology,ci/cd;continuous integration;continuous delivery;continuous deployment,devops;infrastructure,Continuous Integration / Continuous Delivery practices. DevOps foundational.,true,true

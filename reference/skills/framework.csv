@@ -1,0 +1,4 @@
+canonical_name,category,aliases,primary_specialty,description,is_active,is_searchable
+React,framework,reactjs;react.js,frontend;fullstack,Frontend JavaScript library for building user interfaces. Multi-tagged for frontend + fullstack contexts.,true,true
+PyTorch,framework,,ml_engineering;applied_ml,Deep-learning framework; the dominant tool for ML research and increasingly for production.,true,true
+ROS2,framework,ros 2;ros_2;ros2 humble,robotics;robotics_software;autonomy_software,Robot Operating System v2 — middleware and framework for distributed robotics software.,true,true

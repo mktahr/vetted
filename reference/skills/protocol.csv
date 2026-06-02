@@ -1,0 +1,3 @@
+canonical_name,category,aliases,primary_specialty,description,is_active,is_searchable
+gRPC,protocol,,backend,"High-performance RPC framework over HTTP/2 using Protocol Buffers; common in microservice + ML-serving architectures.",true,true
+CAN bus,protocol,can bus;controller area network;canfd;can-fd,embedded;embedded_software;firmware,Controller Area Network — standard automotive / industrial vehicle bus for embedded systems communication.,true,true

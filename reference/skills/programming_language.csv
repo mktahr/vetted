@@ -1,0 +1,3 @@
+canonical_name,category,aliases,primary_specialty,description,is_active,is_searchable
+Python,programming_language,,backend,"General-purpose programming language; ubiquitous in backend, ML, scripting, and data work.",true,true
+Verilog,programming_language,,asic_engineering;chip_verification;hardware_description_languages,Hardware description language for digital circuit design and ASIC/FPGA implementation + verification.,true,true

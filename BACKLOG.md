@@ -62,6 +62,11 @@ These were intentionally cut from PR A scope. All have hooks in the already-ship
 ### Specialty dictionary cleanup — title-like specialty names
 - **Promoted to ROADMAP item #3** (Four-axis candidate taxonomy rebuild — 2026-05-29). Absorbed into sub-PR 2b of that build (`specialty_dictionary` cleanup as part of the function/specialty rework). Original notes preserved in PR #5 / PR #6 history; see ROADMAP for current scope.
 
+### Dictionary refinement: methodology category split
+- **Status:** identified during sub-PR 2a of four-axis taxonomy build (2026-06-01). `skills_dictionary.category='methodology'` is the broadest of the 7 V1 categories — could legitimately hold engineering practices (CI/CD, DevOps, TDD, V-model, design review) AND testing methodologies (HIL, MIL, SIL, formal verification, fuzz testing) which are pretty different beasts
+- **Trigger:** when methodology entries grow past ~20 in the dictionary OR when recruiters surface confusion between "uses HIL testing" and "practices CI/CD" as functionally different searches
+- **Scope:** evaluate split into `engineering_practice` (process / workflow) vs `testing_methodology` (verification / validation technique). Migration to extend the CHECK constraint with the new category values + reclassify existing methodology rows. Low-effort once triggered
+
 ### Industry-specific title normalization
 - **Status:** identified during PR #6 slope-score build (2026-05-29). Titles map to seniority/function differently across industries. A "VP" at an investment bank (Morgan Stanley, Goldman) is NOT a management title — it's roughly equivalent to Senior IC / early Lead in tech. Associate/Analyst at consultancies (McKinsey, Bain) and law firms map to junior-to-mid IC. Military ranks have their own ladder (Lieutenant → Captain → Major → Lt Col → Colonel) that maps to IC → manager → director → VP equivalents. Currently `seniority_rules` assumes a startup/tech mapping uniformly — every "VP" resolves to `vp`, every "Associate" resolves to `junior_ic`, etc.
 - **Trigger:** out of scope until Vetted expands beyond engineering. The schema decision (industry-conditional title rules) should be made BEFORE expanding so we don't ship industry-bias to non-tech recruiters
