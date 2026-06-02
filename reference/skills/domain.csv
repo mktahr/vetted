@@ -1,0 +1,2 @@
+canonical_name,category,aliases,primary_specialty,description,is_active,is_searchable
+SLAM,domain,simultaneous localization and mapping,robotics;perception_software;robotic_perception;autonomy_software,Simultaneous Localization and Mapping — core robotics/perception algorithm class for autonomous systems.,true,true

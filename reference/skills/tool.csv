@@ -1,0 +1,4 @@
+canonical_name,category,aliases,primary_specialty,description,is_active,is_searchable
+Docker,tool,,infrastructure;devops,Container runtime and image format; foundational to modern infrastructure and CI/CD.,true,true
+Kubernetes,tool,k8s,infrastructure;devops;ml_ops,Container orchestration platform; standard for production infrastructure and ML serving.,true,true
+KiCad,tool,,pcb_design;hardware_design;electrical_engineering,Open-source PCB design and electrical schematic capture tool.,true,true

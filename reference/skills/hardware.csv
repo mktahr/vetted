@@ -1,0 +1,2 @@
+canonical_name,category,aliases,primary_specialty,description,is_active,is_searchable
+RTOS,hardware,real-time os;real-time operating system;realtime operating system,embedded;firmware;rtos_engineering,"Real-time operating system class (Zephyr, FreeRTOS, VxWorks, QNX). Cross-disciplinary — embedded software, firmware, and RTOS-specialist tracks all surface here.",true,true
