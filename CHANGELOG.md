@@ -6,6 +6,51 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 
 ---
 
+## 2026-06-10 — Five-axis taxonomy sub-PR 2b (dev-verified, prod pending)
+
+**Shipped**
+- Branch `five-axis-taxonomy-sub-pr-2b` pushed to GitHub (commits `e731eed` + `b838219`). PR not yet opened. URL: https://github.com/mktahr/vetted/pull/new/five-axis-taxonomy-sub-pr-2b
+- Migration 071 — `function_dictionary` expansion: 16 new active engineering sub-functions (software, firmware, mechanical, electrical, hardware, chip, systems, controls, robotics, aerospace, materials, manufacturing, test, optics, ml, data). 2 inactive rebrands (product_management, product_design). 16 legacy V1-scope-cut deactivations. Final: 18 active / 18 inactive / 36 total. `engineering_leadership` explicitly NOT a function (verification guard rail).
+- Migration 072 — `specialty_dictionary` multi-parent: drops single-value FK, converts `parent_function` from TEXT to TEXT[]. Deletes 4 title-like specialties + 1 redundant (data_engineering). Reparents 137+20+5 active specialties with 45 multi-parent assignments where the discipline genuinely spans categories. Defensive catchall sweeps any specialty with all-inactive parents (no-op on prod, sweeps 12 dev-only ghost rows). Portable verification block (delta + structural invariants) works on both dev and prod despite different pre-migration row counts.
+- Migration 073 — `person_experiences` + `people` reclassification: single-parent active specialties get the new function via JOIN; multi-parent stays at `'engineering'` per option (b); orphan cleanup for 5 deleted specialty refs (4 title-like → specialty=NULL; data_engineering → specialty=NULL + function=`'data_engineering'`); `people.current_function_normalized` recomputed from primary current experience.
+- Migration 074 — `title_dictionary` remap: Cohort A (20 specialty-driven via JOIN); Cohort B (7 leadership stay at `'engineering'` inactive umbrella per locked override; 10 IC → software_engineering); orphan specialty cleanup mirrors 073 pattern (data engineer title row lifted to function=`'data_engineering'`).
+- `lib/scoring/score-candidate.ts` — `degreeRelevance` refactored to dispatch via SW_LIKE / HW_LIKE / MECH_LIKE function-group sets. `FUNCTION_MAP` expanded for all 16 sub-functions. Legacy non-engineering branches preserved.
+- ROADMAP item #2 renamed Four-axis → Five-axis. Title axis added (storage plan: `person_experiences.title_normalized` + `people.current_title_normalized` + `ever_titles` in sub-PR 4). Build order expanded to 7 sub-PRs (2a/2b split; calibration broken out as its own item).
+- CLAUDE.md — new "Five-Axis Taxonomy (Post-Migrations 069–074)" section. Multi-parent examples, no-FK rationale for `parent_function` TEXT[], title axis design, engineering_leadership-is-not-a-function guard rail. Dictionary table entries updated. Migration ledger extended through 074.
+- BACKLOG.md — "Taxonomy Expansion" section with 10 deferred sub-functions (nuclear, biomedical, chemical, environmental, civil/structural, ocean/marine, agricultural, petroleum, mining, audio/acoustic).
+- All 4 migrations applied + verified on dev. Prod untouched.
+
+**Decisions**
+- Function list locked at 16 active engineering sub-functions + founder + unknown (=18 active). `engineering_leadership` killed as a function — engineering managers / directors / VPs / CTOs sit at function=<discipline> + seniority=manager|director|vp|c_suite (migration 067).
+- `data_engineering` added as a function (alongside `ml_engineering`). The `data_engineering` specialty dropped because the function takes its place; person_experiences signal lifted from specialty axis to function axis in 073.
+- `parent_function` becomes TEXT[] (multi-parent). No FK constraint — Postgres lacks native multi-value FK; same pattern as `companies.industries[]`. App-layer enforcement in sync-reference.mjs. Semantics: HINT metadata for sub-PR 3 LLM ingest inference, NOT a hard restriction.
+- Multi-parent count locked at exactly 45 of 166 active specialties (~27%). Don't over-multi.
+- Multi-parent reclassification in 073: option (b) — multi-parent specialty rows stay at function=`'engineering'` until sub-PR 3 LLM picks per-candidate. Deterministic pick would discard information.
+- Cohort B leadership titles in 074: 7 rows (CTO / chief technology officer / director of engineering / em / engineering manager / vp engineering / vp of engineering) stay at function=`'engineering'` (inactive). Defaulting to software_engineering would destroy information in hard-tech context where customers hire engineering leadership at hardware / aerospace / robotics / defense companies.
+- Fifth axis added mid-session: **title** as a searchable axis alongside function, specialty, skills, industry context. Storage: `title_raw` already exists; `title_normalized` added in sub-PR 4 via LLM ingest inference. No "title family" normalization layer.
+- Promotion sequencing: 071/072/073/074 to prod TOGETHER in order, AFTER PR merges + Vercel deploys the code changes. Splitting promotion would put prod DB ahead of prod code.
+- Verification blocks: portable design (delta from pre-migration + structural invariants) instead of absolute counts. Works across dev/prod where pre-migration row counts differ.
+
+**Where we left off**
+- Branch `five-axis-taxonomy-sub-pr-2b` pushed but PR NOT yet opened.
+- Prod untouched. Dev has 071-074 applied + verified.
+- Session ended early due to system memory pressure on Matt's machine (closed VSCode to free RAM).
+
+**Open questions**
+- None blocking. All design decisions locked through the session.
+
+**Watch-outs**
+- **DB-code lockstep is mandatory.** Prod code on Vercel must deploy BEFORE prod migrations run. Otherwise scoring engine falls through default branch of degreeRelevance for new sub-function values — mild degradation (not crash) until deploy completes.
+- **Catchall in 072 is no-op on prod** (verified by direct query — the 12 ghost rows that triggered it on dev don't exist on prod).
+- **073 expects ~16 orphan refs on prod**: 1 chief_engineer + 1 distinguished_engineer + 2 principal_engineer + 6 engineering_management + 6 data_engineering (last 6 get lifted to function=`'data_engineering'`).
+- **Context-compaction drift incident**: mid-session, an earlier context compaction lost the locked function list. CC reintroduced `engineering_leadership` as a function. Matt caught it and corrected. Saved as feedback memory `feedback_surface_context_loss.md` — going forward, CC must flag locked decisions before they drift silently.
+- **DEV migrations 071-074 are applied**; dev schema is ahead of prod until prod promotion runs.
+- **Multi-parent count locked at 45, NOT 35**: my prior summary "35 multi-parent" was a math error. Verification block enforces =45.
+- **`wrap session` discipline matters**: this session almost closed without a formal wrap (memory pressure interpreted as "skip docs update"). Always run the protocol unless explicitly told to skip — SESSION_HANDOFF.md not getting overwritten was the visible failure mode.
+- **CHANGELOG gap 2026-05-26 through 2026-06-09**: PRs #4 (sourcing pipeline), #5 (seniority split), #6 (slope_score), #7 (founder-soft-NFT), #8 (skills_dictionary) shipped without per-session CHANGELOG entries. Migration ledger in CLAUDE.md catches up the schema side, but the session-narrative gap remains. Acceptable — git log captures the work; backfilling CHANGELOG retroactively isn't worth the effort.
+
+---
+
 ## 2026-05-25 — PR #3 + docs maintenance + End-of-Session Protocol
 
 **Shipped**
