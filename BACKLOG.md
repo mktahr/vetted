@@ -202,6 +202,27 @@ Known tagger limitations from the round-3/round-4 eval. Not severe enough to blo
 
 ---
 
+## Taxonomy Expansion
+
+### Additional engineering sub-functions (post-V1 expansion)
+- **Status:** deferred from sub-PR 2b (taxonomy rebuild)
+- **Trigger:** customer demand OR material candidate volume in these disciplines
+- **Scope:** V1 taxonomy ships with 16 active engineering sub-functions (software, firmware, mechanical, electrical, hardware, chip, systems, controls, robotics, aerospace, materials, manufacturing, test, optics, ml, data). Disciplines deferred for later expansion:
+  - `nuclear_engineering`
+  - `biomedical_engineering` / `bioengineering`
+  - `chemical_engineering`
+  - `environmental_engineering`
+  - `civil_engineering` / `structural_engineering`
+  - `ocean_engineering` / `marine_engineering`
+  - `agricultural_engineering`
+  - `petroleum_engineering`
+  - `mining_engineering`
+  - `audio_engineering` / `acoustic_engineering`
+
+When expansion is triggered: add the new function as INSERT in a follow-on migration, surface in UI filter dropdowns, decide which existing specialties (if any) need to reparent.
+
+---
+
 ## Product Expansion (Long-term)
 
 ### Elite Upwork marketplace

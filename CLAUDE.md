@@ -301,6 +301,8 @@ Lives at [lib/companies/tagger/](lib/companies/tagger/). Files: `claude.ts` (LLM
 
 ## Role Dictionary + Specialty Taxonomy (Post-Migration 017)
 
+> **Superseded by the Five-Axis Taxonomy (post-migrations 071/072).** The 17-era role+specialty model is being replaced with a five-axis structure (function, specialty, skills, industry context, title). The legacy `role_dictionary` and `role_specialty_map` are still wired today but will be retired as the new taxonomy fully lands across ingest, scoring, and UI. See "Five-Axis Taxonomy" section below.
+
 ### Role Dictionary
 `role_dictionary` — 26 roles that group specialties into recruiter-friendly categories. Roles are the primary search filter; selecting a role expands to all mapped specialties via `role_specialty_map`.
 
@@ -333,6 +335,60 @@ TODO: Move to server-side API when people count exceeds ~500.
 
 ### Location Typeahead
 Static list at `lib/locations/us-locations.ts` — all 50 US states + DC + top 50 cities. Matches as ILIKE substring against `people.location_name`.
+
+---
+
+## Five-Axis Taxonomy (Post-Migrations 069–074)
+
+The candidate model captures what kind of work someone does, at what depth, in what context — across **five searchable axes**:
+
+| Axis | Storage | Source of truth |
+|---|---|---|
+| **Function** | `person_experiences.function_normalized` + `people.current_function_normalized` | `function_dictionary` — 18 active values (16 V1 engineering sub-functions + founder + unknown) |
+| **Specialty** | `person_experiences.specialty_normalized` + `people.current_specialty_normalized` | `specialty_dictionary` — 166 active, multi-parent (TEXT[]) under function |
+| **Skills** | `person_experiences.skills[]` (sub-PR 4) | `skills_dictionary` — 14 rows today (migrations 069/070), grows via `/reference/skills/*.csv` |
+| **Industry context** | derived per-experience from the company's `industries[]` / `domain_tags[]` | `companies` (migration 031 taxonomy) |
+| **Title** | `person_experiences.title_raw` (exists today) + `title_normalized` (added in sub-PR 4) | LLM ingest inference (sub-PR 3) computes canonical title |
+
+Recruiters search by ALL FIVE axes independently — a candidate whose function is `firmware_engineering` but whose title is "Senior Mechanical Engineer" should surface for BOTH `function=firmware` AND `title=mechanical` searches. The five axes are independent, additive dimensions.
+
+### Function axis — 16 V1 engineering sub-functions (migration 071)
+
+`software_engineering`, `firmware_engineering`, `mechanical_engineering`, `electrical_engineering`, `hardware_engineering`, `chip_engineering`, `systems_engineering`, `controls_engineering`, `robotics_engineering`, `aerospace_engineering`, `materials_engineering`, `manufacturing_engineering`, `test_engineering`, `optics_engineering`, `ml_engineering`, `data_engineering` — plus `founder` + `unknown` (= 18 active).
+
+Inactive functions (V1 scope cut, kept in dictionary as FK targets): legacy `engineering` umbrella, `data_science`, `product`, `design`, `product_management`, `product_design`, `sales`, `marketing`, `operations`, `finance`, `legal`, `recruiting`, `people_hr`, `customer_success`, `research`, `communications`, `investing`, `consulting`. (= 18 inactive.)
+
+**`engineering_leadership` is NOT a function.** Engineering managers / directors / VPs / CTOs sit at `function=<their discipline>` (the function they manage) + `seniority=manager|director|vp|c_suite` (migration 067). Leadership is the seniority axis, not function. Guard rail: migration 071 verification block fails loud if `engineering_leadership` ever exists as a function row.
+
+### Specialty axis — multi-parent (`parent_function` is TEXT[])
+
+`specialty_dictionary.parent_function` is `TEXT[]` post-migration 072. 35 of 166 active specialties carry a multi-parent array (~21%) where the discipline genuinely spans two or three categories. Examples:
+
+- `mechatronics` → `[mechanical_engineering, electrical_engineering, controls_engineering]`
+- `sensor_fusion` → `[robotics_engineering, ml_engineering]`
+- `pcb_design` → `[electrical_engineering, hardware_engineering]`
+- `embedded_hardware` → `[hardware_engineering, firmware_engineering]`
+- `battery_engineering` → `[electrical_engineering, mechanical_engineering, hardware_engineering]`
+- `industrial_engineering` → `[manufacturing_engineering, systems_engineering]`
+- `automation_engineering` → `[manufacturing_engineering, controls_engineering]`
+
+Single-parent for the rest. The "don't over-multi" rule: only flag multi where the cross is genuine for typical hiring; default to single where the specialty cleanly sits in one discipline.
+
+### Why `specialty_dictionary.parent_function` has no FK constraint
+
+PostgreSQL does not support multi-value foreign keys natively. Same pattern as `companies.industries[]` (migration 031) and `companies.domain_tags[]`. Array membership is enforced **at the application layer** in `scripts/sync-reference.mjs`, which validates that every element of `parent_function` exists in `function_dictionary.function_normalized` before applying CSV diffs.
+
+**`parent_function` semantics: HINT not constraint.** The array is metadata that helps the sub-PR 3 LLM ingest inference pick a function for a given candidate's role — soft suggestion of "these are typical homes for this specialty." The LLM is free to assign any function from the active `function_dictionary` based on the candidate's actual work, not restricted to the parent array. Useful for fuzzy specialties whose typical home varies by company (e.g. `mechatronics` typical home depends on whether the team sits in EE org, ME org, or controls org).
+
+### Title axis — added in sub-PR 4
+
+`person_experiences.title_raw` already exists. Sub-PR 4 adds `title_normalized` (canonical / cleaned, e.g. "Sr Mech Eng" / "Senior Mechanical Engineer" / "Sr. Mech Eng" all collapse to "Senior Mechanical Engineer"). LLM ingest inference (sub-PR 3) computes `title_normalized` alongside the other four axes. Aggregated candidate-level columns: `people.current_title_normalized` + `people.ever_titles` (sub-PR 4).
+
+No "title family" normalization dictionary layer needed — the function axis already groups by discipline more rigorously (grounded in actual work, not just title text). Title variants get handled at search time via expansion ("mechanical engineer" search expands to "Sr/Staff/Lead Mechanical Engineer" etc.).
+
+### Scoring with the five axes (sub-PR 6, not yet shipped)
+
+Intersection scoring per-role: `match × tenure_weight × recency_decay`. Tenure curve 30/70/90/100 (months 0-12-24-36+). Axis-specific recency decay: skills decay fastest, specialty slower, industry slowest. Title match contributes per-role alongside function/specialty/skills/industry. Context-aware skill multiplier (0.5× when subsequent role's specialty matches the skill's `primary_specialty`, 1.0× otherwise — see `skills_dictionary.primary_specialty`).
 
 ---
 
@@ -721,8 +777,8 @@ The "Normalized tables" / "Dictionary tables" lists below describe the post-migr
 - **`candidate_decision_state`** — decision_state (active/hold/excluded), effective_at
 
 ### Dictionary tables (seeded)
-- `function_dictionary` — 18 rows (engineering, product, design, data_science, sales, marketing, operations, finance, legal, recruiting, people_hr, customer_success, research, communications, founder, investing, consulting, unknown)
-- `specialty_dictionary` — 25 rows, partitioned by parent_function (backend, frontend, fullstack, mobile_ios, mobile_android, infrastructure, ml_engineering, data_engineering, security, embedded, ai_research, analytics, product_b2b, product_consumer, product_platform, product_growth, ux_design, product_design, brand_design, enterprise_sales, smb_sales, sales_engineering, partnerships, growth_marketing, content_marketing, brand_marketing)
+- `function_dictionary` — 36 rows post-migration 071 (18 active + 18 inactive). Active: 16 V1 engineering sub-functions (software_engineering, firmware_engineering, mechanical_engineering, electrical_engineering, hardware_engineering, chip_engineering, systems_engineering, controls_engineering, robotics_engineering, aerospace_engineering, materials_engineering, manufacturing_engineering, test_engineering, optics_engineering, ml_engineering, data_engineering) + founder + unknown. Inactive (V1 scope cut): engineering (legacy umbrella), data_science, product, design, product_management, product_design, sales, marketing, operations, finance, legal, recruiting, people_hr, customer_success, research, communications, investing, consulting. `engineering_leadership` is NOT a function — engineering managers / directors / VPs / CTOs sit at function=<their discipline> + seniority=manager|director|vp|c_suite (migration 067). See "Five-Axis Taxonomy" section.
+- `specialty_dictionary` — 225 rows post-migration 072 (166 active + 59 inactive). `parent_function` is `TEXT[]` (multi-parent array, GIN-indexed). 35 of 166 active specialties have multi-parent assignments where the discipline genuinely spans two or three categories (e.g. `mechatronics` → [mechanical, electrical, controls]; `sensor_fusion` → [robotics, ml]; `pcb_design` → [electrical, hardware]). No FK constraint on `parent_function` — see "Five-Axis Taxonomy" section for the no-FK rationale.
 - `title_dictionary` — ~175 patterns, populated by migration 002 + `scripts/seed-recruiting-titles.mjs` (16 recruiting titles). **Stores title_normalized + function_normalized + specialty_normalized + confidence only — seniority comes from `seniority_rules`.**
 - `employment_type_dictionary` — 20 patterns (full-time, contract, freelance, part-time, internship, board, advisory variants)
 - `degree_dictionary` — 32 patterns (BS, BA, MS, MA, MBA, PhD, JD, MD, Certificate, Bootcamp, Coursework, etc.)
