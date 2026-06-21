@@ -129,11 +129,42 @@ function determineStage(years: number | null): ScoringStage {
 
 // ─── Degree relevance dictionary ──────────────────────────────────────────
 
+// Function-group sets — collapse the 16 new engineering sub-functions
+// (migration 071) into three degree-mapping branches. Engineering
+// leadership is NOT a function — it's a seniority (manager / director /
+// vp / c_suite, migration 067). Non-engineering functions are kept
+// supported here for legacy data still on people.current_function_normalized.
+
+const SW_LIKE_FUNCTIONS = new Set([
+  'software_engineering',
+  'firmware_engineering',
+  'ml_engineering',
+  'data_engineering',
+]);
+
+const HW_LIKE_FUNCTIONS = new Set([
+  'hardware_engineering',
+  'electrical_engineering',
+  'chip_engineering',
+  'optics_engineering',
+]);
+
+const MECH_LIKE_FUNCTIONS = new Set([
+  'mechanical_engineering',
+  'materials_engineering',
+  'manufacturing_engineering',
+  'robotics_engineering',
+  'aerospace_engineering',
+  'controls_engineering',
+  'systems_engineering',
+  'test_engineering',
+]);
+
 export function degreeRelevance(
   functionName: string | null | undefined,
   fieldOrDegree: string,
 ): number {
-  const fn = (functionName || 'engineering').toLowerCase();
+  const fn = (functionName || 'software_engineering').toLowerCase();
   const s = fieldOrDegree.toLowerCase();
 
   const hasMBA = /\bmba\b|master of business administration/i.test(s);
@@ -163,27 +194,35 @@ export function degreeRelevance(
   const hasSTEM = hasCS || hasEngineering || hasPhysics || hasMath || hasStats ||
     /chemistry|biology|biochem|neuroscience|biomedical|genetics/i.test(s);
 
-  if (fn === 'engineering' || fn === 'software engineering') {
+  // Software-like engineering (incl. ML, data, firmware)
+  if (SW_LIKE_FUNCTIONS.has(fn) || fn === 'engineering' || fn === 'software engineering') {
     if (hasCS) return 1.0;
     if (/electrical engineering/i.test(s) || hasMath || hasStats || hasPhysics) return 0.75;
     if (hasME || hasInfoSys || hasCogSci) return 0.5;
     if (hasSTEM) return 0.25;
     return 0;
   }
-  if (fn === 'hardware' || fn === 'electrical engineering' || fn === 'hardware engineering') {
+
+  // Hardware-like (chip / EE)
+  if (HW_LIKE_FUNCTIONS.has(fn) || fn === 'hardware' || fn === 'hardware engineering') {
     if (hasEE) return 1.0;
     if (hasME || hasPhysics || hasMaterials || hasAero) return 0.75;
     if (hasCS || /applied mathematics/i.test(s)) return 0.5;
     if (hasSTEM) return 0.25;
     return 0;
   }
-  if (fn === 'mechanical' || fn === 'robotics' || fn === 'mechanical engineering') {
+
+  // Mechanical-like (incl. robotics, aerospace, controls, systems, test)
+  if (MECH_LIKE_FUNCTIONS.has(fn) || fn === 'mechanical' || fn === 'robotics') {
     if (hasME || hasRobotics || hasAero || hasSystemsEng) return 1.0;
     if (/electrical engineering/i.test(s) || hasPhysics || hasMaterials) return 0.75;
     if (hasCS || /applied mathematics/i.test(s)) return 0.5;
     if (hasSTEM) return 0.25;
     return 0;
   }
+
+  // Legacy non-engineering branches (kept for back-compat with pre-2b data
+  // and the recruiting override path that bypasses this dispatcher).
   if (fn === 'product') {
     if (hasMBA) return 1.0;
     if (hasCS || hasEngineering || hasEcon || hasHCI) return 1.0;
@@ -688,12 +727,42 @@ export async function scoreCandidate(
       let fqNote = 'No function score data';
 
       if (mostRecent?.company_id && functionName) {
+        // Maps people.current_function_normalized → company_function_scores.function_normalized.
+        // The CHECK constraint on company_function_scores is currently {design, operations, sales}
+        // (see CLAUDE.md "Function-Level Company Scoring"). Engineering sub-functions all map to
+        // 'engineering' here — no row in company_function_scores will match today, so the lookup
+        // falls back to the overall company_year_scores via experienceCompanyScore (intended).
         const FUNCTION_MAP: Record<string, string> = {
-          engineering: 'engineering', product: 'product', design: 'design',
-          sales: 'go_to_market', marketing: 'go_to_market',
-          operations: 'operations', finance: 'operations',
+          // 16 V1 engineering sub-functions (migration 071) — all map to 'engineering'
+          software_engineering:      'engineering',
+          firmware_engineering:      'engineering',
+          mechanical_engineering:    'engineering',
+          electrical_engineering:    'engineering',
+          hardware_engineering:      'engineering',
+          chip_engineering:          'engineering',
+          systems_engineering:       'engineering',
+          controls_engineering:      'engineering',
+          robotics_engineering:      'engineering',
+          aerospace_engineering:     'engineering',
+          materials_engineering:     'engineering',
+          manufacturing_engineering: 'engineering',
+          test_engineering:          'engineering',
+          optics_engineering:        'engineering',
+          ml_engineering:            'engineering',
+          data_engineering:          'engineering',
+          // Legacy umbrella + pre-2b non-engineering values (still present on
+          // people.current_function_normalized for historical rows until rescore).
+          engineering:      'engineering',
+          data_science:     'engineering',
+          product:          'product',
+          design:           'design',
+          sales:            'go_to_market',
+          marketing:        'go_to_market',
+          operations:       'operations',
+          finance:          'operations',
           customer_success: 'customer_success',
-          recruiting: 'operations', people_hr: 'operations',
+          recruiting:       'operations',
+          people_hr:        'operations',
         };
         const mappedFn = FUNCTION_MAP[functionName] || functionName;
         const fnMatch = functionScores.find(fs =>
