@@ -34,6 +34,11 @@ These were intentionally cut from PR A scope. All have hooks in the already-ship
 - **Trigger:** when normalized-specialty matching becomes the dominant search vector
 - **Scope:** target depth — engineering (backend sub-specialties like payments/auth/data-pipeline, ML sub-specialties like NLP/vision/rec-sys, infra sub-specialties like kubernetes/observability/databases), then equivalent depth for product, design, sales, marketing, operations, recruiting, finance, data/analytics
 
+### Dangling specialty refs in `title_dictionary` (non-engineering)
+- **Status:** surfaced during sub-PR 2b prod verification (2026-06-21). 3 rows reference specialties absent from `specialty_dictionary`: `Data Scientist` + `Senior Data Scientist` → `analytics` (fn=data_science); `Account Executive` → `enterprise_sales` (fn=sales). Pre-existing — unrelated to the five-axis rebuild (none of these were in 072's delete set). Harmless today (title_dictionary specialty hints are advisory; these are non-engineering / out of V1 scope).
+- **Trigger:** when the non-engineering taxonomy gets built out, OR when a referential-integrity sweep across dictionary tables is run.
+- **Scope:** trivial — either seed `analytics` + `enterprise_sales` into `specialty_dictionary` (if they should exist) or NULL the 3 `specialty_normalized` refs. ~10 min. Worth bundling into a broader title/specialty dictionary integrity audit rather than a one-off.
+
 ### Company data enrichment
 - **Status:** founding year partially done (20 hand-seeded); funding rounds, investor names, headcount by year, major events (acquisitions, layoffs, C-suite departures) not yet pulled
 - **Trigger:** **required precondition** for the AI narrative summary feature below

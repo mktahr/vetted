@@ -6,6 +6,35 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 
 ---
 
+## 2026-06-21 — Five-axis taxonomy sub-PR 2b SHIPPED to prod (PR #9 merged + 071–074 promoted + rescore)
+
+**Shipped**
+- **PR #9 merged to main** (squash → `fd0e9dd`); branch `five-axis-taxonomy-sub-pr-2b` deleted. Vercel production deploy of `fd0e9dd` confirmed live BEFORE any prod migration (DB-code lockstep held — code led the DB).
+- **Migrations 071–074 promoted to prod, in order, each independently verified:**
+  - 071 — function_dictionary: **18 active / 18 inactive / 36 total**; 0 `engineering_leadership` function rows (guard rail holds).
+  - 072 — specialty_dictionary multi-parent: **225 / 166 / 59**, **45 multi-parent**, `parent_function` now `TEXT[]`, 0 invalid parent refs, 0 active rows with empty parent. Catchall a confirmed no-op on prod (delta −5 = exactly the 5 DELETEs; 0 ghost rows swept).
+  - 073 — person/people reclassification: **0 orphan specialty refs remaining**, **6 person_experiences at `data_engineering`**, 1 lone `engineering` row (NULL-specialty, left for sub-PR 3), 0 invalid function refs. Pre-flight matched exactly (126 single-parent reclassified, 10 title-like → NULL, 6 data_engineering lifted, 35 people recomputed).
+  - 074 — title_dictionary remap: **7 leadership stay at `engineering`** (CTO/Dir/EM/VP), **28 at `software_engineering`**, **1 at `data_engineering`**; 0 refs to the 5 deleted specialties.
+- **Prod rescore via `/api/admin/rescore-all`** (the deployed canonical TS scorer, NOT the stale `score-all.mjs` mirror): **84/84 success, 0 failed, 0 skipped**. Bucket distribution unchanged (vetted 49 / needs_review 35 before and after) — confirmation, not churn. Bucket rows 261 → 345 (append-only).
+
+**Decisions**
+- Rescored via the deployed API endpoint instead of `scripts/score-all.mjs`. Discovered mid-session that the `.mjs` is a stale JS mirror whose `degreeRelevance` branches on space/bare function strings (`'software engineering'`, `'hardware'`, `'mechanical'`) and does NOT recognize the underscore taxonomy values (`software_engineering`, `firmware_engineering`, `ml_engineering`, etc.) — running it would have written mis-scored buckets to prod. The API route imports the real `@/lib/scoring`, so it reflects the new taxonomy correctly. Logged the stale mirror to BUGS.
+- Unchanged bucket distribution is correct: the `score-candidate.ts` change was a `degreeRelevance` refactor (group-set dispatch + FUNCTION_MAP expansion) that generalizes function→degree mapping without moving existing candidates' point values across the low bucket thresholds (30/35/40/45).
+
+**Where we left off**
+- Sub-PR 2b fully shipped: merged, prod-migrated, rescored, verified. Prod DB + prod code in lockstep.
+- Session opened with an incident: free-tier Supabase (prod + dev) had auto-paused after ~11 days idle (NXDOMAIN on both API subdomains). Matt restored from the Supabase dashboard; origin boot lag (NXDOMAIN → 521 → 200) cleared on its own. Vercel was healthy throughout — the "Failed to fetch" was purely the paused backend.
+
+**Open questions**
+- None blocking. Next in the five-axis build is sub-PR 3 (LLM ingest inference outputting the five-axis tuple incl. `title_normalized`).
+
+**Watch-outs**
+- **Stale `score-all.mjs` mirror** — do not use it for rescoring; it has drifted from `lib/scoring/score-candidate.ts`. Use `/api/admin/rescore-all` (deployed TS) until the mirror is fixed or retired. Logged to BUGS.
+- **3 pre-existing dangling specialty refs in `title_dictionary`** (`Data Scientist`/`Senior Data Scientist` → `analytics`; `Account Executive` → `enterprise_sales`) — non-engineering, absent from `specialty_dictionary`, unrelated to this workstream. Harmless; logged to BACKLOG.
+- **Free-tier pause will recur** — both Supabase projects idle-pause after ~7 days. If a future session opens with NXDOMAIN / "Failed to fetch", restore from the Supabase dashboard first (it's not a code or Vercel problem).
+
+---
+
 ## 2026-06-10 — Five-axis taxonomy sub-PR 2b (dev-verified, prod pending)
 
 **Shipped**
