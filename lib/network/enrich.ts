@@ -170,20 +170,29 @@ export async function enrichConnections(p: EnrichParams): Promise<EnrichSummary>
 
     const enrichedCanonicals: string[] = [];
     const cacheRows: any[] = [];
-    for (const profile of resp.profiles) {
-      const purl = extractProfileUrl(profile);
+    for (const item of resp.profiles) {
+      // Live Crust /person/enrich returns { matched_on, matches: [{ person_data }] }.
+      // Fall back to an older flat shape defensively.
+      const purl = (item as any)?.matched_on ?? extractProfileUrl(item);
       const canon = canonicalizeLinkedInUrl(purl);
       if (!canon || !batch.includes(canon)) continue;
+      // Genuine no-match: Crust echoes matched_on with an empty matches[]. Skip so it
+      // counts as failed rather than caching a hollow "enriched" row (which would also
+      // mark the connection enriched and stop it from ever retrying).
+      const personData = (item as any)?.matches?.[0]?.person_data ?? null;
+      if (!personData) continue;
+      const basic = (personData as any)?.basic_profile ?? personData;
+      const employment = (personData as any)?.employment_details?.current?.[0] ?? null;
       enrichedCanonicals.push(canon);
       cacheRows.push({
         canonical_url: canon,
         source: 'crust_person_enrich',
-        enriched_profile: profile,
-        display_name: (profile as any)?.name ?? (profile as any)?.full_name ?? null,
-        headline: (profile as any)?.headline ?? null,
-        location_name: (profile as any)?.location?.raw ?? (profile as any)?.location ?? null,
-        current_company: (profile as any)?.current_company?.name ?? null,
-        current_title: (profile as any)?.current_title ?? null,
+        enriched_profile: personData,
+        display_name: (basic as any)?.name ?? (basic as any)?.full_name ?? null,
+        headline: (basic as any)?.headline ?? null,
+        location_name: (basic as any)?.location?.raw ?? (basic as any)?.location ?? null,
+        current_company: employment?.company_name ?? (basic as any)?.current_company?.name ?? null,
+        current_title: (basic as any)?.current_title ?? employment?.title ?? null,
         last_enriched_at: now,
       });
     }

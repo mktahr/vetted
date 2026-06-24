@@ -170,7 +170,7 @@ export async function fetchPersonEnrich(
   profileUrls: string[],
   opts?: { fields?: string; preview?: boolean },
 ): Promise<PersonEnrichResponse> {
-  const body: Record<string, unknown> = { enrich_by_profile_url: profileUrls.slice(0, 25) }
+  const body: Record<string, unknown> = { professional_network_profile_urls: profileUrls.slice(0, 25) }
   if (opts?.fields) body.fields = opts.fields
   if (opts?.preview) body.preview = true
 
