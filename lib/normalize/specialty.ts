@@ -53,11 +53,37 @@ export async function loadSpecialtyDictionary(
 
   const { data, error } = await supabase
     .from('specialty_dictionary')
-    .select('specialty_normalized, function_normalized, title_patterns, keyword_signals, technology_signals')
+    .select('specialty_normalized, parent_function, title_patterns, keyword_signals, technology_signals')
     .eq('active', true)
 
   if (error) throw new Error(`Failed to load specialty_dictionary: ${error.message}`)
-  cachedEntries = (data || []) as SpecialtyDictionaryEntry[]
+
+  // parent_function is TEXT[] (migration 072, multi-parent). Derive the per-experience
+  // scalar function ONLY when unambiguous (single parent) — mirrors migration 073's
+  // reclassification rule (single-parent specialties were assigned parent_function[1];
+  // multi-parent rows were deferred). Multi-parent → null here, leaving the function axis
+  // to the title_dictionary fallback now and the sub-PR 3 LLM ingest inference later.
+  //
+  // This replaces the legacy orphan `function_normalized` column, which exists only on
+  // prod (added out-of-band, never created by a migration) and carries stale pre-rebuild
+  // umbrella values (e.g. 'engineering'/'operations'). Selecting it threw on dev (the
+  // column doesn't exist there) and silently mis-stamped fresh ingests on prod.
+  cachedEntries = ((data || []) as Array<{
+    specialty_normalized: string
+    parent_function: string[] | null
+    title_patterns: string[]
+    keyword_signals: string[]
+    technology_signals: string[]
+  }>).map(row => ({
+    specialty_normalized: row.specialty_normalized,
+    function_normalized:
+      Array.isArray(row.parent_function) && row.parent_function.length === 1
+        ? row.parent_function[0]
+        : null,
+    title_patterns: row.title_patterns,
+    keyword_signals: row.keyword_signals,
+    technology_signals: row.technology_signals,
+  }))
 
   // Build title→specialty map for O(1) lookup
   titleMap = new Map()
