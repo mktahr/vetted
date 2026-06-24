@@ -612,8 +612,10 @@ export default function ProfileTable() {
         setRoleSpecialtyMap(rm)
 
         // All specialties grouped
-        const dict = (specDict || []) as Array<{ specialty_normalized: string; parent_function: string | null }>
-        setAllSpecialtyOptions(dict.map(d => ({ value: d.specialty_normalized, label: d.specialty_normalized.replace(/_/g, ' '), sublabel: (d.parent_function || '').replace(/_/g, ' ') })))
+        const dict = (specDict || []) as Array<{ specialty_normalized: string; parent_function: string[] | null }>
+        // parent_function is TEXT[] (migration 072, multi-parent). Join all parents
+        // to a string FIRST, then format underscores. Guard against null/empty/legacy-string.
+        setAllSpecialtyOptions(dict.map(d => ({ value: d.specialty_normalized, label: d.specialty_normalized.replace(/_/g, ' '), sublabel: (Array.isArray(d.parent_function) ? d.parent_function.join(', ') : (d.parent_function || '')).replace(/_/g, ' ') })))
 
         setError(null)
       } catch (err: any) { setError(err?.message || 'Failed to fetch.') }
