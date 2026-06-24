@@ -59,6 +59,10 @@ function ConnectionsInner() {
   const [enriched, setEnriched] = useState('all')
   const [scored, setScored] = useState('all')
 
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [force, setForce] = useState(false)
+  const [enriching, setEnriching] = useState(false)
+
   const load = useCallback(async () => {
     if (!orgId) return
     setLoading(true)
@@ -84,6 +88,39 @@ function ConnectionsInner() {
     load()
   }
 
+  function toggleSel(id: string) {
+    setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+
+  async function enrich(scope: 'org' | 'employee' | 'connections') {
+    setMsg(null)
+    const payloadBase: any = { org_id: orgId, scope, force }
+    if (scope === 'employee') payloadBase.employee_id = employeeId
+    if (scope === 'connections') payloadBase.connection_ids = Array.from(selected)
+
+    // Count-first: estimate before spending.
+    const est = await fetch('/api/network/enrich', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...payloadBase, mode: 'estimate' }) }).then((r) => r.json())
+    if (est.error) return setMsg(`Enrich error: ${est.error}`)
+    const s = est.summary
+    if (s.needs === 0 && s.reusedCrossSilo === 0 && s.reusedGlobalPool === 0) return setMsg('Nothing to enrich in this selection.')
+    const ok = window.confirm(
+      `Enrich ${s.target} connection(s):\n` +
+      `• ${s.reusedCrossSilo} reused from cache (free)\n` +
+      `• ${s.reusedGlobalPool} reused from candidate pool (free)\n` +
+      `• ${s.needs} need fresh enrichment → ~${s.estimatedCredits} Crust credits\n\nProceed?`,
+    )
+    if (!ok) return
+
+    setEnriching(true)
+    const run = await fetch('/api/network/enrich', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...payloadBase, mode: 'run' }) }).then((r) => r.json())
+    setEnriching(false)
+    if (run.error) return setMsg(`Enrich error: ${run.error}`)
+    const rs = run.summary
+    setMsg(`Enriched: ${rs.enrichedNew} new + ${rs.reusedCrossSilo + rs.reusedGlobalPool} reused. ${rs.failed ?? 0} failed. ~${rs.creditsSpent} credits.`)
+    setSelected(new Set())
+    load()
+  }
+
   const counts = useMemo(() => {
     const c = { yes: 0, maybe: 0, no: 0 }
     for (const r of rows) (c as any)[r.title_bucket]++
@@ -103,6 +140,17 @@ function ConnectionsInner() {
           <a href={`/network/review?org_id=${orgId}`} style={{ ...btn, background: 'transparent', color: 'var(--fg-secondary)', border: '1px solid var(--border-subtle)', textDecoration: 'none' }}>Review queue ({counts.maybe})</a>
           <button style={{ ...btn, opacity: triaging ? 0.6 : 1 }} disabled={triaging} onClick={runTriage}>{triaging ? 'Triaging…' : 'Run LLM triage'}</button>
         </div>
+      </div>
+
+      {/* Enrichment toolbar — every action is count-first (estimate → confirm → run). */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12, padding: '10px 12px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
+        <span style={{ fontSize: 'var(--fs-12)', color: 'var(--fg-tertiary)', fontWeight: 600 }}>Enrich:</span>
+        <button style={{ ...btn, opacity: enriching ? 0.6 : 1 }} disabled={enriching} onClick={() => enrich('org')}>Whole org</button>
+        <button style={{ ...btn, background: 'transparent', color: 'var(--fg-secondary)', border: '1px solid var(--border-subtle)', opacity: enriching || !employeeId ? 0.5 : 1 }} disabled={enriching || !employeeId} onClick={() => enrich('employee')}>Selected employee</button>
+        <button style={{ ...btn, background: 'transparent', color: 'var(--fg-secondary)', border: '1px solid var(--border-subtle)', opacity: enriching || selected.size === 0 ? 0.5 : 1 }} disabled={enriching || selected.size === 0} onClick={() => enrich('connections')}>Selected rows ({selected.size})</button>
+        <label style={{ fontSize: 'var(--fs-12)', color: 'var(--fg-secondary)', display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+          <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} /> force re-enrich
+        </label>
       </div>
 
       {msg && <div style={{ fontSize: 'var(--fs-13)', color: 'var(--fg-secondary)', marginBottom: 10 }}>{msg}</div>}
@@ -127,17 +175,24 @@ function ConnectionsInner() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
+              <th style={{ ...th, width: 28 }}>
+                <input type="checkbox" checked={rows.length > 0 && selected.size === rows.length}
+                  onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((r) => r.connection_id)) : new Set())} />
+              </th>
               <th style={th}>Name</th><th style={th}>Company</th><th style={th}>Title</th>
               <th style={th}>Bucket</th><th style={th}>Specialty</th><th style={th}>Enriched</th><th style={th}>Via</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td style={td} colSpan={7}>Loading…</td></tr>
+              <tr><td style={td} colSpan={8}>Loading…</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td style={td} colSpan={7}>No connections match these filters.</td></tr>
+              <tr><td style={td} colSpan={8}>No connections match these filters.</td></tr>
             ) : rows.map((c) => (
               <tr key={c.connection_id} style={{ opacity: c.status === 'excluded' ? 0.55 : 1 }}>
+                <td style={{ ...td, width: 28 }}>
+                  <input type="checkbox" checked={selected.has(c.connection_id)} onChange={() => toggleSel(c.connection_id)} />
+                </td>
                 <td style={td}>
                   {c.raw_url ? <a href={c.raw_url} target="_blank" rel="noreferrer" style={{ color: 'var(--fg-primary)', textDecoration: 'none', fontWeight: 600 }}>{c.full_name}</a> : <span style={{ fontWeight: 600 }}>{c.full_name}</span>}
                 </td>

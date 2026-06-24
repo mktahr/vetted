@@ -153,6 +153,55 @@ export async function fetchPersonSearch(
   }
 }
 
+// ─── Person enrich (by profile URL) ─────────────────────────────────────────
+// Single-profile / small-batch enrichment used by the network-connections
+// module. Reuses the same auth + 429-retry plumbing as /person/search.
+// Crust supports up to 25 profile URLs per call. preview:true returns basic
+// fields for 0 credits (cache probe).
+
+export interface PersonEnrichResponse {
+  profiles: unknown[]           // intentionally any — handed to the v2 mapper
+  status?: number
+  error?: string
+}
+
+export async function fetchPersonEnrich(
+  apiKey: string,
+  profileUrls: string[],
+  opts?: { fields?: string; preview?: boolean },
+): Promise<PersonEnrichResponse> {
+  const body: Record<string, unknown> = { enrich_by_profile_url: profileUrls.slice(0, 25) }
+  if (opts?.fields) body.fields = opts.fields
+  if (opts?.preview) body.preview = true
+
+  const resp = await fetchWithRetry(
+    `${API_BASE}/person/enrich`,
+    {
+      method: 'POST',
+      headers: authHeaders(apiKey),
+      body: JSON.stringify(body),
+    },
+  )
+
+  if (!resp.ok) {
+    const text = await resp.text()
+    return {
+      profiles: [],
+      status: resp.status,
+      error: `Crust /person/enrich HTTP ${resp.status}: ${text.slice(0, 500)}`,
+    }
+  }
+
+  const data = await resp.json().catch(() => null)
+  // Crust may return a bare array or { profiles: [...] } — normalize both.
+  const profiles = Array.isArray(data)
+    ? data
+    : Array.isArray((data as any)?.profiles)
+      ? (data as any).profiles
+      : []
+  return { profiles }
+}
+
 // ─── Filter validators ─────────────────────────────────────────────────────
 // Type guards for routes to confirm shape before calling the API.
 
