@@ -4,6 +4,10 @@ Items that take less than ~0.5 day each. For larger deferred features see [BACKL
 
 ---
 
+## Resolved
+
+- **✅ Dev/prod schema drift on `specialty_dictionary.function_normalized` — FIXED 2026-06-24 (PR [#12](https://github.com/mktahr/vetted/pull/12) + migration 079).** Chose fix option (b): the orphan column was redundant post-072 (its info lives in `parent_function[]`). `loadSpecialtyDictionary()` now selects `parent_function` and derives the scalar function via the single-parent rule (single → `parent_function[0]`; multi → `null`, deferred to sub-PR 3 LLM) — mirrors migration 073's reclassification logic. Migration 079 then dropped the orphan `function_normalized` column from prod (`DROP COLUMN IF EXISTS` → no-op on dev), converging both DBs on the migration-defined schema. Verified: dev no longer throws, prod stamps fresh ingests with the correct sub-function instead of the stale `engineering`/`operations` umbrella, 0 derivation-invariant violations on both DBs.
+
 ## Active
 
 - **`scripts/score-all.mjs` is a stale scoring mirror — do not use for rescoring.** Surfaced 2026-06-21 during the sub-PR 2b prod rescore. The script reimplements scoring in JS (a "mirror of `lib/scoring`") but its `degreeRelevance` branches on space/bare function strings (`'software engineering'`, `'hardware'`, `'mechanical'`, `'robotics'`) and does NOT recognize the underscore taxonomy values actually stored (`software_engineering`, `firmware_engineering`, `ml_engineering`, `data_engineering`, etc.) — so it mis-scores nearly every engineering candidate's degree-relevance component. **Use `POST /api/admin/rescore-all` (imports the real `@/lib/scoring`) for any prod rescore.** Fix options: (a) retire `score-all.mjs` and point all rescore paths at the API route / a thin Node wrapper that imports the TS engine, or (b) regenerate the mirror from current `score-candidate.ts`. Option (a) preferred — a hand-maintained mirror will keep drifting. ~0.5 day for (a).

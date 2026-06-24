@@ -49,6 +49,25 @@ Matt uses plain-English phrases for common doc operations. Recognize these and a
 | "What did we ship last session?" | Report the last merged PR with contents (from `git log main` and PR titles) |
 | "What's next on the roadmap?" | Read ROADMAP.md "Current Build" + top of "Next Up" |
 | "What did we last complete?" | Read ROADMAP.md "Recently Completed" — most recent row |
+| "block" (exact, single word) | Re-output the immediately preceding response as ONE self-contained plain-text copyable code block, for one-click forwarding (to a Claude chat, Codex, or a fresh session). See "Block Command" section below. |
+
+---
+
+## Prompt Output & Copyable-Block Conventions
+
+### Full-copyable-prompt rule
+
+This is primarily a rule for how the **chat assistant (Claude.ai)** outputs prompts intended to be handed to Claude Code. Whenever a prompt is provided for Matt to give to CC, it must come as **one full, consolidated, copyable block** — the entire prompt, ready to copy in a single action. Never partial updates, never "change line X to Y," never a diff against a previous prompt. If the prompt changed, re-output the whole thing from scratch. Matt copies one block and pastes it; he should never have to assemble a prompt from fragments.
+
+### Block Command
+
+**Trigger phrase: `block`** (exact, single word). When Matt types it, take whatever was produced in the **immediately preceding response** — summary, audit, proposals, judgment calls, report, or prompt — and re-output it as a **single self-contained copyable code block** so Matt can one-click copy and paste it elsewhere (a Claude chat, Codex, or a fresh CC session) without manually highlighting.
+
+Rules for the block:
+- **Full substance, not a summary** — include everything of substance from the prior response. It must stand alone so the recipient has full context.
+- **Plain readable text inside the block** — no reliance on rendered bold / links / tables (code blocks don't render those). Convert tables to plain lists/labels, links to bare URLs, etc.
+- **Faithful reformat only** — do not add new analysis or change any recommendation. It's a re-packaging of what was already said, for forwarding.
+- **On-demand only** — normal responses stay normally formatted for readability. Only `block` triggers the plain copyable version.
 
 ---
 
@@ -696,7 +715,7 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 
 ---
 
-## Database: Final Schema State (after migrations 001–074)
+## Database: Final Schema State (after migrations 001–079; 075–078 dev-only/PR #10-pending)
 
 **Migration ledger** (full per-migration descriptions live in `supabase/migrations/*.sql` headers):
 - 001 — Phase 1 normalized schema + enums
@@ -758,6 +777,8 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 - 072 — `specialty_dictionary` multi-parent restructure (PR [#9](https://github.com/mktahr/vetted/pull/9), sub-PR 2b — **merged + prod-applied 2026-06-21**; prod verified 225 / 166 / 59 / 45 multi-parent, 0 invalid parent refs, catchall a no-op on prod as predicted). Drops single-value FK on parent_function. Converts `parent_function` from TEXT to TEXT[] (multi-parent array, GIN-indexed). Deletes 4 title-like specialties (chief_engineer, distinguished_engineer, engineering_management, principal_engineer) + 1 redundant (data_engineering — function takes its place). Reparents 137 engineering-parented + 20 NULL-parented active + 5 redline legacy non-eng specialties under the new 16 sub-functions. 45 multi-parent assignments where the discipline genuinely spans categories (mechatronics → [mechanical, electrical, controls]; sensor_fusion → [robotics, ml]; battery_engineering → [electrical, mechanical, hardware]; etc.). 59 V1-scope-cut deactivations. Defensive catchall sweeps specialties with all-inactive parents (no-op on prod, sweeps 12 dev-only legacy ghost rows). Portable verification block (delta + structural invariants) works across dev/prod where pre-migration row counts differ. App-layer enforcement of array-element validity lives in `scripts/sync-reference.mjs` — Postgres lacks native multi-value FK. Final: 225 total / 166 active / 59 inactive on prod (dev: 202/156/46 due to dev-only ghost rows). See "Five-Axis Taxonomy" section.
 - 073 — `person_experiences` + `people` reclassification (PR [#9](https://github.com/mktahr/vetted/pull/9), sub-PR 2b — **merged + prod-applied 2026-06-21**; prod verified 0 orphan refs remaining, 6 rows lifted to `function='data_engineering'`, 1 lone `engineering` row left for sub-PR 3). UPDATEs `function_normalized` via JOIN to specialty_dictionary.parent_function[1] for single-parent active specialties. Multi-parent specialty rows stay at `function='engineering'` per option (b) — sub-PR 3 LLM ingest inference reclassifies per-candidate based on actual title/description/skills. Orphan cleanup for 5 deleted specialty refs: 4 title-like → specialty=NULL; data_engineering → specialty=NULL + function=`'data_engineering'` (signal lifted from specialty axis to function axis). Recomputes `people.current_function_normalized` from primary current experience using same priority order as ingest route (is_primary_current → first non-student-titled → first with title → first by start_date desc).
 - 074 — `title_dictionary` function remap (PR [#9](https://github.com/mktahr/vetted/pull/9), sub-PR 2b — **merged + prod-applied 2026-06-21**; prod verified 7 leadership@`engineering` / 28 `software_engineering` / 1 `data_engineering`). Followed by a full prod rescore via `/api/admin/rescore-all` (84/84, bucket distribution unchanged vetted 49 / needs_review 35). Cohort A (20 rows with single-parent active specialty) reclassified via JOIN. Cohort B leadership titles (7 rows: CTO / chief technology officer / director of engineering / em / engineering manager / vp engineering / vp of engineering) intentionally left at `function='engineering'` (legacy inactive umbrella) — defaulting to software_engineering would destroy information in hard-tech context; sub-PR 3 LLM reclassifies per-candidate. Cohort B explicit IC titles (10 rows: senior software engineer, principal software engineer, swe, mobile engineer, etc.) → software_engineering. Orphan specialty cleanup mirrors 073 pattern (data engineer title row → function=`'data_engineering'`).
+- 075–078 — **reserved by the open Network Connections module (PR [#10](https://github.com/mktahr/vetted/pull/10), not yet merged).** Applied + verified on dev only; NOT on prod. 075 = 7 network tables; 076 = RLS-off; 077 = `crust_import_log.request_kind` CHECK += `network_enrich`; 078 = additive LLM-triage columns on `connections`. See SESSION_HANDOFF for status.
+- 079 — drop orphan `specialty_dictionary.function_normalized` column (PR [#12](https://github.com/mktahr/vetted/pull/12) — **merged + prod-applied 2026-06-24**). The column was never created by any migration (001 made the column `parent_function`; 072 → `TEXT[]`); it survived only on prod as an out-of-band orphan holding stale pre-rebuild umbrella values (`engineering`/`operations`), causing dev/prod drift that threw `400` on dev (`loadSpecialtyDictionary()`). Paired with a code fix: `lib/normalize/specialty.ts::loadSpecialtyDictionary()` now reads `parent_function` and derives the scalar function via the single-parent rule (single → `parent_function[0]`; multi → `null`, deferred to sub-PR 3 LLM) — mirrors migration 073's reclassification logic. `DROP COLUMN IF EXISTS` → drops on prod, no-op on dev. Both DBs now converge on the migration-defined schema. Lockstep held: B-lite code deployed to prod first, then column dropped.
 
 The "Normalized tables" / "Dictionary tables" lists below describe the post-migration state. They name the most-used columns; consult the actual schema for exhaustive column lists.
 
@@ -814,7 +835,7 @@ The "Normalized tables" / "Dictionary tables" lists below describe the post-migr
 │   ├── 07-person-enrich.md                      ← /person/enrich (cached / IN-DB) + add-on cost model
 │   ├── 08-person-autocomplete.md                ← /person/search/autocomplete (FREE)
 │   └── 09-person-live-enrich.md                 ← /person/professional_network/enrich/live (5 credits, real-time scrape)
-├── supabase/migrations/                         ← see "Database: Final Schema State" for full migration set 001–074
+├── supabase/migrations/                         ← see "Database: Final Schema State" for full migration set 001–079
 ├── supabase/seeds/                              ← DEPRECATED post-migration 060. Source of truth is now /reference/. README.md is a deprecation pointer; legacy CSVs (olympiads_signals, national_labs_signals, tags_signals, hackathons_signals, conferences_signals, fellowships_signals, vetted_competitions, vetted_teams) live on for historical replay only.
 │
 ├── app/                                         ← Next.js 14 App Router

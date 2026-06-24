@@ -202,7 +202,9 @@ function SearchBuilderInner() {
       })))
       setSchoolOptions((schools || []).filter((s: any) => s.school_score != null).map((s: any) => ({ value: s.school_id, label: s.school_name, sublabel: s.is_foreign ? "Int'l" : undefined })))
       // Accelerator options removed in PR #4 — Y Combinator now lives in signal_dictionary.incubator with full aliases.
-      setSpecialtyOptions((specs || []).map((d: any) => ({ value: d.specialty_normalized, label: d.specialty_normalized.replace(/_/g, ' '), sublabel: (d.parent_function || '').replace(/_/g, ' ') })))
+      // parent_function is TEXT[] (migration 072, multi-parent). Join all parents to a
+      // string FIRST, then format underscores. Guard against null/empty/legacy-string.
+      setSpecialtyOptions((specs || []).map((d: any) => ({ value: d.specialty_normalized, label: d.specialty_normalized.replace(/_/g, ' '), sublabel: (Array.isArray(d.parent_function) ? d.parent_function.join(', ') : (d.parent_function || '')).replace(/_/g, ' ') })))
 
       // Signal options: category-level only (universal one-bucket policy).
       // 'founder' removed (replaced by VC-Backed / Bootstrapped founder type filter).

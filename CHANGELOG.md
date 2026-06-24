@@ -6,6 +6,38 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 
 ---
 
+## 2026-06-24 — Recovery + specialty resolver dev/prod parity fix (PR #12 + migration 079) + protocol/tooling housekeeping
+
+**Shipped**
+- **PR #12 merged to main** (squash → `1e3cedd`), prod-deployed, branch deleted. B-lite fix: `lib/normalize/specialty.ts::loadSpecialtyDictionary()` now reads `specialty_dictionary.parent_function` and derives the scalar function via the single-parent rule (single → `parent_function[0]`; multi-parent → `null`, deferred to sub-PR 3 LLM) — mirrors migration 073's reclassification logic. Localized to that one function; resolver + ingest unchanged.
+- **Migration 079 applied to prod** (dev first = no-op, then prod = drop). Drops the orphan `specialty_dictionary.function_normalized` column via `DROP COLUMN IF EXISTS` + fail-loud verification. The column was never created by any migration (001 made it `parent_function`; 072 → `TEXT[]`); it survived only on prod as an out-of-band orphan with stale pre-rebuild umbrella values (`engineering`/`operations`). Dev (built from migrations) lacked it, so the old select threw `400` there and broke `/api/ingest`'s specialty step. Both DBs now converge on the migration-defined schema.
+- Verification: `npm run build` clean; dev/prod smoke (old query 400s on dev, new query succeeds both, 0 derivation-invariant violations, `backend`→`software_engineering`, `mechatronics`→`null`); Vercel preview browser-verified; post-drop REST checks (orphan → 400, `parent_function` → 200 on prod).
+- **SESSION_HANDOFF.md reconstructed** (`1168fda`) to the true 2026-06-24 state after the previous handoff went stale (the prior day's work never got a clean wrap — local repo was being wiped by iCloud mid-work).
+- **`.claude/settings.local.json` created** (personal/gitignored) — Bash approval set: `allow` git/gh/`npm run`/ls/cd/cat/grep/`apply-migration.sh dev`; `ask` (still prompts) for `migrate:prod`, `apply-migration.sh prod`, `rm -rf`/`-fr`, force-push, hard-reset, `git clean -f`.
+- **CLAUDE.md + COMMANDS.md doc additions** (in this commit): new "Prompt Output & Copyable-Block Conventions" section — the full-copyable-prompt rule (chat assistant always emits prompts as one consolidated copyable block) + the new `block` command (re-output the previous response as a single plain-text copyable block, on-demand). Migration ledger extended through 079; schema-state header bumped.
+- BUGS.md: marked the `specialty_dictionary.function_normalized` drift **Resolved**; the `score-all.mjs` stale-mirror item stays Active.
+
+**Decisions**
+- Fix option (b) over (a): drop the redundant orphan column rather than re-adding it to dev. Post-072 its info lives in `parent_function[]`; keeping it would enshrine drift in the wrong direction.
+- Multi-parent specialties derive `null` function (NOT `parent_function[0]`) — respects the locked decision that multi-parent rows defer to the sub-PR 3 LLM rather than being deterministically collapsed.
+- Held the CLAUDE.md/COMMANDS.md doc changes out of the PR #12 branch commit; folded them into this end-session commit instead.
+- DB-code lockstep held: B-lite deployed to prod BEFORE migration 079 dropped the column, so nothing read `function_normalized` at drop time.
+
+**Where we left off**
+- Specialty-parity workstream fully closed: merged, prod-deployed, migration applied + verified, BUGS updated. Prod DB + prod code in lockstep.
+- This session also surfaced/clarified the true state of earlier 2026-06-24 work: PR #11 (parent_function render hotfix) merged; PR #10 (network connections) still OPEN; session-protocol rename committed (`70a2d78`).
+
+**Open questions**
+- None blocking. The next substantive thread is either landing PR #10 (network connections) or resuming five-axis sub-PR 3 (LLM ingest inference) — Matt's call next session.
+
+**Watch-outs**
+- **PR #10 (network connections) is open**; its migrations 075–078 are dev-only, not on prod. Promote after merge (dev-first, code-then-DB lockstep).
+- **Stale `score-all.mjs`** — still drifted; use `POST /api/admin/rescore-all` for rescoring.
+- **Keep the repo off iCloud** — it's now at `~/DEV/vetted`; the old `~/Desktop/DEV` path was being wiped.
+- **Free-tier Supabase idle-pause (~7 days)** — restore from the dashboard on NXDOMAIN.
+
+---
+
 ## 2026-06-21 — Five-axis taxonomy sub-PR 2b SHIPPED to prod (PR #9 merged + 071–074 promoted + rescore)
 
 **Shipped**
