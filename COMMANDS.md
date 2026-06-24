@@ -14,6 +14,7 @@
 | "What did we ship last session?" | Reports last merged PR with contents |
 | "What's next on the roadmap?" | Reads ROADMAP.md "current build" section |
 | "What did we last complete?" | Reads ROADMAP.md for most recently completed item |
+| "block" (exact, single word) | Re-outputs CC's immediately preceding response as ONE self-contained plain-text copyable code block (full substance, plain text, no new analysis), so you can one-click copy + forward it to a Claude chat, Codex, or a fresh session |
 
 ## Technical Commands (run yourself when needed)
 
