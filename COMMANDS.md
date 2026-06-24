@@ -8,7 +8,8 @@
 | "Add to backlog" | Adds item to BACKLOG.md (deferred features) |
 | "Add to bugs" | Adds item to BUGS.md (small fixes) |
 | "Add to CLAUDE.md" | Adds engineering note to CLAUDE.md |
-| "Wrap up session" | Confirms everything merged to main, pushed to GitHub, deployed to prod, all docs updated. Reports any gaps. |
+| "start session" (primary) / "new session" (alias) | Runs the Start-of-Session Protocol: reads SESSION_HANDOFF + ROADMAP + latest CHANGELOG, synthesizes a kickoff message, asks whether to proceed or pivot |
+| "end session" (primary) / "wrap session" (alias) | Runs the End-of-Session Protocol: pre-flight verification first, then docs update (CHANGELOG / ledger / ROADMAP / BACKLOG / BUGS) + commit + push + PR merge decision + SESSION_HANDOFF |
 | "Status check" | Reports: current branch, what's in flight, last commit, what's on roadmap next |
 | "What did we ship last session?" | Reports last merged PR with contents |
 | "What's next on the roadmap?" | Reads ROADMAP.md "current build" section |

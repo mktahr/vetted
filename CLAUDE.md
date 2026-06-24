@@ -13,8 +13,8 @@ The core insight: instead of asking AI to judge a candidate, we build our own di
 This file (CLAUDE.md) is the engineering context. Other docs at repo root:
 
 - **[README.md](README.md)** — GitHub-facing project intro: what Vetted is, stack summary, data-flow paragraph.
-- **[SESSION_HANDOFF.md](SESSION_HANDOFF.md)** — Latest session's handoff block only (overwritten each `wrap session`). Read first by the Start-of-Session Protocol when Matt types "start session".
-- **[CHANGELOG.md](CHANGELOG.md)** — Reverse-chronological work-session log (shipped / decisions / where we left off / open questions / watch-outs). Updated automatically by the End-of-Session Protocol when Matt types "wrap session".
+- **[SESSION_HANDOFF.md](SESSION_HANDOFF.md)** — Latest session's handoff block only (overwritten each `end session`). Read first by the Start-of-Session Protocol when Matt types "start session".
+- **[CHANGELOG.md](CHANGELOG.md)** — Reverse-chronological work-session log (shipped / decisions / where we left off / open questions / watch-outs). Updated automatically by the End-of-Session Protocol when Matt types "end session".
 - **[ROADMAP.md](ROADMAP.md)** — Current build, sequenced "Next Up" items, recently completed (with PR links). The "what are we shipping" doc.
 - **[BACKLOG.md](BACKLOG.md)** — Major deferred features (>0.5 day to scope/build), sub-sectioned by domain. Each entry has a trigger condition for when to build.
 - **[BUGS.md](BUGS.md)** — Small fixes (<0.5 day each). Items move here from BACKLOG when they're scoped down or surface during build.
@@ -23,8 +23,8 @@ This file (CLAUDE.md) is the engineering context. Other docs at repo root:
 - **[GETTING_STARTED.md](GETTING_STARTED.md)** — Onboarding for a new machine. **Currently stale; references old build phases.**
 
 **When to update which:**
-- Session ends (Matt typed "wrap session") → CHANGELOG.md (append) + SESSION_HANDOFF.md (overwrite) per End-of-Session Protocol below
-- Session starts (Matt typed "start session") → read SESSION_HANDOFF.md + ROADMAP + CHANGELOG top entry per Start-of-Session Protocol below
+- Session ends (Matt typed "end session" / "wrap session") → CHANGELOG.md (append) + SESSION_HANDOFF.md (overwrite) per End-of-Session Protocol below
+- Session starts (Matt typed "start session" / "new session") → read SESSION_HANDOFF.md + ROADMAP + CHANGELOG top entry per Start-of-Session Protocol below
 - New deferred feature → BACKLOG.md
 - New small fix that's <0.5 day → BUGS.md
 - Item moved into active queue → ROADMAP.md "Next Up"
@@ -43,9 +43,8 @@ Matt uses plain-English phrases for common doc operations. Recognize these and a
 | "Add to backlog" | Edit BACKLOG.md (deferred features, sub-sectioned by domain) |
 | "Add to bugs" | Edit BUGS.md (small fixes) |
 | "Add to CLAUDE.md" | Add engineering context to this file |
-| "start session" (exact) | Execute the Start-of-Session Protocol: read SESSION_HANDOFF.md + ROADMAP + most recent CHANGELOG entry, synthesize kickoff message, ask whether to proceed with the queued task or pivot. See "Start-of-Session Protocol" section below. |
-| "wrap session" (exact) | Execute the End-of-Session Protocol: session summary + CHANGELOG entry + migration ledger + ROADMAP + BACKLOG/BUGS + commit + push + PR merge decision + write SESSION_HANDOFF.md. Two approval gates (post-docs-diff, pre-merge). See "End-of-Session Protocol" section below. |
-| "Wrap up session" | Confirm everything merged to main, pushed to GitHub, deployed to prod, all docs updated. Report any gaps. (Status verification — distinct from "wrap session" which executes the docs-update protocol.) |
+| "start session" (primary) / "new session" (alias) | Execute the Start-of-Session Protocol: read SESSION_HANDOFF.md + ROADMAP + most recent CHANGELOG entry, synthesize kickoff message, ask whether to proceed with the queued task or pivot. See "Start-of-Session Protocol" section below. |
+| "end session" (primary) / "wrap session" (alias) | Execute the End-of-Session Protocol: **pre-flight verification first** (state check + hard-stop on uncommitted/un-pushed work; open PR + not-yet-deployed reported as context) → session summary + CHANGELOG entry + migration ledger + ROADMAP + BACKLOG/BUGS + commit + push + PR merge decision + write SESSION_HANDOFF.md. Two approval gates (post-docs-diff, pre-merge). See "End-of-Session Protocol" section below. |
 | "Status check" | Report: current branch, what's in flight, last commit, what's on roadmap next |
 | "What did we ship last session?" | Report the last merged PR with contents (from `git log main` and PR titles) |
 | "What's next on the roadmap?" | Read ROADMAP.md "Current Build" + top of "Next Up" |
@@ -1147,7 +1146,7 @@ A curl response of HTTP 200 is NOT proof a page works. Next.js often prerenders 
 
 ### End-of-session docs update — MUST DO
 
-Before wrapping a session that shipped any feature, migration, or architectural change, update CLAUDE.md + CHANGELOG.md + ROADMAP.md so the next Claude session starts with accurate ground truth. The full procedure (trigger phrase `wrap session`, the 8 steps, the next-session starter-prompt template) lives in the "End-of-Session Protocol" section near the bottom of this file.
+Before wrapping a session that shipped any feature, migration, or architectural change, update CLAUDE.md + CHANGELOG.md + ROADMAP.md so the next Claude session starts with accurate ground truth. The full procedure (trigger phrase `end session`, alias `wrap session`, the 12 steps, the next-session starter-prompt template) lives in the "End-of-Session Protocol" section near the bottom of this file.
 
 A stale CLAUDE.md is worse than a short one — future sessions read it as authoritative.
 
@@ -1669,8 +1668,9 @@ Without these edits, signals with the new category exist in the DB but don't ren
 
 ## Start-of-Session Protocol
 
-**Trigger phrase: `start session`** (exact). When Matt types this at the
-beginning of a new CC session, execute:
+**Trigger phrase: `start session`** (primary) — **`new session`** also works as an
+alias; both fire this identical protocol. When Matt types either (exact match) at
+the beginning of a new CC session, execute:
 
 1. **Read [SESSION_HANDOFF.md](SESSION_HANDOFF.md)** — the latest handoff
    block written by the previous session's End-of-Session Protocol.
@@ -1708,12 +1708,30 @@ context manually.
 
 ## End-of-Session Protocol
 
-**Trigger phrase: `wrap session`** (exact). When Matt types this, execute the
-following without further prompting — do the work, gate only at the explicit
-approval points (steps 7 and 10):
+**Trigger phrase: `end session`** (primary) — **`wrap session`** also works as an
+alias; both fire this identical protocol. When Matt types either (exact match),
+execute the following without further prompting — do the work, gate only at the
+explicit approval points (steps 8 and 11):
 
-1. **Generate a short session summary** (2–4 sentences max).
-2. **Append a dated entry to [CHANGELOG.md](CHANGELOG.md)** using the 6-block
+1. **Pre-flight verification — runs BEFORE any docs are written.** Take stock of
+   repo + deploy state and decide whether it's safe to close out:
+   - **Report current state:** working tree clean? (list any uncommitted /
+     untracked changes); current branch; any un-pushed commits (`git status` +
+     `git log @{u}..HEAD`); open PR for the branch and its state (`gh pr view`);
+     prod deploy state (latest `main` deploy on Vercel); whether the docs
+     (CLAUDE/CHANGELOG/ROADMAP/BACKLOG/BUGS) already reflect this session's work.
+   - **HARD-STOP — block and ask before continuing** only on unambiguous
+     problems: **uncommitted changes that would be lost** or **un-pushed
+     commits**. Surface them and ask Matt how to proceed (commit / stash / push /
+     discard) BEFORE writing any docs. Do not proceed past this gate until
+     resolved.
+   - **REPORT-AS-CONTEXT — note, do NOT block** for expected-by-design states:
+     an **open / unmerged PR** and **"not yet deployed to prod"** are NORMAL when
+     ending a session with a PR still open (prod deploy only happens after merge
+     in step 11). Flag them as context, not as gaps.
+   - If nothing needs flagging, say so in one line and continue.
+2. **Generate a short session summary** (2–4 sentences max).
+3. **Append a dated entry to [CHANGELOG.md](CHANGELOG.md)** using the 6-block
    template (if today's entry already exists, expand it rather than duplicating
    the date):
    ```
@@ -1725,21 +1743,21 @@ approval points (steps 7 and 10):
    **Open questions**
    **Watch-outs**
    ```
-3. **Update CLAUDE.md migration ledger** if any new migrations ran this session.
+4. **Update CLAUDE.md migration ledger** if any new migrations ran this session.
    Add the section/sub-section if a new system was introduced. Update the File
    Layout if new files were added. Prune anything now wrong.
-4. **Update [ROADMAP.md](ROADMAP.md)** — move completed items to Recently
+5. **Update [ROADMAP.md](ROADMAP.md)** — move completed items to Recently
    Completed (with PR link), add new Next Up items if any surfaced.
-5. **Add new items to [BACKLOG.md](BACKLOG.md)** (organized by domain) if surfaced.
-6. **Add small fixes to [BUGS.md](BUGS.md)** if surfaced.
-7. **Show docs file changes for review.** DO NOT auto-commit. Wait for explicit
+6. **Add new items to [BACKLOG.md](BACKLOG.md)** (organized by domain) if surfaced.
+7. **Add small fixes to [BUGS.md](BUGS.md)** if surfaced.
+8. **Show docs file changes for review.** DO NOT auto-commit. Wait for explicit
    approval.
-8. **After Matt approves**, commit the docs with message:
+9. **After Matt approves**, commit the docs with message:
    ```
-   Wrap session YYYY-MM-DD: <headline>
+   End session YYYY-MM-DD: <headline>
    ```
-9. **Push the commit to the current branch.**
-10. **PR MERGE DECISION STEP.** If the current branch has an open PR:
+10. **Push the commit to the current branch.**
+11. **PR MERGE DECISION STEP.** If the current branch has an open PR:
     - Check PR state: build status, Vercel preview status, any unresolved review
       comments, any tests failing. Use `gh pr view <N> --json` for state +
       `gh pr checks <N>` for CI.
@@ -1758,17 +1776,17 @@ approval points (steps 7 and 10):
     - If **yes**: squash-and-merge with the PR title as the commit message,
       then delete the branch (local + remote).
     - If **no** or **not yet**: leave the PR open. Note in the starter prompt
-      (step 11) that the PR is still pending.
+      (step 12) that the PR is still pending.
     - If no open PR on this branch: skip the merge ask; note in the starter
       prompt that work is direct-to-main or pre-PR.
-11. **Generate the next-session starter prompt.** Write it to
+12. **Generate the next-session starter prompt.** Write it to
     [SESSION_HANDOFF.md](SESSION_HANDOFF.md) — **overwrite** the previous
     contents, do not append. Print it in the chat too for visibility. Include
     SESSION_HANDOFF.md in the same commit as the other docs updates from
-    step 8 (if step 8 already shipped, this becomes its own follow-on commit
+    step 9 (if step 9 already shipped, this becomes its own follow-on commit
     `Update SESSION_HANDOFF for next session`).
 
-    Format (reflect PR merge status from step 10):
+    Format (reflect PR merge status from step 11):
     ```
     ## Where we left off
     [summary including PR status — merged, pending, blocked]
