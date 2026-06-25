@@ -9,6 +9,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import ConnectionDrawer, { ConnectionDetail } from '../../components/ConnectionDrawer'
 
 interface Owner { employee_id: string; full_name: string }
 interface Conn {
@@ -62,6 +63,21 @@ function ConnectionsInner() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [force, setForce] = useState(false)
   const [enriching, setEnriching] = useState(false)
+
+  // Detail drawer (PR 2 / 2a)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [detail, setDetail] = useState<ConnectionDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailIdx, setDetailIdx] = useState(-1)
+
+  const openDrawerAt = useCallback(async (idx: number) => {
+    const conn = rows[idx]
+    if (!conn) return
+    setDetailIdx(idx); setDrawerOpen(true); setDetailLoading(true); setDetail(null)
+    const d = await fetch(`/api/network/connections/${conn.connection_id}`).then((r) => r.json()).catch(() => null)
+    setDetail(d && !d.error ? d : null)
+    setDetailLoading(false)
+  }, [rows])
 
   const load = useCallback(async () => {
     if (!orgId) return
@@ -188,13 +204,13 @@ function ConnectionsInner() {
               <tr><td style={td} colSpan={8}>Loading…</td></tr>
             ) : rows.length === 0 ? (
               <tr><td style={td} colSpan={8}>No connections match these filters.</td></tr>
-            ) : rows.map((c) => (
-              <tr key={c.connection_id} style={{ opacity: c.status === 'excluded' ? 0.55 : 1 }}>
-                <td style={{ ...td, width: 28 }}>
+            ) : rows.map((c, idx) => (
+              <tr key={c.connection_id} onClick={() => openDrawerAt(idx)} style={{ opacity: c.status === 'excluded' ? 0.55 : 1, cursor: 'pointer' }}>
+                <td style={{ ...td, width: 28 }} onClick={(ev) => ev.stopPropagation()}>
                   <input type="checkbox" checked={selected.has(c.connection_id)} onChange={() => toggleSel(c.connection_id)} />
                 </td>
                 <td style={td}>
-                  {c.raw_url ? <a href={c.raw_url} target="_blank" rel="noreferrer" style={{ color: 'var(--fg-primary)', textDecoration: 'none', fontWeight: 600 }}>{c.full_name}</a> : <span style={{ fontWeight: 600 }}>{c.full_name}</span>}
+                  {c.raw_url ? <a href={c.raw_url} target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()} style={{ color: 'var(--fg-primary)', textDecoration: 'none', fontWeight: 600 }}>{c.full_name}</a> : <span style={{ fontWeight: 600 }}>{c.full_name}</span>}
                 </td>
                 <td style={td}>
                   <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
@@ -212,6 +228,15 @@ function ConnectionsInner() {
           </tbody>
         </table>
       </div>
+
+      <ConnectionDrawer
+        detail={detail}
+        loading={detailLoading}
+        isOpen={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onPrev={detailIdx > 0 ? () => openDrawerAt(detailIdx - 1) : null}
+        onNext={detailIdx >= 0 && detailIdx < rows.length - 1 ? () => openDrawerAt(detailIdx + 1) : null}
+      />
     </div>
   )
 }
