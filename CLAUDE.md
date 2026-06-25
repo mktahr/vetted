@@ -50,6 +50,9 @@ Matt uses plain-English phrases for common doc operations. Recognize these and a
 | "What's next on the roadmap?" | Read ROADMAP.md "Current Build" + top of "Next Up" |
 | "What did we last complete?" | Read ROADMAP.md "Recently Completed" — most recent row |
 | "block" (exact, single word) | Re-output the immediately preceding response as ONE self-contained plain-text copyable code block, for one-click forwarding (to a Claude chat, Codex, or a fresh session). See "Block Command" section below. |
+| "pack codex" | OUTBOUND. Bundle the current state into a copyable review package to paste into Codex (what we're working on, approach/proposed solution, what's done, files/branches touched, the specific thing to pressure-test). Single self-contained plain-text code block, same format rules as `block`. Framed so Codex knows it's receiving Claude's work for review. See "Cross-Agent Pressure-Testing Commands" section below. |
+| "review codex" | INBOUND. Matt is pasting Codex's work/critique/proposal. Evaluate it against the ACTUAL codebase + CLAUDE.md rules — verify every claim against real files before agreeing. Report where Codex is right, wrong, or missing context, anything it got factually wrong about our code, and a recommendation. See "Cross-Agent Pressure-Testing Commands" section below. |
+| "pack claude" / "review claude" (typed to Claude by mistake) | These are **Codex's** commands, not Claude's. If Matt types either to Claude, respond that he's got the wrong agent and remind him Claude uses "pack codex" / "review codex". Do NOT execute. See "Cross-Agent Pressure-Testing Commands" section below. |
 
 ---
 
@@ -68,6 +71,45 @@ Rules for the block:
 - **Plain readable text inside the block** — no reliance on rendered bold / links / tables (code blocks don't render those). Convert tables to plain lists/labels, links to bare URLs, etc.
 - **Faithful reformat only** — do not add new analysis or change any recommendation. It's a re-packaging of what was already said, for forwarding.
 - **On-demand only** — normal responses stay normally formatted for readability. Only `block` triggers the plain copyable version.
+
+---
+
+## Cross-Agent Pressure-Testing Commands (Claude ⇄ Codex)
+
+Matt runs two coding agents against the same repo — **Claude Code** (you) and **Codex** — and uses them to pressure-test each other's work. Four commands coordinate the hand-off: two **outbound** (package an agent's own work for the other to review) and two **inbound** (evaluate the other agent's pasted work). All four are **on-demand only** — they fire only when Matt types the exact phrase; normal responses are unaffected.
+
+This is the single source of truth for **both** agents' cross-check commands. Codex is pointed here via AGENTS.md, so Codex inherits its own commands ("pack claude" / "review claude") from this section rather than from a separate file.
+
+### Claude's commands (the ones YOU, Claude, execute)
+
+**`pack codex`** — OUTBOUND. Bundle the current working state into a copyable review package for Matt to paste into Codex. Include, in this order:
+1. **What we're working on** — the task / goal in 1–3 sentences.
+2. **Current approach / proposed solution** — the design or direction, with the reasoning.
+3. **What's been done so far** — concrete progress (commits, edits, decisions made).
+4. **Relevant files / branches touched** — paths + current branch + any open PR.
+5. **What I want Codex to pressure-test** — the specific question or risk to attack (not "review everything").
+
+Output as a **single self-contained plain-text code block**, same format rules as the `block` command (full substance, plain text, no reliance on rendered formatting, stands alone). Frame it explicitly so Codex knows it's receiving **Claude's** work for adversarial review — e.g. open with "This is Claude Code's work, packaged for Codex to pressure-test."
+
+**`review codex`** — INBOUND. Matt is pasting in Codex's work / critique / proposal. Evaluate it against our **ACTUAL** codebase, files, and the rules in this CLAUDE.md — NOT at face value. Before agreeing with any claim, **verify it against the real files** (read the code, check the migration ledger, confirm the schema). Then report:
+- Where Codex is **right** (and worth acting on).
+- Where Codex is **wrong** or **missing context** about how our system actually works.
+- Anything Codex got **factually wrong** about our code, schema, or conventions (cite the file/line that contradicts it).
+- A clear **recommendation** (adopt / adopt-with-changes / reject, and why).
+
+Default to skepticism: a confident critique that misreads our code is worse than no critique. Catch it.
+
+### Codex cross-check commands (Codex executes these — documented here so both agents share one source of truth)
+
+These are **Codex's** commands. They are defined here because AGENTS.md points Codex to this file. You (Claude) do **not** execute them.
+
+**`pack claude`** — OUTBOUND from Codex. Bundle Codex's current state / approach / progress / files-touched / specific-thing-to-pressure-test into a single self-contained plain-text copyable package, framed so Claude Code knows it's receiving Codex's work for review. (Mirror of Claude's `pack codex`.)
+
+**`review claude`** — INBOUND to Codex. Matt is pasting Claude's work; Codex evaluates it against the actual codebase and the rules in this CLAUDE.md, verifying claims against real files before agreeing, and flags where Claude is right / wrong / missing context. (Mirror of Claude's `review codex`.)
+
+### Wrong-agent guard rail
+
+`pack claude` and `review claude` are **Codex's** commands. If Matt types either of them **to you (Claude)**, do NOT execute — he's aimed the command at the wrong agent. Tell him so, and remind him that **Claude uses `pack codex` / `review codex`**. (Symmetrically, Codex should redirect a misfired `pack codex` / `review codex` back to `pack claude` / `review claude`.)
 
 ---
 
@@ -715,7 +757,34 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 
 ---
 
-## Database: Final Schema State (after migrations 001–079; 075–078 dev-only/PR #10-pending)
+## Network Connections Module (Post-Migrations 075–078; PRs #10, #13)
+
+A siloed, org-scoped warm-intro / network-graph layer. Employees upload their LinkedIn `Connections.csv`; connections are parsed → canonicalized → classified (engineering scope: yes/maybe/no) → deduped per org → optionally Crust-enriched → surfaced in an admin table + review queue + detail drawer.
+
+### Core principle — isolation (PR 1)
+Connections live ONLY in the module's tables. Never written to `people`, never routed through `/api/ingest`, never in the global candidate search. The global pool + a cross-silo cache are READ-only (to avoid re-buying enrichment). **PR 2 will deliberately revisit this:** the planned **`people`-projection-with-pool-flag** model normalizes enriched connections into `people` with `in_general_pool=false` so the existing 25-axis search machinery is reused, while general-pool membership stays admin-gated (**enrichment ≠ promotion**).
+
+### Tenancy
+First real tenant boundary in the app. `org_id` on every table except `network_enriched_profiles` (the global cross-silo enrichment cache, keyed by `canonical_url`). No auth/RLS yet (single admin); schema is multi-tenant-SHAPED so RLS attaches additively later.
+
+### Tables (075)
+`organizations`, `employees`, `upload_batches`, `raw_connection_rows` (verbatim replay buffer), `connections` (per-org deduped projection — current-snapshot fields + `title_bucket` yes/maybe/no + `specialty_normalized` + `company_id`/`company_score` overlay + `enriched`), `connection_owners` (connection↔employee junction; `is_active`=soft-disconnect), `network_enriched_profiles` (global cache, no org_id; `enriched_profile` JSONB + denormalized display fields).
+
+### Pipeline (`lib/network/`, `app/api/network/`, `app/network/`)
+- parse-csv → canonicalize-url → classify-title (scope from `scopes.ts`; engineering for V1, swappable param) → dedupe (per-org + cross-silo cache + global people pool) → company-overlay (best-effort NAME match to scored `companies`).
+- **Tier-2 LLM triage** (`llm-triage.ts`, Haiku, batch) pre-sorts the MAYBE pile (title + company context → probably_yes/no/unclear). Suggestion only; admin Keeps/Drops (`title_bucket_source='manual'`).
+- **Web-check** (`web-check.ts`, Haiku + web_search, single-person, on-demand) for stubborn MAYBEs; returns verdict + sources.
+- **Enrich** (`enrich.ts`): count-first estimate (free) → run. Reuses cross-silo cache + global pool for free; only genuine unknowns hit Crust `/person/enrich`. ⚠️ **The enrich blob is current-snapshot only** (`basic_profile` — NO work history / education), which caps PR 2's searchable axes (see BACKLOG).
+
+### Surfaces
+- `/network` (org list), `/network/connections` (admin table + filters + enrich toolbar + **2a row-click detail drawer**), `/network/review` (MAYBE queue: triage / web-check / Keep-Drop). `ConnectionDrawer.tsx` (PR #13 / 2a) renders identity + warm-path owners + classification + enriched snapshot via `GET /api/network/connections/[id]`.
+
+### PR 2 (next — NOT built)
+Candidate-search integration + admin cross-org view (every org+individual connected to a candidate — schema already supports via `canonical_url` + `connection_owners`) + gated promotion (flag flip, no re-pay). Open decisions: **data tier** (snapshot-axes-now vs paid rich-enrichment for full 25-axis search) + the **`people`-projection-with-pool-flag** architecture. See BACKLOG "Network Connections" + SESSION_HANDOFF.
+
+---
+
+## Database: Final Schema State (after migrations 001–079; 075–078 prod-applied via PR #10, 2026-06-24)
 
 **Migration ledger** (full per-migration descriptions live in `supabase/migrations/*.sql` headers):
 - 001 — Phase 1 normalized schema + enums
@@ -777,7 +846,7 @@ Publications, open source, founder scoring, investor signals, hackathons/labs/cl
 - 072 — `specialty_dictionary` multi-parent restructure (PR [#9](https://github.com/mktahr/vetted/pull/9), sub-PR 2b — **merged + prod-applied 2026-06-21**; prod verified 225 / 166 / 59 / 45 multi-parent, 0 invalid parent refs, catchall a no-op on prod as predicted). Drops single-value FK on parent_function. Converts `parent_function` from TEXT to TEXT[] (multi-parent array, GIN-indexed). Deletes 4 title-like specialties (chief_engineer, distinguished_engineer, engineering_management, principal_engineer) + 1 redundant (data_engineering — function takes its place). Reparents 137 engineering-parented + 20 NULL-parented active + 5 redline legacy non-eng specialties under the new 16 sub-functions. 45 multi-parent assignments where the discipline genuinely spans categories (mechatronics → [mechanical, electrical, controls]; sensor_fusion → [robotics, ml]; battery_engineering → [electrical, mechanical, hardware]; etc.). 59 V1-scope-cut deactivations. Defensive catchall sweeps specialties with all-inactive parents (no-op on prod, sweeps 12 dev-only legacy ghost rows). Portable verification block (delta + structural invariants) works across dev/prod where pre-migration row counts differ. App-layer enforcement of array-element validity lives in `scripts/sync-reference.mjs` — Postgres lacks native multi-value FK. Final: 225 total / 166 active / 59 inactive on prod (dev: 202/156/46 due to dev-only ghost rows). See "Five-Axis Taxonomy" section.
 - 073 — `person_experiences` + `people` reclassification (PR [#9](https://github.com/mktahr/vetted/pull/9), sub-PR 2b — **merged + prod-applied 2026-06-21**; prod verified 0 orphan refs remaining, 6 rows lifted to `function='data_engineering'`, 1 lone `engineering` row left for sub-PR 3). UPDATEs `function_normalized` via JOIN to specialty_dictionary.parent_function[1] for single-parent active specialties. Multi-parent specialty rows stay at `function='engineering'` per option (b) — sub-PR 3 LLM ingest inference reclassifies per-candidate based on actual title/description/skills. Orphan cleanup for 5 deleted specialty refs: 4 title-like → specialty=NULL; data_engineering → specialty=NULL + function=`'data_engineering'` (signal lifted from specialty axis to function axis). Recomputes `people.current_function_normalized` from primary current experience using same priority order as ingest route (is_primary_current → first non-student-titled → first with title → first by start_date desc).
 - 074 — `title_dictionary` function remap (PR [#9](https://github.com/mktahr/vetted/pull/9), sub-PR 2b — **merged + prod-applied 2026-06-21**; prod verified 7 leadership@`engineering` / 28 `software_engineering` / 1 `data_engineering`). Followed by a full prod rescore via `/api/admin/rescore-all` (84/84, bucket distribution unchanged vetted 49 / needs_review 35). Cohort A (20 rows with single-parent active specialty) reclassified via JOIN. Cohort B leadership titles (7 rows: CTO / chief technology officer / director of engineering / em / engineering manager / vp engineering / vp of engineering) intentionally left at `function='engineering'` (legacy inactive umbrella) — defaulting to software_engineering would destroy information in hard-tech context; sub-PR 3 LLM reclassifies per-candidate. Cohort B explicit IC titles (10 rows: senior software engineer, principal software engineer, swe, mobile engineer, etc.) → software_engineering. Orphan specialty cleanup mirrors 073 pattern (data engineer title row → function=`'data_engineering'`).
-- 075–078 — **reserved by the open Network Connections module (PR [#10](https://github.com/mktahr/vetted/pull/10), not yet merged).** Applied + verified on dev only; NOT on prod. 075 = 7 network tables; 076 = RLS-off; 077 = `crust_import_log.request_kind` CHECK += `network_enrich`; 078 = additive LLM-triage columns on `connections`. See SESSION_HANDOFF for status.
+- 075–078 — **Network Connections module phase-1 schema (PR [#10](https://github.com/mktahr/vetted/pull/10) — merged + prod-applied 2026-06-24).** 075 = 7 tables (organizations, employees, upload_batches, raw_connection_rows, connections, connection_owners, network_enriched_profiles); 076 = RLS-off follow-up; 077 = `crust_import_log.request_kind` CHECK += `network_enrich` (non-additive; dev-first then prod); 078 = additive LLM-triage columns on `connections` (`llm_triage_guess`/`_reason`/`_at`). Promoted to prod IN ORDER after the PR #10 merge deploy (code-then-DB lockstep). PR #10 also fixed the live Crust `/person/enrich` path (correct `professional_network_profile_urls` param + nested `matches[].person_data` parsing + empty-`matches` no-match guard) — the enrich path had shipped untested in the branch and was caught during dev testing. See "Network Connections Module" section. PR [#13](https://github.com/mktahr/vetted/pull/13) added the 2a connection detail drawer (code only — no migration).
 - 079 — drop orphan `specialty_dictionary.function_normalized` column (PR [#12](https://github.com/mktahr/vetted/pull/12) — **merged + prod-applied 2026-06-24**). The column was never created by any migration (001 made the column `parent_function`; 072 → `TEXT[]`); it survived only on prod as an out-of-band orphan holding stale pre-rebuild umbrella values (`engineering`/`operations`), causing dev/prod drift that threw `400` on dev (`loadSpecialtyDictionary()`). Paired with a code fix: `lib/normalize/specialty.ts::loadSpecialtyDictionary()` now reads `parent_function` and derives the scalar function via the single-parent rule (single → `parent_function[0]`; multi → `null`, deferred to sub-PR 3 LLM) — mirrors migration 073's reclassification logic. `DROP COLUMN IF EXISTS` → drops on prod, no-op on dev. Both DBs now converge on the migration-defined schema. Lockstep held: B-lite code deployed to prod first, then column dropped.
 
 The "Normalized tables" / "Dictionary tables" lists below describe the post-migration state. They name the most-used columns; consult the actual schema for exhaustive column lists.

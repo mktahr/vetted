@@ -136,6 +136,42 @@ Known tagger limitations from the round-3/round-4 eval. Not severe enough to blo
 
 ---
 
+## Network Connections (warm-intro module)
+
+PR 1 (the pipeline) shipped 2026-06-24 via PR [#10](https://github.com/mktahr/vetted/pull/10). These are the deferred follow-ups.
+
+### Per-connection review actions on the connections table
+- **Status:** PR 1 puts web-check / Keep-Drop only in the MAYBE review queue; the connections table shows buckets read-only.
+- **Trigger:** when curating real org connection sets (esp. as volume grows) makes queue-only actions painful.
+- **Scope:** ~0.5–1 day. Surface per-connection actions (web-check, Keep/Drop, re-bucket with full yes↔maybe↔no transitions) as row actions on [app/network/connections/page.tsx](app/network/connections/page.tsx) (or a row detail drawer), available for ANY bucket — not just MAYBE. Today a connection auto-bucketed YES/NO at upload (or already decided) can't be re-examined or sent back to review, and because the decision is stamped `title_bucket_source='manual'`, even re-upload won't reset it. New API: extend `POST /api/network/connections/[id]` to accept a `maybe` transition. Also covers the "no undo on Keep/Drop" gap (same root cause).
+
+### PR 2 — connection detail view + candidate-search integration
+- **Status:** PR 1 is the pipeline only (upload → classify → triage → enrich → store + basic admin table). **Update 2026-06-24: increment 2a (connection detail drawer) shipped via PR [#13](https://github.com/mktahr/vetted/pull/13)** — enriched data is now viewable. Remaining: (b) candidate-search integration, (c) warm-intro routing — both pending the 2b design decisions.
+- **Trigger:** next up after PR 1 merge — the module delivers little usable value without it.
+- **Scope:** multi-day, stacked branch on PR 1. ~~(a) Connection detail view/drawer~~ ✅ done (2a, PR #13). (b) wire connections into the existing candidate search via the **`people`-projection-with-pool-flag** model (project enriched connections into `people`/experiences/education with `in_general_pool=false` + connection↔person link; default search = general pool; org/employee-scoped "search connections" toggle; **promotion = flag flip, no re-pay**; enrichment ≠ promotion, pool entry is admin-gated). Reuses the existing 25-axis search machinery rather than a separate weaker search. Reverses 075's literal "never write to `people`" — justified by enrichment≠promotion. (c) warm-intro routing (which employee can make the intro). Admin cross-org view (every org + individual connected to a candidate) is supported by current schema (canonical_url + connection_owners) — can ship early. **Schema gap flagged:** the cached `/person/enrich` blob is current-snapshot-only (no work history / education), so full 25-axis search + full promotion need a richer (paid) enrichment tier — decision: snapshot-axes-now vs pay-for-rich.
+
+### Drawer: hide internal classification metadata from user-facing view
+- **Status:** the 2a connection drawer (PR #13) surfaces admin/debug-only fields (`bucket source: taxonomy`, `scope`) that aren't user-facing.
+- **Trigger:** when a recruiter-facing connections view exists (ties to the kebab/recruiter-view work).
+- **Scope:** gate classification-internals (`title_bucket_source`, `function_scope`) behind admin view; keep specialty + company-score user-facing. Small.
+
+### Drawer profile image: confirm source stability / caching
+- **Status:** the 2a drawer renders `basic_profile.profile_picture_permalink` from the Crust enrich blob. Unconfirmed whether that's a stable Crust-hosted S3 URL or a pass-through LinkedIn CDN URL that expires.
+- **Trigger:** before connections (or candidates) rely on profile images in a shipped recruiter-facing view.
+- **Scope:** verify URL host/stability; if LinkedIn-hosted/expiring, plan image refresh on re-enrich or cache to our own storage. Same question likely applies to candidate profile images.
+
+### Connection specialty accuracy limited by snapshot-only data
+- **Status:** `connections.specialty_normalized` is `resolveSpecialty()` best-effort on the terse snapshot current-title alone (e.g. "fullstack" guessed from title), with no work history to disambiguate.
+- **Trigger:** ties directly to the 2b data-tier decision (snapshot vs rich enrichment).
+- **Scope:** if rich enrichment (2b tier ii) lands, re-derive specialty from full history; until then treat connection specialty as low-confidence. Folds into 2b — no standalone work.
+
+### Connection enrichment summary completeness varies
+- **Status:** the enriched `basic_profile.summary` is rich for some profiles, sparse/empty for others — a Crust source-data limitation, not a bug.
+- **Trigger:** revisit if/when summaries are surfaced in a recruiter-facing or scoring context.
+- **Scope:** note only. Consider a fallback (headline + current role) when the summary is thin.
+
+---
+
 ## AI Features
 
 ### AI sourcing partner mode

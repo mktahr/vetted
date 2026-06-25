@@ -15,6 +15,17 @@
 | "What's next on the roadmap?" | Reads ROADMAP.md "current build" section |
 | "What did we last complete?" | Reads ROADMAP.md for most recently completed item |
 | "block" (exact, single word) | Re-outputs CC's immediately preceding response as ONE self-contained plain-text copyable code block (full substance, plain text, no new analysis), so you can one-click copy + forward it to a Claude chat, Codex, or a fresh session |
+| "pack codex" | OUTBOUND. Bundles CC's current work (task, approach, progress, files/branches, the specific thing to pressure-test) into ONE copyable plain-text block to paste into Codex, framed as Claude's work for review |
+| "review codex" | INBOUND. You paste Codex's work/critique; CC evaluates it against the actual codebase + CLAUDE.md rules, verifies claims against real files, and reports where Codex is right/wrong/missing context + a recommendation |
+
+## Codex cross-check commands (say these to Codex, not CC)
+
+| Phrase | What Codex does |
+|---|---|
+| "pack claude" | OUTBOUND from Codex. Bundles Codex's current work into a copyable plain-text block to paste into Claude Code, framed as Codex's work for review |
+| "review claude" | INBOUND to Codex. You paste Claude's work; Codex evaluates it against the actual codebase + CLAUDE.md rules and flags where Claude is right/wrong/missing context |
+
+Both agents' cross-check commands are defined in one place — see "Cross-Agent Pressure-Testing Commands" in CLAUDE.md (Codex inherits its commands from there via AGENTS.md). **If you type "pack claude" / "review claude" to CC by mistake, CC will tell you it's the wrong agent and remind you CC uses "pack codex" / "review codex".**
 
 ## Technical Commands (run yourself when needed)
 

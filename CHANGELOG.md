@@ -6,6 +6,37 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 
 ---
 
+## 2026-06-24 — Network Connections module landed (PR #10 pipeline + PR #13 detail drawer) + enrich fix + perms/docs
+
+**Shipped**
+- **PR [#10](https://github.com/mktahr/vetted/pull/10) merged + prod-applied** (squash `593ce3d`): Network Connections module phase 1 (the pipeline). Migrations 075–078 promoted to prod IN ORDER after the merge deploy (code-then-DB lockstep held; prod deploy confirmed Ready before any DB change). Prod smoke passed: `/network` 200, tables present (0 rows), existing data intact (people 84 / companies 1517), existing `/person/search` ingestion untouched.
+- **Enrich path fixed inside PR #10** (the headline feature was shipped untested — PR only smoke-tested the free estimate). Three bugs, all caught in dev browser-testing: (1) wrong Crust field `enrich_by_profile_url` → `professional_network_profile_urls` (400'd every call); (2) parsed a flat shape but Crust returns nested `matches[].person_data.basic_profile` (URL from `matched_on`); (3) empty `matches[]` (true no-match) was counted as "enriched" → added a guard. Verified live: real engineers enriched correctly.
+- **PR [#13](https://github.com/mktahr/vetted/pull/13) merged + prod-deployed** (squash `c299d528`): increment 2a — connection detail drawer. `GET /api/network/connections/[id]` + `ConnectionDrawer.tsx` + row-click wiring. Browser-verified. Code only, no migration. Fixes the PR 1 gap ("couldn't see enriched info").
+- **Pre-merge branch hygiene:** merged current `main` into the network branch first (carried PR #12 specialty fix + migration 079) — verified via merge-tree simulation that it reverts nothing. (Codex had flagged a "merge reverts PR #12" blocker; disproven — Codex read the two-dot tip diff, not the base...head merge diff.)
+- **Permissions fix:** added `Bash(*)` to `.claude/settings.local.json` allow-list (keeping the destructive-ops `ask` guards) so routine dev bash stops prompting. Cross-check commands (`pack codex`/`review codex` + Codex's `pack claude`/`review claude`) added to CLAUDE.md + COMMANDS.md; AGENTS.md (Codex pointer to CLAUDE.md) created by Codex.
+- **CLAUDE.md:** new "Network Connections Module" section; migration ledger 075–078 flipped to prod-applied; schema-state header bumped.
+- **Logged (BUGS/BACKLOG):** select-all grabs NO rows; classifier missing aero/space disciplines (propulsion/avionics/GNC); drawer ↑↓→should be ←→; review-actions queue-only; hide drawer internal metadata; profile-image source stability; snapshot-only specialty/summary limits; PR 2 detail+integration.
+
+**Decisions**
+- Adopted the dedicated-drawer-first path (2a) before any candidate-search integration; integration (2b) deferred pending design decisions.
+- Enrich fix belonged on the PR #10 branch (making the PR's own feature work — not scope creep).
+- Dev test org wiped after testing (the "fake" CSV handles resolved to real other people via Crust — junk enrichments cleaned).
+
+**Where we left off**
+- Network Connections PR 1 + 2a both live on prod. PR 2 (candidate-search integration + admin cross-org view + gated promotion) is next.
+- Schema read for PR 2 done: cross-org view supported today; the big gap is reusing the 25-axis search machinery — needs a `people`-projection-with-pool-flag model AND a data-tier decision (the cached `/person/enrich` blob is snapshot-only).
+
+**Open questions**
+- PR 2 data tier: snapshot-axes-now (cheap) vs paid rich-enrichment (full 25-axis + full promotion).
+- Accept the `people`-projection-with-pool-flag architecture (reverses 075's literal "never write to people," justified by enrichment ≠ promotion)?
+
+**Watch-outs**
+- **Don't run `npm run build` while `next dev` is live** — it corrupts `.next` ("Cannot find module './XXXX.js'"); fix is stop dev → clear `.next` → restart.
+- Dev-against-dev requires exporting the `_DEV` Supabase vars over the canonical names (script at scratchpad; no committed `npm run dev:dev` yet — candidate for a package.json script).
+- Session doc bundle (CLAUDE/COMMANDS/AGENTS + BUGS/BACKLOG) was carried across branch switches via `git stash` — fragile; committed at end-session.
+
+---
+
 ## 2026-06-24 — Recovery + specialty resolver dev/prod parity fix (PR #12 + migration 079) + protocol/tooling housekeeping
 
 **Shipped**
