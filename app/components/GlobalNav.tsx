@@ -17,6 +17,7 @@ const NAV_ITEMS: Array<{ href: string; label: string; matches: (path: string) =>
   { href: '/',                    label: 'Candidates', matches: (p) => p === '/' || p.startsWith('/profile') },
   { href: '/admin/companies',     label: 'Companies',  matches: (p) => p.startsWith('/admin/companies') },
   { href: '/lists',               label: 'Lists',      matches: (p) => p.startsWith('/lists') },
+  { href: '/network',             label: 'Network',    matches: (p) => p.startsWith('/network') },
 ]
 
 const IMPORT_ITEMS: Array<{ href: string; label: string }> = [

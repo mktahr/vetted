@@ -5,7 +5,7 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
 export interface CrustLogEntry {
-  request_kind: 'preview' | 'run' | 'autocomplete'
+  request_kind: 'preview' | 'run' | 'autocomplete' | 'network_enrich'
   filter_body: unknown
   results_count?: number | null
   credits_used?: number | null

@@ -9,7 +9,8 @@
     "lint": "next lint",
     "migrate:dev": "./scripts/apply-migration.sh dev",
     "migrate:prod": "./scripts/apply-migration.sh prod",
-    "migrate:replay-dev": "./scripts/replay-migrations-to-dev.sh"
+    "migrate:replay-dev": "./scripts/replay-migrations-to-dev.sh",
+    "test:network": "node --test --import ./scripts/ts-test-register.mjs lib/network/canonicalize-url.test.mjs lib/network/parse-csv.test.mjs lib/network/classify-title.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
