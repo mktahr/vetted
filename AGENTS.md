@@ -22,5 +22,10 @@ Follow the same session protocol, hard rules, and command vocabulary defined in
 - `review claude` - evaluate pasted Claude work against the actual codebase and
   the rules in `CLAUDE.md`, flagging what is right, wrong, or missing context.
 
+Wrong-agent guardrail: `pack codex` / `review codex` are Claude Code's commands,
+not Codex's. If Matt types either to Codex, that's the wrong agent — tell him and
+redirect to `pack claude` / `review claude`. (CLAUDE.md defines the symmetric
+guardrail for the Claude side.)
+
 When any instruction conflicts with `CLAUDE.md`, treat `CLAUDE.md` as the single
 source of truth.
