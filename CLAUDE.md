@@ -52,6 +52,7 @@ Matt uses plain-English phrases for common doc operations. Recognize these and a
 | "block" (exact, single word) | Re-output the immediately preceding response as ONE self-contained plain-text copyable code block, for one-click forwarding (to a Claude chat, Codex, or a fresh session). See "Block Command" section below. |
 | "pack codex" | OUTBOUND. Bundle the current state into a copyable review package to paste into Codex (what we're working on, approach/proposed solution, what's done, files/branches touched, the specific thing to pressure-test). Single self-contained plain-text code block, same format rules as `block`. Framed so Codex knows it's receiving Claude's work for review. See "Cross-Agent Pressure-Testing Commands" section below. |
 | "review codex" | INBOUND. Matt is pasting Codex's work/critique/proposal. Evaluate it against the ACTUAL codebase + CLAUDE.md rules — verify every claim against real files before agreeing. Report where Codex is right, wrong, or missing context, anything it got factually wrong about our code, and a recommendation. See "Cross-Agent Pressure-Testing Commands" section below. |
+| "codex loop" | BIDIRECTIONAL (orchestrated). Automated in-window `pack codex` + `review codex` — no copy-paste, no separate Codex window. Drive Codex via the `openai-codex` plugin (`codex-companion.mjs task`, read-only): state proposal → send → Codex pressure-tests per point → ingest/revise → ONE more round on contested points only (max 2 round-trips) → then EXECUTE (converged + implementation-only), or STOP for Matt (product/UX scope, or unresolved disagreement). On execute of a production-touching/user-visible change, fire ONE `/codex:adversarial-review` on the diff; dormant/trivial skips it. HARD BACKSTOP: Vercel-preview-before-merge still applies — never merge to prod unseen. See "Cross-Agent Pressure-Testing Commands" section below. |
 | "pack claude" / "review claude" (typed to Claude by mistake) | These are **Codex's** commands, not Claude's. If Matt types either to Claude, respond that he's got the wrong agent and remind him Claude uses "pack codex" / "review codex". Do NOT execute. See "Cross-Agent Pressure-Testing Commands" section below. |
 
 ---
@@ -98,6 +99,35 @@ Output as a **single self-contained plain-text code block**, same format rules a
 - A clear **recommendation** (adopt / adopt-with-changes / reject, and why).
 
 Default to skepticism: a confident critique that misreads our code is worse than no critique. Catch it.
+
+**`codex loop`** — BIDIRECTIONAL (orchestrated). The automated, in-window version of `pack codex` + `review codex`. When Matt types `codex loop`, you run the full round-trip **yourself, in this window, with NO copy-pasting and NO separate Codex window** — driving Codex through the installed `openai-codex` plugin. This command **composes** the two manual commands: it packages like `pack codex` (outbound framing) and evaluates Codex's reply like `review codex` (verify-against-real-files), but does the hand-off automatically and iterates.
+
+It is a **prose phrase, not a slash command** — `codex loop`, no `/`, no `codex:` namespace. It is NOT the plugin's `/codex:review` (that reviews the git diff only) and NOT the harness's `/loop` skill (recurring-interval runner). It sits alongside `pack codex` / `review codex` / `pack claude` / `review claude` / `block` and replaces none of them. On-demand only.
+
+**Transport mechanism (how the hand-off actually happens):**
+- Round 1 (proposal review — usually NO diff exists yet, so `/codex:review` and `/codex:adversarial-review` do NOT fit): from the main thread, run via Bash
+  `node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-companion.mjs" task "<pack-codex bundle>"` — **read-only (omit `--write`)** so Codex reviews but cannot edit the tree.
+- Round 2 (contested points only): `node "...codex-companion.mjs" task --resume-last "<contested points only>"` — `--resume-last` continues the SAME Codex thread so Codex keeps round-1 context.
+- Drive the script **directly from the main thread** (not via the `codex:codex-rescue` subagent — that's a write-defaulting one-shot forwarder forbidden from ingesting/iterating; the loop's orchestration must live in the main thread).
+- The loop always invokes `task` WITHOUT `--write`. If Codex's output ever shows it touched files during a review round, ABORT the loop and tell Matt.
+- Runs in the foreground (the response is needed to continue) — this is a kick-it-off-and-let-it-run command, not instant.
+
+**Behavior (the loop):**
+1. State your findings and your proposal (how you intend to design / build / fix).
+2. Package that proposal + the relevant files using the `pack codex` structure, and send it to Codex via the transport above.
+3. Codex reviews it against the real codebase + the proposal, pressure-tests it, and gives yay/nay per point in the `review codex` format (right / wrong / missing + recommendation).
+4. Ingest Codex's response, agree where you agree, revise.
+5. If you still disagree on anything, go back to Codex ONE more time with ONLY the contested points (`--resume-last`). **Max 2 full round-trips total: you→Codex→you→Codex→you.**
+6. After round 2, make the final call:
+   - **Converged, only implementation / architecture / codebase-constraint decisions remain** → EXECUTE, then report what you built.
+   - **A genuine PRODUCT / UX / feature-scope decision is in play** → STOP and present it to Matt to decide.
+   - **You and Codex still disagree after round 2** → STOP and show Matt both positions so he decides.
+
+**Exit step — post-build Codex pass (only when you EXECUTE):**
+- If the build is **production-touching or user-visible** (same line as the Vercel-preview rule), fire **ONE** `/codex:adversarial-review` pass on the **actual diff** (now that a diff exists), then report — including Codex's diff-review verdict.
+- If the change is **dormant / trivial** (not production-touching, not user-visible), **skip** the diff pass and just report.
+
+**HARD BACKSTOP (non-negotiable):** "Execute" still obeys the existing rules. Any production-touching or user-visible change must be verified on a **Vercel preview before merge to main** (see "Architecture-level changes ship to a feature branch first" + "Browser verification required for client-bundle changes" in Development Rules). **Never merge to prod unseen.** Auto-executing the build is fine; auto-merging unseen to prod is NOT. Dormant code = flagged N/A (and skips the diff pass per the exit step above).
 
 ### Codex cross-check commands (Codex executes these — documented here so both agents share one source of truth)
 

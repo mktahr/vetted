@@ -17,6 +17,7 @@
 | "block" (exact, single word) | Re-outputs CC's immediately preceding response as ONE self-contained plain-text copyable code block (full substance, plain text, no new analysis), so you can one-click copy + forward it to a Claude chat, Codex, or a fresh session |
 | "pack codex" | OUTBOUND. Bundles CC's current work (task, approach, progress, files/branches, the specific thing to pressure-test) into ONE copyable plain-text block to paste into Codex, framed as Claude's work for review |
 | "review codex" | INBOUND. You paste Codex's work/critique; CC evaluates it against the actual codebase + CLAUDE.md rules, verifies claims against real files, and reports where Codex is right/wrong/missing context + a recommendation |
+| "codex loop" | BIDIRECTIONAL (orchestrated). The hands-free version of pack codex + review codex — no copy-pasting, no separate Codex window. CC states its proposal, sends it to Codex via the openai-codex plugin (read-only), Codex pressure-tests per point (right/wrong/missing), CC ingests + revises, then does ONE more round on contested points only (max 2 round-trips). Then: EXECUTE if converged on implementation-only decisions; STOP and ask you if a product/UX/scope call or unresolved disagreement remains. On execute of a production-touching/user-visible change it fires ONE /codex:adversarial-review on the diff (dormant/trivial skips it). Vercel-preview-before-merge still applies — never merges to prod unseen. NOT /codex:review and NOT /loop. |
 
 ## Codex cross-check commands (say these to Codex, not CC)
 
