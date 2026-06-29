@@ -67,9 +67,13 @@ export async function POST(req: NextRequest) {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-  // Fetch target list
+  // Fetch target list. Restrict to the general pool (record_kind IN
+  // ('candidate','both')) — un-promoted network connections are excluded from
+  // bulk rescore; their scoring happens at normalize/promotion time. An explicit
+  // person_ids subset still wins (e.g. to rescore a specific promoted connection).
   let peopleQuery = supabase.from('people').select('person_id, full_name')
   if (personIds) peopleQuery = peopleQuery.in('person_id', personIds)
+  else peopleQuery = peopleQuery.in('record_kind', ['candidate', 'both'])
   const { data: people, error: pErr } = await peopleQuery
   if (pErr) return Response.json({ error: pErr.message }, { status: 500 })
 

@@ -81,8 +81,9 @@ export default function TriagePage() {
 
         // Candidate counts per current_company_id. Tiny today (<100 people);
         // pre-aggregate client-side. If this grows past ~10k people, switch
-        // to a Postgres view.
-        const peopleRows = await fetchAllRows('people', 'current_company_id')
+        // to a Postgres view. Pool only (record_kind IN ('candidate','both')) —
+        // un-promoted network connections must not inflate per-company counts.
+        const peopleRows = await fetchAllRows('people', 'current_company_id', undefined, q => q.in('record_kind', ['candidate', 'both']))
         const counts: Record<string, number> = {}
         for (const r of peopleRows as Array<{ current_company_id: string | null }>) {
           if (!r.current_company_id) continue

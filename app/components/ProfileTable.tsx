@@ -374,7 +374,10 @@ export default function ProfileTable() {
           { data: signalSearchableData },
           { data: fieldOfStudyData },
         ] = await Promise.all([
-          supabase.from('people').select('*, companies:current_company_id ( company_name )').order('created_at', { ascending: false }),
+          // Default candidate pool = record_kind IN ('candidate','both'). Un-promoted
+          // network connections (record_kind='network_connection') are projected into
+          // people for searchability but excluded here server-side (enrichment != promotion).
+          supabase.from('people').select('*, companies:current_company_id ( company_name )').in('record_kind', ['candidate', 'both']).order('created_at', { ascending: false }),
           supabase.from('candidate_bucket_assignments').select('person_id, candidate_bucket, flagged_reasons, assignment_reason, effective_at').order('effective_at', { ascending: false }),
           supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, seniority_normalized, start_date, end_date, is_current, employment_type_normalized, title_raw, description_raw'),
           supabase.from('person_education').select('person_id, school_id, school_name_raw, degree_raw, degree_level, field_of_study_raw, field_of_study_normalized, start_year, end_year'),
