@@ -3,7 +3,7 @@
 // TODO: Move Boolean search and main filter logic to a server-side API endpoint
 // when people count exceeds ~500. Client-side filtering becomes too slow above that threshold.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, fetchAllRows } from '@/lib/supabase'
 import { Person, SortField, SortDirection, CandidateBucket } from '../types'
@@ -39,7 +39,7 @@ function BucketChip({ bucket }: { bucket: CandidateBucket | null | undefined }) 
 }
 
 // V1: replaces the old FocusScope. Imported from FilterSidebar where the types live.
-import type { CategoryScope, ReviewStatusScope } from './FilterSidebar'
+import type { CategoryScope, ReviewStatusScope, ConnectionScope } from './FilterSidebar'
 
 interface ExperienceLite {
   company_id: string | null
@@ -214,6 +214,15 @@ export default function ProfileTable() {
   // per Matt's Option C decision (zero disruption to existing visibility).
   const [categoryScope, setCategoryScope] = useState<CategoryScope>('all')
   const [reviewStatusScope, setReviewStatusScope] = useState<ReviewStatusScope>('all')
+  // PR 2b — network-connection search scope.
+  const [connectionScope, setConnectionScope] = useState<ConnectionScope>('pool')
+  const [connOrgId, setConnOrgId] = useState<string | null>(null)
+  const [connEmployeeId, setConnEmployeeId] = useState<string | null>(null)
+  const [connOrgs, setConnOrgs] = useState<Array<{ org_id: string; name: string }>>([])
+  const [connEmployees, setConnEmployees] = useState<Array<{ employee_id: string; org_id: string; full_name: string }>>([])
+  // Monotonic fetch generation — guards against a slower scope-change fetch
+  // overwriting a newer one (stale-response race).
+  const fetchGen = useRef(0)
   const [compoundCompanyPills, setCompoundCompanyPills] = useState<ScopedPill[]>([])
   // Derived for backward compat
   const compoundCompany = compoundCompanyPills.map(p => p.value)
@@ -357,10 +366,58 @@ export default function ProfileTable() {
   // ─── Fetch ────────────────────────────────────────────────────────────
 
   useEffect(() => {
+    const myGen = ++fetchGen.current
+    // Scope change → show the loading state + clear stale selection so it can't
+    // point at a person no longer loaded (prior-scope rows shouldn't linger).
+    setLoading(true)
+    setSelectedPerson(null); setIsDrawerOpen(false); setSelectedIds(new Set())
     async function fetchAll() {
       try {
+        // ── Scope-aware people set (PR 2b) ──────────────────────────────────
+        // Default pool = record_kind IN (candidate,both). When connections are in
+        // scope, also pull org/employee-scoped network connections (resolved via
+        // connections.person_id) and merge by person_id. Two queries + merge — clearer
+        // than a PostgREST OR and naturally handles a person who is both.
+        // NOTE: this is a DISPLAY scope, not tenant isolation (RLS is off, single-admin).
+        let connPersonIds: string[] = []
+        if (connectionScope !== 'pool') {
+          let ownerConnIds: string[] | null = null
+          if (connEmployeeId) {
+            const { data: owners, error: ownersErr } = await supabase
+              .from('connection_owners').select('connection_id')
+              .eq('employee_id', connEmployeeId).eq('is_active', true)
+            // Surface failures — a silent empty set would make scoped connections
+            // vanish with no explanation (Codex finding 4).
+            if (ownersErr) throw new Error(`connection_owners: ${ownersErr.message}`)
+            ownerConnIds = (owners || []).map((o: any) => o.connection_id)
+          }
+          let cq = supabase.from('connections').select('person_id').eq('status', 'active').not('person_id', 'is', null)
+          if (connOrgId) cq = cq.eq('org_id', connOrgId)
+          // Employee scope intersects the org filter; empty owner set → match nothing.
+          if (ownerConnIds) cq = ownerConnIds.length ? cq.in('connection_id', ownerConnIds) : cq.in('connection_id', ['00000000-0000-0000-0000-000000000000'])
+          const { data: connRows, error: connErr } = await cq
+          if (connErr) throw new Error(`connections scope: ${connErr.message}`)
+          connPersonIds = Array.from(new Set((connRows || []).map((r: any) => r.person_id).filter(Boolean)))
+        }
+        const PEOPLE_SELECT = '*, companies:current_company_id ( company_name )'
+        const includePool = connectionScope !== 'connections_only'
+        const includeConn = connectionScope !== 'pool'
+        const poolP = includePool
+          ? supabase.from('people').select(PEOPLE_SELECT).in('record_kind', ['candidate', 'both']).order('created_at', { ascending: false })
+          : Promise.resolve({ data: [] as any[], error: null })
+        const connP = includeConn && connPersonIds.length
+          ? supabase.from('people').select(PEOPLE_SELECT).in('person_id', connPersonIds)
+          : Promise.resolve({ data: [] as any[], error: null })
+        const [poolRes, connRes] = await Promise.all([poolP, connP])
+        const peopleErr = (poolRes as any).error || (connRes as any).error
+        // Merge by person_id: pool order (created_at desc) first, then connections
+        // not already present. Dedupes a person who is both candidate and connection.
+        const byId = new Map<string, any>()
+        for (const r of ((poolRes as any).data || [])) byId.set(r.person_id, r)
+        for (const r of ((connRes as any).data || [])) if (!byId.has(r.person_id)) byId.set(r.person_id, r)
+        const peopleData = Array.from(byId.values())
+
         const [
-          { data: peopleData, error: peopleErr },
           { data: bucketData },
           { data: expData },
           { data: eduData },
@@ -374,7 +431,6 @@ export default function ProfileTable() {
           { data: signalSearchableData },
           { data: fieldOfStudyData },
         ] = await Promise.all([
-          supabase.from('people').select('*, companies:current_company_id ( company_name )').order('created_at', { ascending: false }),
           supabase.from('candidate_bucket_assignments').select('person_id, candidate_bucket, flagged_reasons, assignment_reason, effective_at').order('effective_at', { ascending: false }),
           supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, seniority_normalized, start_date, end_date, is_current, employment_type_normalized, title_raw, description_raw'),
           supabase.from('person_education').select('person_id, school_id, school_name_raw, degree_raw, degree_level, field_of_study_raw, field_of_study_normalized, start_year, end_year'),
@@ -389,6 +445,7 @@ export default function ProfileTable() {
           supabase.from('field_of_study_dictionary').select('field_of_study_normalized, domain_group'),
         ])
 
+        if (myGen !== fetchGen.current) return  // a newer scope-change fetch superseded this one
         if (peopleErr) { setError(`Database error: ${peopleErr.message}`); return }
 
         const latestBucket: Record<string, { bucket: CandidateBucket; reason: string | null; flagged_reasons: string[] }> = {}
@@ -618,13 +675,35 @@ export default function ProfileTable() {
         setAllSpecialtyOptions(dict.map(d => ({ value: d.specialty_normalized, label: d.specialty_normalized.replace(/_/g, ' '), sublabel: (Array.isArray(d.parent_function) ? d.parent_function.join(', ') : (d.parent_function || '')).replace(/_/g, ' ') })))
 
         setError(null)
-      } catch (err: any) { setError(err?.message || 'Failed to fetch.') }
-      finally { setLoading(false) }
+      } catch (err: any) { if (myGen === fetchGen.current) setError(err?.message || 'Failed to fetch.') }
+      finally { if (myGen === fetchGen.current) setLoading(false) }
     }
     fetchAll()
+  }, [connectionScope, connOrgId, connEmployeeId])
+
+  // PR 2b — load orgs + employees once for the connection-scope pickers.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const [{ data: orgs }, { data: emps }] = await Promise.all([
+        supabase.from('organizations').select('org_id, name').order('name'),
+        supabase.from('employees').select('employee_id, org_id, full_name').order('full_name'),
+      ])
+      if (cancelled) return
+      setConnOrgs((orgs as any) || [])
+      setConnEmployees((emps as any) || [])
+    })()
+    return () => { cancelled = true }
   }, [])
 
   // Contextual specialty options (filtered by selected roles)
+  // PR 2b — connection-scope picker options. Employees filter to the selected org.
+  const connOrgOptions = useMemo(() => connOrgs.map(o => ({ value: o.org_id, label: o.name })), [connOrgs])
+  const connEmployeeOptions = useMemo(
+    () => connEmployees.filter(e => !connOrgId || e.org_id === connOrgId).map(e => ({ value: e.employee_id, label: e.full_name })),
+    [connEmployees, connOrgId],
+  )
+
   const filteredSpecialtyOptions = useMemo(() => {
     if (roleSel.length === 0) return allSpecialtyOptions
     const allowedSpecs = new Set<string>()
@@ -1057,6 +1136,9 @@ export default function ProfileTable() {
         locationSel={locationSel} setLocationSel={setLocationSel} locationOptions={locationOptions}
         categoryScope={categoryScope} setCategoryScope={setCategoryScope}
         reviewStatusScope={reviewStatusScope} setReviewStatusScope={setReviewStatusScope}
+        connectionScope={connectionScope} setConnectionScope={setConnectionScope}
+        connOrgOptions={connOrgOptions} connOrgId={connOrgId} setConnOrgId={(v) => { setConnOrgId(v); setConnEmployeeId(null) }}
+        connEmployeeOptions={connEmployeeOptions} connEmployeeId={connEmployeeId} setConnEmployeeId={setConnEmployeeId}
         compoundCompany={compoundCompany} setCompoundCompany={setCompoundCompany}
         compoundCompanyPills={compoundCompanyPills} setCompoundCompanyPills={setCompoundCompanyPills}
         compoundSpecialties={compoundSpecialties} setCompoundSpecialties={setCompoundSpecialties}

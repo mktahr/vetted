@@ -3,6 +3,12 @@
 > Source: OpenAPI YAML spec from docs.crustdata.com (verified 2026-05-01).
 > **The request body is SHARED with `/person/professional_network/enrich/live`** — see `09-person-live-enrich.md` for the live variant.
 
+> ⚠️ **VERIFIED ACCOUNT BEHAVIOR (live probe 2026-06-28) — overrides the spec below in two places:**
+> 1. **Omitting `fields` does NOT return all field groups on our account.** The default response is `basic_profile` + `social_handles` + `crustdata_person_id` ONLY — no experience / education / skills. To get the rich blob you MUST pass `fields` explicitly. Confirmed-working base-cost set: `['basic_profile','experience','education','skills']`. The OpenAPI "if omitted, all available fields are returned" claim is FALSE for our account.
+> 2. **Our account is DENIED `certifications` and `honors`** — including either in `fields` returns `403 permission_error` and fails the ENTIRE call (not a partial result). Keep them out of the request.
+> 3. Employer company name is under `name` (the embedded `company_name` field comes back `undefined`). Employer objects also carry `seniority_level`, `function_category`, `years_at_company`, `crustdata_company_id`, `company_professional_network_profile_url` — richer than the `/person/search` employer shape.
+> 4. **This endpoint IS now called by application code** — `lib/network/enrich.ts` (network-connections enrichment) via `fetchPersonEnrich` in `lib/crust/api.ts`. (The "not currently called" note further down is obsolete.)
+
 ## Cost (3 sources — discrepancy)
 
 | Source | Number |
@@ -212,7 +218,7 @@ Sample response:
 
 ## Notes for our codebase
 
-- Not currently called by any application code.
+- **Called by `lib/network/enrich.ts`** (network-connections module) via `fetchPersonEnrich` in `lib/crust/api.ts`, which now passes `fields: ['basic_profile','experience','education','skills']` (see the verified-account-behavior banner at the top). Was previously uncalled.
 - For company-side enrichment (the active V1 build target), see `03-company-enrich.md`.
 - **`preview: true` (FREE)** is interesting: could be used for "does this person exist in Crust's cache?" pre-checks before deciding whether to spend credits on full enrich.
 - The `PersonEmploymentDetails` shape is richer than what `/person/search` returns per experience — note the new fields (company_headcount_latest, company_industries, company_hq_location, etc.) for any future ingest-mapper work.

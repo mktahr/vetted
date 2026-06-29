@@ -6,6 +6,37 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 
 ---
 
+## 2026-06-29 — Network Connections PR 2b: enriched-connection search integration (PR #14, open)
+
+**Shipped** (branch `network-connections-pr2b`, PR [#14](https://github.com/mktahr/vetted/pull/14) — open at session end, migrations on prod, code pending merge)
+- **Enrich data-tier resolved by live probe:** `/person/enrich` returns rich data (experience/education/skills) ONLY when `fields=[basic_profile,experience,education,skills]` is explicitly requested — the docs' "all fields if omitted" is false for our account; `certifications`/`honors` are denied (403 the whole call). Fixed `lib/network/enrich.ts` (request the allowlist; parse `experience.employment_details`; employer `name` not `company_name`; primary-current via `is_default`). `CREDITS_PER_ENRICH` 1→3 (conservative; test key); post-run credits labeled "(estimated)". `docs/crust/07` banner added.
+- **Migrations 080 (`people.record_kind`) + 081 (`connections.person_id`)** applied dev+prod, inert until code uses them. `record_kind` is a KIND column (candidate|network_connection|both, default candidate — fail-safe), not a boolean (Codex's catch). Pool membership derives from it.
+- **Server-side pool filters** (`record_kind IN (candidate,both)`) on ProfileTable fetch, rescore-all, company-triage counts. No-op on prod (0 connections) — preview-verified the candidate list is unchanged.
+- **Cache freshness** (`STALE_AFTER_DAYS=90`; only fresh real-blob rows reused; hollow `global_pool_reuse` rows no longer block re-enrichment).
+- **`mapEnrichToCanonical`** (`lib/ingest/mappers/crust-enrich.ts`) — preserves description/employment_type/field_of_study/skills the search mapper drops. 24/24 unit tests.
+- **`writeCanonicalProfile`** (`lib/ingest/write-canonical.ts`) — extracted ingest steps 2–9 into a transport-agnostic core; `/api/ingest` is now a thin wrapper. Candidate ingest proven **semantically byte-equivalent** via OLD-vs-NEW differential on the real HTTP route (empty snapshot + response diffs, incl. existing-person re-ingest + identical company baseline).
+- **`projectConnection`** (`lib/network/project-connection.ts` + `app/api/network/project/route.ts`) — resolve-existing-person-first → merge (link + guarded candidate→both, no rewrite) else `network_insert`; `record_kind` transition applied LAST; bounded 23505 recovery; `person_id` set only after the person op. Dev-verified: new connection → `network_connection`, full exp/edu/skills via the real resolver, scored, **excluded from default pool**; merge → `both`, no duplicate.
+- **Search-within-connections** — FilterSidebar `[General pool | Pool+connections | Connections-only]` + org/employee picker (optional/gated; search-builder untouched); ProfileTable reactive scoped loader (two-query merge by person_id, `fetchGen` stale-guard, scope-change resets). Browser-verified on the Vercel preview.
+- **Codex pre-merge review fixes** (commit `3b1332d`): a second Codex pass flagged 2 HIGH + 3 lower. Fixed all: (1) `projectConnection` now enforces `STALE_AFTER_DAYS` on the enrich blob — refuses a stale blob for a new-person projection (`stale_enrichment_blob`); (2) merge now LINKS before promoting, both error-checked, `promoteCandidateToBoth` returns boolean, already-linked path re-runs the promote to repair a partial state (no `both` with no link, no false `merged`); (3) project route `scope='connections'` filters IDs by `org_id`; (4) ProfileTable surfaces connection-scope query errors instead of silently empty; (5) `setLoading(true)` on scope change. Re-verified on dev: fresh→projected, merge→both (link-first), stale→refused.
+
+**Decisions**
+- Data tier (ii) and the `people`-projection-with-`record_kind` architecture both adopted (reverses 075's literal "never write connections to people," justified by enrichment ≠ promotion).
+- KIND column over boolean (Codex); default `candidate` fail-safe; ingest does NOT write `record_kind` (relies on the default) to avoid demoting a promoted `both` on re-ingest.
+- Projection scoring: score connections at projection time (bucket written) but keep them out of pool via `record_kind` — the promotion bar needs a score.
+- Two Codex pressure-tests folded in across the build (identity/upsert contract, resolve-first ordering, record_kind-transition-last, bounded 23505, identical-baseline + re-ingest regression).
+
+**Where we left off**
+- PR #14 open + MERGEABLE, Vercel check passing. Migrations 080/081 on prod (inert). Code pending the merge gate.
+
+**Open questions** — none blocking.
+
+**Watch-outs**
+- Merging the code deploys the `record_kind` filters + projection to prod; safe (filters no-op against 0 connections; projection only on explicit `/api/network/project`). Lockstep is DB-then-code here and fine.
+- 081's SQL/DB comment still says "1:1" — cosmetic; the real cardinality is N:1 (many connections → one person).
+- Deferred: warm-path chip; scope dependent fetches to visible IDs (perf); candidate-ingest→`both` symmetric promote; cross-URL-format people dedup.
+
+---
+
 ## 2026-06-24 — Network Connections module landed (PR #10 pipeline + PR #13 detail drawer) + enrich fix + perms/docs
 
 **Shipped**

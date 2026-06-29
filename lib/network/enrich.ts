@@ -54,6 +54,14 @@ interface TargetConn { connection_id: string; canonical_url: string; enriched: b
 
 const CRUST_BATCH = 25;
 
+// Field groups requested from /person/enrich. Omitting `fields` returns ONLY
+// basic_profile on our account (verified live 2026-06-28) — useless for the
+// five-axis projection. This explicit set unlocks full work history + education
+// + skills at base cost. `certifications`/`honors` are DENIED to our account
+// (requesting them 403s the entire call); `contact` is a paid add-on we don't
+// need for search. Keep this list to the confirmed-permitted, base-cost groups.
+const ENRICH_FIELDS = ['basic_profile', 'experience', 'education', 'skills'];
+
 function canonicalToProfileUrl(canonical: string): string {
   // canonical = "linkedin.com/in/<slug>" → full www URL Crust expects.
   return `https://www.${canonical}`;
@@ -161,7 +169,7 @@ export async function enrichConnections(p: EnrichParams): Promise<EnrichSummary>
   for (let i = 0; i < needs.length; i += CRUST_BATCH) {
     const batch = needs.slice(i, i + CRUST_BATCH);
     const urls = batch.map(canonicalToProfileUrl);
-    const resp = await fetchPersonEnrich(apiKey!, urls);
+    const resp = await fetchPersonEnrich(apiKey!, urls, { fields: ENRICH_FIELDS });
     if (resp.error) {
       failed += batch.length;
       await writeCrustLog(supabase, { request_kind: 'network_enrich', filter_body: { enrich_by_profile_url: urls }, results_count: 0, credits_used: 0, error_message: resp.error });
@@ -182,7 +190,14 @@ export async function enrichConnections(p: EnrichParams): Promise<EnrichSummary>
       const personData = (item as any)?.matches?.[0]?.person_data ?? null;
       if (!personData) continue;
       const basic = (personData as any)?.basic_profile ?? personData;
-      const employment = (personData as any)?.employment_details?.current?.[0] ?? null;
+      // Enrich shape nests employment under `experience.` (matches the working
+      // crust-v2 search mapper); the employer's company name is `name`, not
+      // `company_name` (verified live 2026-06-28 — company_name comes back undefined).
+      // Pick the primary current role the same way the search mapper does:
+      // prefer is_default===true, fall back to the first current entry. Avoids
+      // snapshotting a secondary current role (overlapping advisory/internship).
+      const currentRoles: any[] = (personData as any)?.experience?.employment_details?.current ?? [];
+      const employment = currentRoles.find((e) => e?.is_default === true) ?? currentRoles[0] ?? null;
       enrichedCanonicals.push(canon);
       cacheRows.push({
         canonical_url: canon,
@@ -191,8 +206,8 @@ export async function enrichConnections(p: EnrichParams): Promise<EnrichSummary>
         display_name: (basic as any)?.name ?? (basic as any)?.full_name ?? null,
         headline: (basic as any)?.headline ?? null,
         location_name: (basic as any)?.location?.raw ?? (basic as any)?.location ?? null,
-        current_company: employment?.company_name ?? (basic as any)?.current_company?.name ?? null,
-        current_title: (basic as any)?.current_title ?? employment?.title ?? null,
+        current_company: employment?.name ?? employment?.company_name ?? (basic as any)?.current_company?.name ?? null,
+        current_title: employment?.title ?? (basic as any)?.current_title ?? null,
         last_enriched_at: now,
       });
     }

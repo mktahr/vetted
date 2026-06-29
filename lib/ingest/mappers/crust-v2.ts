@@ -22,7 +22,10 @@ export type { IngestPayload }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function dateOnly(iso: string | null | undefined): string | undefined {
+// NOTE: dateOnly, monthsBetween, graduationDateFromEducation, and computeYearsSpan
+// are exported and SHARED with crust-enrich.ts so the grad-anchor + years-of-
+// experience business logic stays identical between the search and enrich paths.
+export function dateOnly(iso: string | null | undefined): string | undefined {
   if (!iso || typeof iso !== 'string') return undefined
   const m = iso.match(/^(\d{4}-\d{2}-\d{2})/)
   return m ? m[1] : undefined
@@ -34,7 +37,7 @@ function yearOf(iso: string | null | undefined): number | undefined {
   return m ? parseInt(m[1], 10) : undefined
 }
 
-function monthsBetween(startISO: string | undefined, endISO: string | undefined): number | undefined {
+export function monthsBetween(startISO: string | undefined, endISO: string | undefined): number | undefined {
   if (!startISO) return undefined
   const start = new Date(startISO)
   if (isNaN(start.getTime())) return undefined
@@ -112,7 +115,7 @@ function mapSchool(s: PersonSearchSchool): RawEducation {
   }
 }
 
-function graduationDateFromEducation(
+export function graduationDateFromEducation(
   education: Array<{ end_year?: number | null | undefined; degree?: string }>,
 ): Date | null {
   const isHighSchoolOrLower = (e: { degree?: string }) => {
@@ -135,7 +138,7 @@ function graduationDateFromEducation(
   return earliest === null ? null : new Date(earliest, 5, 1)
 }
 
-function computeYearsSpan(
+export function computeYearsSpan(
   experiences: RawExperience[],
   graduationDate: Date | null,
 ): number | null {

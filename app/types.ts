@@ -63,6 +63,9 @@ export interface Person {
   current_function_normalized: string | null
   years_experience_estimate: number | null
   career_stage_assigned: string | null
+  // PR 2b: candidate | network_connection | both. Drives pool membership +
+  // the network/warm-path indicator. Default 'candidate' for existing rows.
+  record_kind: 'candidate' | 'network_connection' | 'both' | null
   // Derived signals (populated by scripts/compute-derived-fields.mjs)
   career_progression: 'rising' | 'flat' | 'declining' | 'insufficient_data' | null
   highest_seniority_reached: string | null

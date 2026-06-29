@@ -20,6 +20,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { canonicalizeLinkedInUrl } from './canonicalize-url';
 import { fetchAllServer } from './client';
+import { STALE_AFTER_DAYS } from './config';
 
 export interface EnrichmentCacheHit {
   canonical_url: string;
@@ -35,8 +36,18 @@ export interface GlobalPoolHit {
 }
 
 /**
- * Look up which of the given canonical URLs already exist in
+ * Look up which of the given canonical URLs are reusable cache hits in
  * network_enriched_profiles. Returns a Map keyed by canonical_url.
+ *
+ * A row only counts as a VALID reuse hit if all three hold:
+ *   - source = 'crust_person_enrich'  — a real paid enrichment. `global_pool_reuse`
+ *     rows are markers with enriched_profile=NULL (no searchable blob); they must
+ *     NOT block re-enrichment, so they're excluded here and fall through to the
+ *     pool path (which re-confirms the people-pool match).
+ *   - enriched_profile IS NOT NULL    — belt-and-suspenders against any hollow row.
+ *   - last_enriched_at within STALE_AFTER_DAYS — older hits are stale; excluding
+ *     them here routes them to re-enrichment so we don't serve years-old data.
+ * All three are applied server-side so we never pull the (large) blob just to test it.
  */
 export async function loadEnrichmentCache(
   supabase: SupabaseClient,
@@ -46,6 +57,8 @@ export async function loadEnrichmentCache(
   const unique = Array.from(new Set(canonicalUrls.filter(Boolean)));
   if (unique.length === 0) return map;
 
+  const cutoffIso = new Date(Date.now() - STALE_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
   // Chunk the IN list to keep URLs well under PostgREST limits.
   const CHUNK = 500;
   for (let i = 0; i < unique.length; i += CHUNK) {
@@ -53,7 +66,10 @@ export async function loadEnrichmentCache(
     const { data, error } = await supabase
       .from('network_enriched_profiles')
       .select('canonical_url, enriched_profile_id, source, last_enriched_at')
-      .in('canonical_url', slice);
+      .in('canonical_url', slice)
+      .eq('source', 'crust_person_enrich')
+      .not('enriched_profile', 'is', null)
+      .gte('last_enriched_at', cutoffIso);
     if (error) throw new Error(`loadEnrichmentCache: ${error.message}`);
     for (const row of data ?? []) {
       map.set((row as EnrichmentCacheHit).canonical_url, row as EnrichmentCacheHit);

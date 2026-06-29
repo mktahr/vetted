@@ -18,12 +18,15 @@ export async function fetchAllRows<T = Record<string, unknown>>(
   table: string,
   select: string,
   orderBy?: string,
+  modify?: (q: any) => any,   // optional query modifier (e.g. server-side filters)
 ): Promise<T[]> {
   const PAGE_SIZE = 1000
   let all: T[] = []
   let page = 0
   while (true) {
-    let query = supabase.from(table).select(select).range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+    let query = supabase.from(table).select(select)
+    if (modify) query = modify(query)
+    query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
     if (orderBy) query = query.order(orderBy)
     const { data, error } = await query
     if (error) throw new Error(`fetchAllRows(${table}): ${error.message}`)
