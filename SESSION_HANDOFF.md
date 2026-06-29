@@ -1,40 +1,35 @@
-# Session Handoff — 2026-06-24 (end of session)
+# Session Handoff — 2026-06-29 (end of session)
 
 ## Where we left off
 
-**Network Connections module is live on prod — PR 1 (pipeline) + PR 2 increment 2a (detail drawer) both shipped.**
-- **PR [#10](https://github.com/mktahr/vetted/pull/10)** (squash `593ce3d`) — phase-1 pipeline. Migrations **075–078 promoted to prod in order** after the merge deploy (code-then-DB lockstep). Prod smoke passed; existing data + `/person/search` ingestion untouched. The live Crust `/person/enrich` path was fixed inside this PR (correct `professional_network_profile_urls` param + nested `matches[].person_data` parsing + empty-`matches` no-match guard) — it had shipped untested in-branch, caught during dev testing.
-- **PR [#13](https://github.com/mktahr/vetted/pull/13)** (squash `c299d528`) — increment 2a: connection detail drawer (`ConnectionDrawer.tsx` + `GET /api/network/connections/[id]` + row-click). Code only, no migration. Prod-deployed + browser-verified.
-
-Earlier same day: specialty resolver dev/prod parity (PR #12 + migration 079) — also done. Prod DB + prod code in lockstep; both DBs on the migration-defined schema.
+**Network Connections PR 2b (enriched-connection search integration) is MERGED + live on prod.**
+- **PR [#14](https://github.com/mktahr/vetted/pull/14)** squash-merged to `main` (`0f8aad2`); branch `network-connections-pr2b` deleted (local + remote). Prod deploy of `main` confirmed **green**.
+- **Migrations 080 (`people.record_kind`) + 081 (`connections.person_id`)** applied to dev + prod earlier in the session (inert until this code shipped). Prod post-deploy smoke: 84 people, all `record_kind='candidate'`, 0 connections, both columns present — the new pool filter is a verified no-op, candidate pool intact.
+- PR 2b delivers: enriched connections projected into `people` (`record_kind='network_connection'`) so the existing 25-axis search machinery is reused, **excluded from the default pool** (enrichment ≠ promotion); search-within-connections scope (org/employee). Built increment-by-increment (probe → migrations → filters → freshness → enrich mapper → `writeCanonicalProfile` extraction → `projectConnection` → search UI), each verified before the next; two Codex pressure-tests folded in (architecture) plus a third pre-merge review (5 findings, all fixed: freshness enforcement, merge link-before-promote + checked errors + repair-on-rerun, scope org_id filter, surfaced query errors, loading state).
 
 ## What's in flight
 
-**Nothing open.** PR #10 and #13 are merged + deployed; branches deleted. No open PRs. End-session docs committed (CLAUDE.md Network Connections section + ledger; CHANGELOG; ROADMAP; BUGS/BACKLOG log entries; cross-check-command docs; AGENTS.md).
+**Nothing open.** No open PRs. `main` clean + synced. Working tree clean after this handoff commit.
 
-**Local repo:** `~/DEV/vetted` (off iCloud), on `main`, synced with origin, clean after the end-session commit.
+**Local repo:** `~/DEV/vetted`, on `main`.
 
 ## Next thing to do
 
-**Network Connections PR 2** — candidate-search integration + admin cross-org view + gated promotion.
+**Network Connections — GATED PROMOTION** (the next PR 2 sibling). Admin flips a connection from `network_connection` → the general pool, **gated on: company is vetted in our system AND the candidate passes our normal bar/checkpoints**. Mechanically: flip `record_kind` `network_connection`→`both` + ensure the link (no re-pay — the row is already projected and scored). The promotion bar **reads the score written at projection time** (connections are scored when projected, per the locked Q2 decision). Forms: manual add / add-anyone / future auto-rule (scored company → eligible).
 
-**FIRST STEP (before any building): a Claude+Codex architecture pressure-test.** Run `pack codex` to hand Codex the two open design decisions and get an adversarial read, then `review codex` on the response:
-1. **Data tier:** snapshot-axes-now (cheap; cached `/person/enrich` is `basic_profile` only — no history/education) **vs** paid rich-enrichment (full 25-axis search + full promotion).
-2. **Architecture:** the **`people`-projection-with-pool-flag** model — normalize enriched connections into `people`/experiences/education with `in_general_pool=false` + a connection↔person link, so the existing 25-axis search machinery is reused; default search = general pool; org/employee-scoped "search connections" toggle; **promotion = flag flip, no re-pay** (enrichment ≠ promotion). This **reverses 075's literal "never write to people"** rule — needs explicit buy-in.
-
-Then build in this order (recommended): **2b-3** admin cross-org view (no schema change — supported today via `canonical_url` + `connection_owners`) → **2b-0** migration (pool flag + connection↔person link + promotion/eligibility marker, dev-first) → **2b-1** normalizer (cached blob → people, no re-pay) → **2b-2** search reuse + org-scope filter → **2b-4** gated promotion → **2b-5** rich-enrichment upgrade (only if data tier ii). Full scope in BACKLOG "Network Connections".
+After gated promotion: **ADMIN CROSS-ORG VIEW** — for a given candidate, show every org + individual connected to them (schema already supports via `canonical_url` + `connection_owners`; no migration needed).
 
 ## Open questions
 
-- Data tier (i snapshot vs ii rich) and architecture buy-in (people-projection-with-pool-flag) — to be resolved by the Codex pressure-test + Matt's call before building 2b.
-- Increment order above is a recommendation, not locked.
+- **Define "passes our normal bar"** for promotion — "company is vetted" is concrete; the candidate-bar / checkpoint criteria need spec'ing (bucket threshold? manual review? both?). Decide before building the auto-rule.
 
 ## Watch-outs
 
-- **Never run `npm run build` while `next dev` is live** — corrupts `.next` ("Cannot find module './XXXX.js'"). Fix: stop dev → `mv`/clear `.next` → restart.
-- **Dev-against-dev run** needs the `_DEV` Supabase vars exported over the canonical names — script lives in the session scratchpad; **no committed `npm run dev:dev` yet** (candidate for a package.json script).
-- **Enrich blob is snapshot-only** (`basic_profile`, no history/education) — caps PR 2's searchable axes until a richer (paid) enrichment tier; drives the data-tier decision.
-- **Cross-check commands are live:** `pack codex` / `review codex` (Claude) ↔ `pack claude` / `review claude` (Codex). If `pack claude`/`review claude` is typed to Claude, redirect to the Codex variants.
+- **Prod network module is empty (0 connections, and orgs likely 0).** To exercise projection end-to-end on prod you must first upload a `Connections.csv` (an org + employee) → classify → enrich → then `POST /api/network/project`. The full projection + merge + stale-refusal flow was verified on **dev** this session, not prod.
+- **Committed automated tests for `projectConnection` do NOT exist** — it transitively imports `@/lib` via `write-canonical`, which the node type-strip test loader can't resolve, so a pure unit test can't import it. Coverage is the manual dev-integration harness (in the session scratchpad). A committed seeded-dev integration harness (fresh / stale / merge / link-failure / promotion-failure / rerun-retry / cross-org / owner-query-failure) is a logged follow-up.
+- **081's SQL + live DB `COMMENT` say "1:1"** — cosmetic only; the real cardinality is **N:1** (many connections, across orgs, may link one person).
+- **Deferred (logged), pick up as needed:** warm-path indicator chip on connection rows; scope ProfileTable's dependent fetches (bucket/exp/edu/signals) to visible IDs (perf — currently whole-table, pre-existing); candidate-ingest→`both` symmetric promote (lattice completeness — only matters once a projected connection is later candidate-ingested); cross-URL-format `people` dedup (pre-existing — candidate ingest uses exact `linkedin_url` match).
 - **Free-tier Supabase idle-pause (~7 days)** — on NXDOMAIN / "Failed to fetch", restore both projects from the Supabase dashboard first.
-- **DB-code lockstep** remains the rule for any prod taxonomy/scoring/migration change: deploy code to prod first, then promote the DB.
 - **Stale `score-all.mjs`** — use `POST /api/admin/rescore-all` for any rescore.
+- **Dev-against-dev run** needs the `_DEV` Supabase vars exported over the canonical names before `next dev` (no committed `npm run dev:dev` script yet).
+- **`migrate:prod` is a deliberate `ask` guard** in `.claude/settings.local.json` — it prompts on every prod DB migration by design (not a misconfig).
