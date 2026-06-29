@@ -132,7 +132,7 @@ function ConnectionsInner() {
     setEnriching(false)
     if (run.error) return setMsg(`Enrich error: ${run.error}`)
     const rs = run.summary
-    setMsg(`Enriched: ${rs.enrichedNew} new + ${rs.reusedCrossSilo + rs.reusedGlobalPool} reused. ${rs.failed ?? 0} failed. ~${rs.creditsSpent} credits.`)
+    setMsg(`Enriched: ${rs.enrichedNew} new + ${rs.reusedCrossSilo + rs.reusedGlobalPool} reused. ${rs.failed ?? 0} failed. ~${rs.creditsSpent} credits (estimated).`)
     setSelected(new Set())
     load()
   }

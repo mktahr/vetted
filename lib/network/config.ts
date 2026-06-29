@@ -2,10 +2,15 @@
 //
 // Tunable constants for the network module.
 
-// Estimated Crust credits per single-profile /person/enrich call. Placeholder
-// used for the pre-spend cost estimate; reconcile against real billing in the
-// enrichment commit (Crust person-enrich add-on cost model, docs/crust/07).
-export const CREDITS_PER_ENRICH = 1;
+// Estimated Crust credits per single-profile /person/enrich call. Used ONLY for
+// the pre-spend admin estimate and the post-run "estimated credits" readout — it
+// is NOT observed billing (we compute from attempted records, and we don't yet
+// know whether Crust bills unmatched requests). Set conservatively to 3 (Matt's
+// contract CSV rate in docs/crust/07) rather than the public-docs "1 base" so the
+// estimate never UNDER-reports before a bulk enrich. We're on a test key with no
+// signed contract; set the real rate once the contract lands. See docs/crust/05
+// for the unresolved 1-vs-3 discrepancy.
+export const CREDITS_PER_ENRICH = 3;
 
 // LinkedIn CSV import guardrails (mirrors the Crust import caps' intent).
 export const HARD_ROW_CAP = 50000;

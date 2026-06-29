@@ -158,6 +158,14 @@ export async function fetchPersonSearch(
 // module. Reuses the same auth + 429-retry plumbing as /person/search.
 // Crust supports up to 25 profile URLs per call. preview:true returns basic
 // fields for 0 credits (cache probe).
+//
+// IMPORTANT (verified live 2026-06-28): omitting `fields` does NOT return all
+// field groups — our account's default response is basic_profile + social_handles
+// ONLY (no experience / education / skills). To get the rich blob the caller MUST
+// pass `fields` explicitly. Our account is DENIED `certifications` + `honors`
+// (requesting them 403s the whole call), so the safe base-cost rich set is
+// ['basic_profile','experience','education','skills']. `fields` is a string[] —
+// Crust's schema types it as an array.
 
 export interface PersonEnrichResponse {
   profiles: unknown[]           // intentionally any — handed to the v2 mapper
@@ -168,7 +176,7 @@ export interface PersonEnrichResponse {
 export async function fetchPersonEnrich(
   apiKey: string,
   profileUrls: string[],
-  opts?: { fields?: string; preview?: boolean },
+  opts?: { fields?: string[]; preview?: boolean },
 ): Promise<PersonEnrichResponse> {
   const body: Record<string, unknown> = { professional_network_profile_urls: profileUrls.slice(0, 25) }
   if (opts?.fields) body.fields = opts.fields
