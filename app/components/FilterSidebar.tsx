@@ -20,6 +20,13 @@ const IconChevron = ({ collapsed }: { collapsed: boolean }) => <svg viewBox="0 0
 export type CategoryScope = 'all' | 'hardware' | 'non_hardware'
 export type ReviewStatusScope = 'all' | 'vetted' | 'unreviewed' | 'excluded'
 
+// PR 2b: network-connection search scope. Default 'pool' = general candidate pool
+// only (record_kind IN candidate,both). The other two surface org/employee-scoped
+// network connections (record_kind IN network_connection,both). These props are
+// OPTIONAL — only the main candidate table passes them; search-builder omits them
+// and the control doesn't render.
+export type ConnectionScope = 'pool' | 'pool_connections' | 'connections_only'
+
 export interface FilterSidebarProps {
   roleSel: string[];             setRoleSel: (v: string[]) => void
   rolePills: Array<{ value: string; scope: 'ever' | 'currently' | 'previously' }>
@@ -43,6 +50,10 @@ export interface FilterSidebarProps {
   locationOptions: MultiSelectOption[]
   categoryScope: CategoryScope;          setCategoryScope: (v: CategoryScope) => void
   reviewStatusScope: ReviewStatusScope;  setReviewStatusScope: (v: ReviewStatusScope) => void
+  // Optional — network-connection search scope (main candidate table only).
+  connectionScope?: ConnectionScope;     setConnectionScope?: (v: ConnectionScope) => void
+  connOrgOptions?: MultiSelectOption[];  connOrgId?: string | null;      setConnOrgId?: (v: string | null) => void
+  connEmployeeOptions?: MultiSelectOption[]; connEmployeeId?: string | null; setConnEmployeeId?: (v: string | null) => void
   compoundCompany: string[];     setCompoundCompany: (v: string[]) => void
   compoundCompanyPills: Array<{ value: string; scope: 'ever' | 'currently' | 'previously' }>
   setCompoundCompanyPills: (v: Array<{ value: string; scope: 'ever' | 'currently' | 'previously' }>) => void
@@ -186,6 +197,36 @@ export default function FilterSidebar(props: FilterSidebarProps) {
             <option value="excluded">Excluded only</option>
           </select>
         </div>
+
+        {/* PR 2b — network-connection scope (only when the host page wires it in) */}
+        {props.setConnectionScope && (
+          <div style={{ marginBottom: 16 }}>
+            <Lbl>Connections</Lbl>
+            <select value={props.connectionScope ?? 'pool'} onChange={e => props.setConnectionScope!(e.target.value as ConnectionScope)} style={selectStyle}>
+              <option value="pool">General pool only</option>
+              <option value="pool_connections">Pool + connections</option>
+              <option value="connections_only">Connections only</option>
+            </select>
+            {props.connectionScope && props.connectionScope !== 'pool' && (
+              <>
+                <div style={{ marginTop: 8 }}>
+                  <Lbl>Organization</Lbl>
+                  <select value={props.connOrgId ?? ''} onChange={e => props.setConnOrgId!(e.target.value || null)} style={selectStyle}>
+                    <option value="">All organizations</option>
+                    {(props.connOrgOptions ?? []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <Lbl>Employee</Lbl>
+                  <select value={props.connEmployeeId ?? ''} onChange={e => props.setConnEmployeeId!(e.target.value || null)} style={selectStyle}>
+                    <option value="">All employees</option>
+                    {(props.connEmployeeOptions ?? []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* WHO THEY ARE */}
         <SH icon={<IconUser />} label="Who they are" />
