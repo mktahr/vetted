@@ -14,3 +14,10 @@ export const CREDITS_PER_ENRICH = 3;
 
 // LinkedIn CSV import guardrails (mirrors the Crust import caps' intent).
 export const HARD_ROW_CAP = 50000;
+
+// Enrichment cache freshness. A cached enrichment is reused (free) only if it
+// was enriched within this many days; older hits are treated as stale and
+// re-enriched so we don't serve years-old work history. Profiles change slowly,
+// so this is deliberately generous to protect spend — tune against real billing.
+// (Matt's "enriched 2 weeks ago -> don't re-pay" sits comfortably inside this.)
+export const STALE_AFTER_DAYS = 90;
