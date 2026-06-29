@@ -6,21 +6,20 @@ Active work tracking. For deferred features see [BACKLOG.md](BACKLOG.md). For sm
 
 ## Current Build
 
-**Sourcing pipeline — phase 1** (branch: `sourcing-pipeline-phase1`)
+**Network Connections PR 2 — gated promotion** (branch: `network-connections-gated-promotion`)
 
-A separate sourcing layer for discovering high-signal early-career talent via public roster pages (FSAE teams, fellowships, hackathon winners) or CSV import. Members get LinkedIn URL discovery + full profile enrichment, then surface in admin UI for review before being ingested into the candidate DB.
+Closing out the Network Connections PR 2 arc: admin promotes projected connections into the general candidate pool (flag flip `record_kind` network_connection→both, no re-pay/re-enrich/re-score) behind a vetted-company auto-rule + manual override, plus the admin cross-org view. See "Recently Completed" once merged.
 
-- **Phase 1 (in flight):** schema only — `sourced_prospects` table + supporting structures. Migrations `056_sourcing_pipeline_schema.sql` + `057_sourcing_pipeline_rls_off.sql` staged locally; tables sit dormant until phase 2+ wires them up.
-- Untracked supporting work in the branch: `app/api/admin/import/`, `scripts/seed-test-profiles.mjs`, `docs/pdl/`.
+> **Note (2026-06-29):** the prior "Current Build" line here pointed at **Sourcing pipeline — phase 1** on branch `sourcing-pipeline-phase1`. That branch no longer exists (not local, not on origin, never merged); its migrations 056/057 were renumbered to 065/066 (already on main). The line was stale and has been replaced. The sourcing pipeline as a *feature* still lives in "Next Up" below — only the dead-branch pointer was removed.
 
 ---
 
 ## Next Up (sequenced toward Aug 28 launch)
 
-**Active thread → Network Connections PR 2.** PR 1 pipeline + 2a drawer shipped 2026-06-24 ([#10](https://github.com/mktahr/vetted/pull/10), [#13](https://github.com/mktahr/vetted/pull/13)); **PR 2b (enriched-connection search integration) built + verified, PR [#14](https://github.com/mktahr/vetted/pull/14)** (open at last session end — migrations 080/081 on prod, code pending merge). Remaining PR 2 siblings, sequenced:
-1. **Gated promotion** (NEXT) — admin flips `network_connection`→pool, gated on **vetted-company + bar** (flag flip `network_connection`→`both`, no re-pay). The promotion bar reads the score written at projection.
-2. **Admin cross-org view** — for a given candidate, every org + individual connected to them (schema supports via `canonical_url` + `connection_owners`; no migration).
-Full scope in BACKLOG "Network Connections".
+**Active thread → Network Connections PR 2.** PR 1 pipeline + 2a drawer shipped 2026-06-24 ([#10](https://github.com/mktahr/vetted/pull/10), [#13](https://github.com/mktahr/vetted/pull/13)); PR 2b (enriched-connection search integration) merged 2026-06-29 ([#14](https://github.com/mktahr/vetted/pull/14)). PR 2 siblings:
+1. **Gated promotion** — ✅ built on `network-connections-gated-promotion` (migration 082; vetted-company auto-rule + manual override; safe demote guard). In PR / preview verification.
+2. **Admin cross-org view** — ✅ built in the same branch (`/api/network/cross-org` + `CrossOrgNetwork` on the profile page; no migration).
+Deferred (logged in BACKLOG "Network Connections"): any additional candidate "bar" beyond the vetted-company check; candidate-ingest→`both` symmetric promote edge.
 
 1. **Sourcing pipeline phases 2+** — wire up roster scrapers, LinkedIn URL discovery, profile enrichment, admin review UI. Phase 2+ scope TBD after phase 1 lands.
 2. **Five-axis candidate taxonomy rebuild**

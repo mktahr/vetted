@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Person, Experience, Education, BucketAssignment, CandidateBucket, FlaggedReason, ClearanceLevel, ScoreComponent } from '../../types'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from '../../components/CompanyLogo'
+import CrossOrgNetwork from '../../components/CrossOrgNetwork'
 import { filterEducationForDisplay } from '@/lib/education/display-filter'
 import { formatSeniorityLabel } from '@/lib/normalize/seniority'
 
@@ -424,6 +425,9 @@ export default function ProfilePage() {
             <p className="font-medium text-sm">{person.career_stage_assigned?.replace(/_/g, ' ') || 'N/A'}</p>
           </div>
         </div>
+
+        {/* Cross-org network — who can warm-intro this candidate (renders nothing if none) */}
+        <CrossOrgNetwork personId={params.id as string} />
 
         {/* Education — right after overview, before summary */}
         {education.length > 0 && (() => {
