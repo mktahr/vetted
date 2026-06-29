@@ -29,20 +29,27 @@ import { canonicalizeLinkedInUrl } from './canonicalize-url';
 import { loadGlobalPoolMatches } from './dedupe';
 import { mapEnrichToCanonical } from '../ingest/mappers/crust-enrich';
 import { writeCanonicalProfile } from '../ingest/write-canonical';
+import { STALE_AFTER_DAYS } from './config';
 
 export type ProjectAction = 'already_linked' | 'merged' | 'merged_on_race' | 'projected';
 
 export type ProjectResult =
   | { ok: true; connectionId: string; personId: string; action: ProjectAction; bucket?: string | null; totalScore?: number | null }
-  | { ok: false; connectionId: string; reason: 'connection_not_found' | 'bad_url' | 'no_enrichment_blob' | 'map_failed' | 'person_write_failed' | 'link_failed' };
+  | { ok: false; connectionId: string; reason: 'connection_not_found' | 'bad_url' | 'no_enrichment_blob' | 'stale_enrichment_blob' | 'map_failed' | 'person_write_failed' | 'link_failed' | 'promotion_failed' };
 
-/** Guarded promote candidate→both. No-op if record_kind is already 'both' or 'network_connection'. */
-async function promoteCandidateToBoth(supabase: SupabaseClient, personId: string): Promise<void> {
-  await supabase
+/**
+ * Guarded promote candidate→both. No-op (still succeeds) if record_kind is already
+ * 'both' or 'network_connection'. Returns false on DB error so the caller can
+ * propagate it — a silent failure here would leave record_kind out of sync with
+ * the connection link.
+ */
+async function promoteCandidateToBoth(supabase: SupabaseClient, personId: string): Promise<boolean> {
+  const { error } = await supabase
     .from('people')
     .update({ record_kind: 'both', updated_at: new Date().toISOString() })
     .eq('person_id', personId)
     .eq('record_kind', 'candidate');
+  return !error;
 }
 
 /** Set connections.person_id. Returns false on failure so the caller can report it. */
@@ -67,6 +74,12 @@ export async function projectConnection(supabase: SupabaseClient, connectionId: 
     .maybeSingle();
   if (!conn) return { ok: false, connectionId, reason: 'connection_not_found' };
   if (conn.person_id) {
+    // Already linked. Re-run the guarded promote to REPAIR a partial state (a prior
+    // run that linked but failed before promoting candidate→both). No-op for a
+    // network_connection person. This is the retry path Codex flagged.
+    if (!(await promoteCandidateToBoth(supabase, conn.person_id))) {
+      return { ok: false, connectionId, reason: 'promotion_failed' };
+    }
     return { ok: true, connectionId, personId: conn.person_id, action: 'already_linked' };
   }
 
@@ -77,24 +90,35 @@ export async function projectConnection(supabase: SupabaseClient, connectionId: 
   const poolMatches = await loadGlobalPoolMatches(supabase, [canon]);
   const existing = poolMatches.get(canon);
 
-  // 3. MERGE onto an existing person — link + guarded promote, no rewrite/rescore.
+  // 3. MERGE onto an existing person — LINK FIRST, then guarded promote, both
+  //    error-checked. No rewrite/rescore (don't overwrite a candidate's own data).
+  //    Link-first so a promote failure leaves a linked row that a rerun repairs,
+  //    never a 'both' row with no connection (Codex blocker 2).
   if (existing) {
-    await promoteCandidateToBoth(supabase, existing.person_id);
     if (!(await linkConnection(supabase, connectionId, existing.person_id))) {
       return { ok: false, connectionId, reason: 'link_failed' };
+    }
+    if (!(await promoteCandidateToBoth(supabase, existing.person_id))) {
+      return { ok: false, connectionId, reason: 'promotion_failed' };
     }
     return { ok: true, connectionId, personId: existing.person_id, action: 'merged' };
   }
 
-  // 4. New person — require a fresh rich enrich blob (global_pool_reuse rows have
-  //    enriched_profile=NULL and would have matched the pool above anyway).
+  // 4. New person — require a FRESH rich enrich blob. global_pool_reuse rows have
+  //    enriched_profile=NULL (and would have matched the pool above anyway). A blob
+  //    older than STALE_AFTER_DAYS is refused — re-enrich first (mirrors the dedup
+  //    freshness policy; a direct merge above needs no blob).
   const { data: blobRow } = await supabase
     .from('network_enriched_profiles')
-    .select('enriched_profile, source')
+    .select('enriched_profile, source, last_enriched_at')
     .eq('canonical_url', canon)
     .maybeSingle();
   const personData = blobRow?.source === 'crust_person_enrich' ? blobRow.enriched_profile : null;
   if (!personData) return { ok: false, connectionId, reason: 'no_enrichment_blob' };
+  const ageMs = blobRow?.last_enriched_at ? Date.now() - new Date(blobRow.last_enriched_at).getTime() : Infinity;
+  if (ageMs > STALE_AFTER_DAYS * 24 * 60 * 60 * 1000) {
+    return { ok: false, connectionId, reason: 'stale_enrichment_blob' };
+  }
 
   const fullUrl = `https://www.${canon}`; // canon = "linkedin.com/in/<slug>"
   const payload = mapEnrichToCanonical(personData, fullUrl);
@@ -108,9 +132,11 @@ export async function projectConnection(supabase: SupabaseClient, connectionId: 
   // Race: a concurrent candidate ingest created this person mid-flight. Merge
   // instead of overwriting their candidate data.
   if (result.ok === false && result.reason === 'person_exists') {
-    await promoteCandidateToBoth(supabase, result.personId);
     if (!(await linkConnection(supabase, connectionId, result.personId))) {
       return { ok: false, connectionId, reason: 'link_failed' };
+    }
+    if (!(await promoteCandidateToBoth(supabase, result.personId))) {
+      return { ok: false, connectionId, reason: 'promotion_failed' };
     }
     return { ok: true, connectionId, personId: result.personId, action: 'merged_on_race' };
   }

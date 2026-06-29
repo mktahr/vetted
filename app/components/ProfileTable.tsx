@@ -367,7 +367,9 @@ export default function ProfileTable() {
 
   useEffect(() => {
     const myGen = ++fetchGen.current
-    // Scope change → clear stale selection so it can't point at a person no longer loaded.
+    // Scope change → show the loading state + clear stale selection so it can't
+    // point at a person no longer loaded (prior-scope rows shouldn't linger).
+    setLoading(true)
     setSelectedPerson(null); setIsDrawerOpen(false); setSelectedIds(new Set())
     async function fetchAll() {
       try {
@@ -381,16 +383,20 @@ export default function ProfileTable() {
         if (connectionScope !== 'pool') {
           let ownerConnIds: string[] | null = null
           if (connEmployeeId) {
-            const { data: owners } = await supabase
+            const { data: owners, error: ownersErr } = await supabase
               .from('connection_owners').select('connection_id')
               .eq('employee_id', connEmployeeId).eq('is_active', true)
+            // Surface failures — a silent empty set would make scoped connections
+            // vanish with no explanation (Codex finding 4).
+            if (ownersErr) throw new Error(`connection_owners: ${ownersErr.message}`)
             ownerConnIds = (owners || []).map((o: any) => o.connection_id)
           }
           let cq = supabase.from('connections').select('person_id').eq('status', 'active').not('person_id', 'is', null)
           if (connOrgId) cq = cq.eq('org_id', connOrgId)
           // Employee scope intersects the org filter; empty owner set → match nothing.
           if (ownerConnIds) cq = ownerConnIds.length ? cq.in('connection_id', ownerConnIds) : cq.in('connection_id', ['00000000-0000-0000-0000-000000000000'])
-          const { data: connRows } = await cq
+          const { data: connRows, error: connErr } = await cq
+          if (connErr) throw new Error(`connections scope: ${connErr.message}`)
           connPersonIds = Array.from(new Set((connRows || []).map((r: any) => r.person_id).filter(Boolean)))
         }
         const PEOPLE_SELECT = '*, companies:current_company_id ( company_name )'

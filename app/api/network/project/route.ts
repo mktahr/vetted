@@ -38,7 +38,16 @@ export async function POST(req: Request) {
     // Resolve the target connection ids.
     let ids: string[];
     if (scope === 'connections') {
-      ids = body.connection_ids as string[];
+      // Scope the explicit IDs to org_id — a request must not project another org's
+      // connections while claiming this org (API-contract/operator-safety guard).
+      const requested = body.connection_ids as string[];
+      const { data, error } = await supabase
+        .from('connections')
+        .select('connection_id')
+        .eq('org_id', orgId)
+        .in('connection_id', requested);
+      if (error) return NextResponse.json({ error: error.message }, { status: 502 });
+      ids = (data ?? []).map((r) => (r as any).connection_id);
     } else {
       let restrictIds: string[] | null = null;
       if (scope === 'employee') {
