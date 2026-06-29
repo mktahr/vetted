@@ -33,7 +33,10 @@
 
 export const ENRICH_MAPPER_VERSION = '1.0.0'
 
-import type { IngestPayload, CanonicalProfile, RawExperience, RawEducation } from './crust'
+// Ingest types come from write-canonical.ts (the single source of truth, and what
+// writeCanonicalProfile consumes) — type-only import, so no runtime coupling to that
+// module's @/lib dependencies. Helpers are shared from the crust-v2 search mapper.
+import type { IngestPayload, CanonicalProfile, RawExperience, RawEducation } from '../write-canonical'
 import {
   dateOnly,
   monthsBetween,

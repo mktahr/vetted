@@ -118,15 +118,28 @@ export interface RawEducation {
   grade?: string;
 }
 
+// Person-write identity mode (step 6b).
+//   'candidate'       — today's exact upsert(onConflict:'linkedin_url') with NO
+//                       record_kind written. Byte-identical to the pre-6b path.
+//   'network_insert'  — INSERT a NEW person with record_kind='network_connection'.
+//                       Used by the network-projection path ONLY when the caller has
+//                       already confirmed no existing person matches (resolve-first).
+//                       On a UNIQUE(linkedin_url) race (a concurrent candidate ingest
+//                       won), returns { ok:false, reason:'person_exists', personId }
+//                       so the caller can fall back to link+promote instead of
+//                       overwriting the candidate's data.
+export type PersonIdentity = { mode: 'candidate' } | { mode: 'network_insert' };
+
 export interface WriteCanonicalOpts {
   // Run derived-fields + scoreCandidate + writeBucketAssignment (step 8). Default true.
-  // (Step 6b will add an `identity` option for the network-projection path; the
-  // candidate path keeps today's exact upsert-by-linkedin_url with no record_kind.)
   score?: boolean;
+  // Person-write identity. Default { mode: 'candidate' } — unchanged ingest path.
+  identity?: PersonIdentity;
 }
 
 export type WriteCanonicalResult =
   | { ok: false; reason: 'person_upsert_failed' }
+  | { ok: false; reason: 'person_exists'; personId: string }
   | {
       ok: true;
       personId: string;
@@ -348,6 +361,7 @@ export async function writeCanonicalProfile(
   opts: WriteCanonicalOpts = {},
 ): Promise<WriteCanonicalResult> {
   const { score = true } = opts;
+  const identity = opts.identity ?? { mode: 'candidate' };
   const canonical = payload.canonical_json || {};
   const source = payload.source ?? null;
   const ingestTimestamp = new Date().toISOString();
@@ -384,18 +398,46 @@ export async function writeCanonicalProfile(
     updated_at: ingestTimestamp,
   };
 
-  const { data: person, error: personError } = await supabase
-    .from('people')
-    .upsert(personRecord, { onConflict: 'linkedin_url' })
-    .select('person_id')
-    .single();
+  let personId: string;
+  if (identity.mode === 'network_insert') {
+    // NEW network-connection person. INSERT (not upsert) with record_kind set —
+    // the caller (projectConnection) has already confirmed no existing match.
+    const { data: inserted, error: insertError } = await supabase
+      .from('people')
+      .insert({ ...personRecord, record_kind: 'network_connection' })
+      .select('person_id')
+      .single();
 
-  if (personError || !person) {
-    console.error('[ingest] Person upsert failed:', personError);
-    return { ok: false, reason: 'person_upsert_failed' };
+    if (insertError || !inserted) {
+      // UNIQUE(linkedin_url) race: a concurrent candidate ingest created this person
+      // mid-flight. Re-resolve and signal the caller to link+promote rather than
+      // overwrite the candidate's data.
+      if ((insertError as { code?: string } | null)?.code === '23505') {
+        const { data: existing } = await supabase
+          .from('people')
+          .select('person_id')
+          .eq('linkedin_url', payload.linkedin_url)
+          .maybeSingle();
+        if (existing) return { ok: false, reason: 'person_exists', personId: existing.person_id };
+      }
+      console.error('[network-project] Person insert failed:', insertError);
+      return { ok: false, reason: 'person_upsert_failed' };
+    }
+    personId = inserted.person_id;
+  } else {
+    // Candidate path — unchanged from 6a: upsert by linkedin_url, no record_kind.
+    const { data: person, error: personError } = await supabase
+      .from('people')
+      .upsert(personRecord, { onConflict: 'linkedin_url' })
+      .select('person_id')
+      .single();
+
+    if (personError || !person) {
+      console.error('[ingest] Person upsert failed:', personError);
+      return { ok: false, reason: 'person_upsert_failed' };
+    }
+    personId = person.person_id;
   }
-
-  const personId = person.person_id;
 
   // ── Step 5: Clear old experiences + education before re-inserting ────────
   const { error: delExpError } = await supabase
