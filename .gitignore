@@ -47,3 +47,9 @@ scripts/_audit-companies.mjs
 scripts/_check-all-tables.mjs
 scripts/diagnose-*.mjs
 scripts/simulate-*.mjs
+
+# Eval harness data artifacts (real candidate text — reproducible via scripts/eval/freeze-fixture.ts)
+reference/eval/*.json
+reference/eval/*.csv
+reference/eval/*.log
+reference/eval/*.txt
