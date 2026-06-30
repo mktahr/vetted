@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useState, useEffect } from 'react'
 import { Person, CandidateBucket } from '../types'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from './CompanyLogo'
 import { formatSeniorityLabel } from '@/lib/normalize/seniority'
@@ -300,6 +301,9 @@ export default function ProfileDrawer({ person, experiences, education, signals,
             )}
           </div>
 
+          {/* Network — who can warm-intro this candidate (renders nothing if none) */}
+          <DrawerNetwork personId={person.person_id} />
+
           {/* Signals */}
           {signals.length > 0 && (() => {
             const MAX_DISPLAY = 10
@@ -412,6 +416,38 @@ export default function ProfileDrawer({ person, experiences, education, signals,
         </div>
       </div>
     </>
+  )
+}
+
+// Cross-org network — who (org + individual) can warm-intro this candidate.
+// Self-fetches so the parent (ProfileTable) doesn't need to thread the data;
+// renders nothing when the candidate has no connections (the common case).
+interface CrossOrg { total_orgs: number; total_employees: number; orgs: Array<{ org_id: string; org_name: string; employees: string[] }> }
+function DrawerNetwork({ personId }: { personId: string }) {
+  const [data, setData] = useState<CrossOrg | null>(null)
+  useEffect(() => {
+    let alive = true
+    fetch(`/api/network/cross-org?person_id=${personId}`)
+      .then(r => r.json())
+      .then(d => { if (alive && d && !d.error) setData(d) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [personId])
+  if (!data || data.total_orgs === 0) return null
+  return (
+    <div style={{ marginTop: 24 }}>
+      <div style={{ fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)', color: 'var(--fg-tertiary)', textTransform: 'uppercase', letterSpacing: 'var(--tr-eyebrow)', marginBottom: 12, fontFamily: 'var(--font-sans)' }}>
+        Network · {data.total_employees} {data.total_employees === 1 ? 'person' : 'people'} · {data.total_orgs} {data.total_orgs === 1 ? 'org' : 'orgs'}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {data.orgs.map(o => (
+          <div key={o.org_id}>
+            <div style={{ fontSize: 'var(--fs-13)', color: 'var(--fg-primary)', fontWeight: 'var(--fw-medium)' }}>{o.org_name}</div>
+            <div style={{ fontSize: 'var(--fs-12)', color: 'var(--fg-secondary)' }}>{o.employees.join(', ')}</div>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 

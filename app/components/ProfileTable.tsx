@@ -218,6 +218,9 @@ export default function ProfileTable() {
   const [connectionScope, setConnectionScope] = useState<ConnectionScope>('pool')
   const [connOrgId, setConnOrgId] = useState<string | null>(null)
   const [connEmployeeId, setConnEmployeeId] = useState<string | null>(null)
+  // PR 2 — person_ids that have ≥1 active network connection, for the list-row
+  // "in a network" chain indicator (scope-independent, loaded once).
+  const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set())
   const [connOrgs, setConnOrgs] = useState<Array<{ org_id: string; name: string }>>([])
   const [connEmployees, setConnEmployees] = useState<Array<{ employee_id: string; org_id: string; full_name: string }>>([])
   // Monotonic fetch generation — guards against a slower scope-change fetch
@@ -680,6 +683,19 @@ export default function ProfileTable() {
     }
     fetchAll()
   }, [connectionScope, connOrgId, connEmployeeId])
+
+  // PR 2 — load the set of person_ids that have an active network connection, so
+  // the list can show a subtle "in a network" indicator on those rows. Loaded
+  // once; scope-independent. RLS is off on connections (single-admin), so the
+  // browser client can read it directly (same pattern as the scope fetch above).
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      const { data } = await supabase.from('connections').select('person_id').eq('status', 'active').not('person_id', 'is', null)
+      if (alive && data) setConnectedIds(new Set(data.map((r: any) => r.person_id).filter(Boolean)))
+    })()
+    return () => { alive = false }
+  }, [])
 
   // PR 2b — load orgs + employees once for the connection-scope pickers.
   useEffect(() => {
@@ -1287,17 +1303,24 @@ export default function ProfileTable() {
                       </td>
                       {/* Name */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
-                        <button onClick={e => { e.stopPropagation(); router.push(`/profile/${person.person_id}`) }}
-                          style={{ color: isSelected ? 'var(--accent)' : 'var(--fg-primary)', fontWeight: 'var(--fw-medium)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-13)', textDecoration: 'none' }}
-                          onMouseEnter={e => {
-                            e.currentTarget.style.textDecoration = 'underline'
-                            e.currentTarget.style.textDecorationColor = 'var(--fg-secondary)'
-                            e.currentTarget.style.textUnderlineOffset = '3px'
-                            e.currentTarget.style.textDecorationThickness = '1px'
-                          }}
-                          onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none' }}>
-                          {person.full_name || 'N/A'}
-                        </button>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <button onClick={e => { e.stopPropagation(); router.push(`/profile/${person.person_id}`) }}
+                            style={{ color: isSelected ? 'var(--accent)' : 'var(--fg-primary)', fontWeight: 'var(--fw-medium)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-13)', textDecoration: 'none' }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.textDecoration = 'underline'
+                              e.currentTarget.style.textDecorationColor = 'var(--fg-secondary)'
+                              e.currentTarget.style.textUnderlineOffset = '3px'
+                              e.currentTarget.style.textDecorationThickness = '1px'
+                            }}
+                            onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none' }}>
+                            {person.full_name || 'N/A'}
+                          </button>
+                          {connectedIds.has(person.person_id) && (
+                            <span title="In a network — has a warm-intro connection" style={{ display: 'inline-flex', color: 'var(--fg-tertiary)', opacity: 0.55, flexShrink: 0 }}>
+                              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                            </span>
+                          )}
+                        </span>
                       </td>
                       {/* Bucket */}
                       <td style={{ padding: '8px 8px', whiteSpace: 'nowrap' }}>
