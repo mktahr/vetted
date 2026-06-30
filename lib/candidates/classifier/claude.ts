@@ -10,23 +10,34 @@ import type { ClaudeCallResult, ClassifierRawOutput } from './types';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 
-/** Pull the first balanced JSON object out of the model text. */
+function asOutput(parsed: any): ClassifierRawOutput | null {
+  return parsed && Array.isArray(parsed.assignments) ? (parsed as ClassifierRawOutput) : null;
+}
+
+/** Extract the first balanced JSON object, STRING-AWARE so braces inside quoted
+ *  values (e.g. a "{" in title_normalized_inferred) don't break the matcher. */
 function extractJson(text: string): ClassifierRawOutput | null {
+  // Fast path: whole response (optionally a ```json fence) is the object.
+  const fenced = text.replace(/```(?:json)?/gi, '').trim();
+  try { const p = asOutput(JSON.parse(fenced)); if (p) return p; } catch { /* fall through */ }
+
   const start = text.indexOf('{');
   if (start === -1) return null;
-  let depth = 0;
+  let depth = 0, inStr = false, esc = false;
   for (let i = start; i < text.length; i++) {
-    if (text[i] === '{') depth++;
-    else if (text[i] === '}') {
+    const c = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '{') depth++;
+    else if (c === '}') {
       depth--;
       if (depth === 0) {
-        try {
-          const parsed = JSON.parse(text.slice(start, i + 1));
-          if (parsed && Array.isArray(parsed.assignments)) return parsed as ClassifierRawOutput;
-          return null;
-        } catch {
-          return null;
-        }
+        try { return asOutput(JSON.parse(text.slice(start, i + 1))); } catch { return null; }
       }
     }
   }

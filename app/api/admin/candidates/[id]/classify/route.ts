@@ -17,9 +17,11 @@ export const maxDuration = 120;
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const ingestSecret = process.env.INGEST_SECRET;
   const secret = req.headers.get('x-ingest-secret');
-  const origin = req.headers.get('origin') || '';
+  // Same-origin = the Origin header's host EXACTLY equals the request host (not a
+  // substring match, which an attacker-controlled origin could satisfy — Codex).
   const host = req.headers.get('host') || '';
-  const sameOrigin = !!origin && origin.includes(host);
+  let sameOrigin = false;
+  try { sameOrigin = !!host && new URL(req.headers.get('origin') || '').host === host; } catch { sameOrigin = false; }
   if (!sameOrigin && !(ingestSecret && secret === ingestSecret)) {
     return Response.json({ error: 'unauthorized' }, { status: 401 });
   }
