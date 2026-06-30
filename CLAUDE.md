@@ -1333,6 +1333,21 @@ This applies all migrations in order against an empty dev DB. **Known caveats** 
 
 **What lives on dev today:** schema only. No reference data (no schools, companies, signal_dictionary entries, etc.). Per Rule 6 (Data State During Build Phase), sparse dev data is expected and not a blocker. If a future migration needs reference data to validate, seed it on dev manually via the existing seed scripts (which currently target prod by default — env-awareness of seed scripts is a follow-up).
 
+### Decision filter — when to STOP and ask Matt vs decide yourself
+
+Too many "option A vs B?" stops on reversible implementation details slow Matt down. Before surfacing ANY decision to him, run it through two axes:
+
+- **AXIS 1 — Reversibility.** *Cheap-to-reverse:* build order, which-sub-PR-first, naming, file placement, UI/polish sequencing, internal refactors — anything easily changed later. *Expensive-to-reverse:* schema, data migrations, anything touching prod data or prod scoring, public API/route shape — anything painful to unwind once merged/shipped.
+- **AXIS 2 — Whose call it is.** *Product/taste call:* what Matt sees as the user, what counts as "vetted," scoring philosophy, feature scope — anything where he's the taste-maker. *Implementation call:* how to build something he's already greenlit in principle.
+
+How to act:
+- **Reversible AND implementation → DECIDE IT YOURSELF and proceed.** Tell him what you chose in one line ("Going with X for build order — say so if you'd rather Y"). Do NOT stop for an answer.
+- **Expensive-to-reverse OR a genuine product/taste call → STOP and ask.**
+- **Genuine high-stakes fork that's still implementation → no open A/B menu.** Give a recommendation with a default and proceed unless he objects ("Going X unless you say otherwise") — he unblocks by silence. (Turn-based chat: state the call and act in the SAME turn; he course-corrects next turn if needed.)
+- **Irreversible → always stop, however confident you are.**
+
+Two notes: (1) This does NOT reduce **Codex pressure-testing on the expensive-to-reverse layer** — keep that exactly as-is; this rule is ONLY about when to stop and ask *Matt*. (2) When genuinely unsure which bucket something is in, lean toward decide-and-tell for reversible things and stop for irreversible ones — the asymmetry is intentional (a wrong reversible call is cheap; a wrong irreversible one isn't). The "Open questions get a recommendation" and "options Matt rejected" rules below are specific instances of this filter.
+
 ### Don't propose options the user has explicitly rejected
 
 When an approach fails or needs revision, do NOT silently fall back to an option the user already turned down earlier in the same workstream. Reread the conversation, identify the rejected option, and find a third path. (Incident: 2026-05-05, candidate name hover — user rejected underline in favor of subtle accent; when accent failed I retreated to underline.)
