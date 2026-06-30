@@ -6,6 +6,38 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 
 ---
 
+## 2026-06-29 — Network Connections PR 2: gated promotion + admin cross-org view (PR #15) — later session
+
+**Shipped** (branch `network-connections-gated-promotion`, PR [#15](https://github.com/mktahr/vetted/pull/15) — MERGED to main; migration 082 dev+prod)
+- **Gated promotion** — admin moves a projected connection into the general candidate pool: flag flip `record_kind` network_connection→both + `person_id` link, NO re-pay/re-enrich/re-score (scored at projection time). Two gate inputs, admin override wins: auto-rule = company `review_status='vetted'` (via the connection's overlay `company_id`); manual `pool_override` in/out/null persists across auto-rule re-runs. `lib/network/promote.ts` (`reconcileConnectionPool`/`reconcileConnections`/`setPoolOverride`/`loadVettedCompanyIds`), `POST /api/network/promote` (mode auto|set), connections GET returns pool state, connections page Pool column + per-row Auto/Force-in/Force-out + "Auto-promote vetted" toolbar.
+- **Demotion safety** — `people.promoted_from_connection` (migration 082) guards force-out so a NATIVE candidate is never removed: demote fires only when flag=TRUE AND no other linked connection (N:1) still wants them in. Proven on dev (seeded rolled-back guard test).
+- **Admin cross-org view** — `GET /api/network/cross-org` (match by person_id OR canonical_url) surfaced on the candidate **profile page** (`CrossOrgNetwork`), the **candidates drawer** (`DrawerNetwork`), and a **subtle list chain icon** on rows with a connection. No migration.
+- **Connection drawer rich-enrichment fix** — the 2a drawer only showed `basic_profile` + a stale "snapshot only" note; the enrich blob actually carries full work history/education/skills. Drawer now renders all three; languages + false note removed.
+- **Network nav fix** — persistent "View / review connections" + "Review queue" links on org-select (were buried in the post-upload summary only).
+- **migration 082** (additive): `connections.pool_override` (CHECK in/out) + `people.promoted_from_connection` (BOOL default false). Dev + prod.
+- **Codex `codex loop` pre-merge review** — adversarial-review of the branch returned DO-NOT-SHIP / 4 findings; verified all against the code, fixed 3: (1) [critical] candidate ingest now clears `promoted_from_connection` (native provenance) so a re-ingested promoted connection can't be wrongly demoted — proven on dev; (2) [high] sibling N:1 read now fails CLOSED on DB error (was fail-open); (3) [high] promote/demote guards row-count-verified via `.select()` (were reporting success on 0-row updates). 4th finding (no auth on service-role routes) = app-wide pre-launch status quo, deferred to the auth workstream.
+
+**Decisions**
+- New conversational command **`codex loop`** added (CLAUDE.md + COMMANDS.md) — automated in-window pack+review codex round-trip via the openai-codex plugin (`codex-companion task`, read-only; `adversarial-review --base main` for the post-build diff pass). Used it for this PR's pre-merge review.
+- "Vetted company" gate = `review_status='vetted'` (Matt's choice over score-based), isolated in `desiredInPool()`. Surfaced that the vetted flag does NOT track score (0 of 9 score-5 companies vetted; 99 vetted / 767 scored / 1517 total) — companies CSV-curation + two-lists rework backlogged + saved to memory.
+- Auth deferred to the app-wide workstream (ROADMAP item 4), not bolted onto two routes — Matt aligned.
+- Classification from full enriched data (work history/skills) confirmed as NOT built yet — it's five-axis sub-PR 3 (LLM ingest inference); today's classification is title-dictionary only.
+
+**Where we left off**
+- PR #15 merged to main; branch deleted; prod deploy of main. Migration 082 on prod.
+- Gated promotion proven end-to-end on REAL data: uploaded 17 real LinkedIn profiles to "Test Organization One", enriched 10 (Notion + Robinhood vetted), promoted Annie Cheng into the candidate pool with a full profile.
+
+**Open questions**
+- Eligibility-rule definition (vetted vs scored vs score-threshold) — Matt reviewing the company roster CSV (`/Users/matt/Downloads/vetted-companies-ALL.csv`) before deciding; current = `review_status='vetted'`.
+
+**Watch-outs**
+- **Test data in prod:** "Test Organization One" (`org_id=76f902eb-1bb8-45ff-9568-d04c9db84443`) + 17 real connections; Annie Cheng + any other promoted connections now sit in the REAL candidate pool as `record_kind='both'`. NOTE: `scripts/seed-gated-promotion-demo.mjs --cleanup` only removes the earlier MOCK fixture (already cleaned) — the real Test-Org-One data needs manual cleanup (delete org 76f902eb… → cascades connections/owners; then delete the promoted people) if you want it gone.
+- Athletics extractor false-positive (BUGS.md): "olympian"/"olympic" matches context-free (hit Annie's Airbnb role description). Her bad signal was deleted but re-fires on re-extract until the extractor is fixed.
+- Companies architecture rework outstanding (memory `companies-csv-two-lists` + BACKLOG): CSV curation + "all vs scored/vetted" two-lists + searchable-default = List 2.
+- `scripts/seed-gated-promotion-demo.mjs` left untracked (throwaway fixture; not merged).
+
+---
+
 ## 2026-06-29 — Network Connections PR 2b: enriched-connection search integration (PR #14, open)
 
 **Shipped** (branch `network-connections-pr2b`, PR [#14](https://github.com/mktahr/vetted/pull/14) — open at session end, migrations on prod, code pending merge)
