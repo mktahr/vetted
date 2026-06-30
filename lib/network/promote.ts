@@ -67,26 +67,32 @@ function desiredInPool(conn: ConnRow, vetted: Set<string>): boolean {
 }
 
 /** Flip network_connection -> both + set the demotion-provenance flag. Guarded so
- *  it only ever lifts a network_connection (never re-marks a native candidate). */
+ *  it only ever lifts a network_connection (never re-marks a native candidate).
+ *  Returns true ONLY when exactly one row actually transitioned — a filtered update
+ *  reports no error on 0 rows, so a concurrent state change would otherwise be
+ *  misreported as a successful promotion (Codex finding). */
 async function promoteToPool(supabase: SupabaseClient, personId: string): Promise<boolean> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('people')
     .update({ record_kind: 'both', promoted_from_connection: true, updated_at: new Date().toISOString() })
     .eq('person_id', personId)
-    .eq('record_kind', 'network_connection');
-  return !error;
+    .eq('record_kind', 'network_connection')
+    .select('person_id');
+  return !error && (data?.length ?? 0) === 1;
 }
 
 /** Demote both -> network_connection. Guarded on promoted_from_connection=TRUE so a
- *  native candidate can never be removed from the pool here. */
+ *  native candidate can never be removed from the pool here. Row-count-verified
+ *  (same 0-row-success hazard as promoteToPool). */
 async function demoteFromPool(supabase: SupabaseClient, personId: string): Promise<boolean> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('people')
     .update({ record_kind: 'network_connection', promoted_from_connection: false, updated_at: new Date().toISOString() })
     .eq('person_id', personId)
     .eq('record_kind', 'both')
-    .eq('promoted_from_connection', true);
-  return !error;
+    .eq('promoted_from_connection', true)
+    .select('person_id');
+  return !error && (data?.length ?? 0) === 1;
 }
 
 /**
@@ -164,11 +170,15 @@ export async function reconcileConnectionPool(
     return { ok: true, connectionId, action: 'kept_native_candidate', personId: conn.person_id };
   }
   // N:1 — keep them in if ANY other linked connection still wants them in.
-  const { data: siblings } = await supabase
+  // FAIL CLOSED: a degraded sibling read must NOT be treated as "no sibling wants
+  // them in" — that would let a DB error demote someone another connection still
+  // needs in the pool (Codex finding). On error, abort without demoting.
+  const { data: siblings, error: sibErr } = await supabase
     .from('connections')
     .select('connection_id, company_id, person_id, pool_override')
     .eq('person_id', conn.person_id)
     .neq('connection_id', connectionId);
+  if (sibErr) return { ok: false, connectionId, reason: `sibling_check_failed: ${sibErr.message}` };
   if ((siblings ?? []).some((s) => desiredInPool(s as ConnRow, vetted))) {
     return { ok: true, connectionId, action: 'kept_other_owner', personId: conn.person_id };
   }
