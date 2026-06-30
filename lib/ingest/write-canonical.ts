@@ -445,6 +445,14 @@ export async function writeCanonicalProfile(
     personId = person.person_id;
   }
 
+  // ── Classification invalidation (BEFORE the experience rewrite) ──────────
+  // Bump generation + mark pending + clear any in-flight classify lease. Closes the
+  // stale-done window: a crash mid-rewrite leaves the candidate 'pending' (it will be
+  // reclassified), never stale 'done'. Paired with an AFTER bump (post-insert) that
+  // invalidates a worker which claimed a partial mid-rewrite snapshot. Best-effort:
+  // a failure here never blocks ingest. (Five-axis sub-PR 3.)
+  await supabase.rpc('bump_classification_generation', { p_person_id: personId });
+
   // ── Step 5: Clear old experiences + education before re-inserting ────────
   const { error: delExpError } = await supabase
     .from('person_experiences')
@@ -573,6 +581,12 @@ export async function writeCanonicalProfile(
       currentTitleNormalized = expTitleData?.title_normalized || null;
     }
   }
+
+  // ── Classification invalidation (AFTER the complete experience rewrite) ──
+  // Second bump: invalidates any classify worker that claimed a partial mid-rewrite
+  // snapshot (its captured generation no longer matches → its commit discards). The
+  // candidate is left 'pending' on the fresh, complete experience set. (Sub-PR 3.)
+  await supabase.rpc('bump_classification_generation', { p_person_id: personId });
 
   // If no explicit is_current was found, fall back to the first experience
   if (!currentSpecialty && !currentSeniority && experiences.length > 0) {

@@ -259,10 +259,32 @@ $$;
 COMMENT ON FUNCTION commit_classification IS
   'Fenced atomic publish of a classify-pending result. Validates person lease + run (claimed/owner/token) + generation fence under a person-row lock, requires assignment exp-id set == current experience set (count+membership+uniqueness), writes inferred axes (each exactly 1 row else RAISE→rollback), marks done, closes the run. Returns committed | discarded:<reason>. Caller runs the discard path on any non-committed return / exception.';
 
+-- ── Ingest invalidation primitive ────────────────────────────────────────────
+-- Atomic: bump generation (the fence), mark pending (eligibility), clear any active
+-- lease (kills an in-flight worker — its commit then fails the generation fence).
+-- Called by ingest BOTH immediately before AND immediately after an experience
+-- rewrite: the BEFORE call closes the stale-done window (a crash mid-rewrite leaves
+-- the candidate 'pending', not stale 'done'); the AFTER call invalidates any worker
+-- that claimed a partial mid-rewrite snapshot (its generation no longer matches).
+CREATE OR REPLACE FUNCTION bump_classification_generation(p_person_id UUID)
+RETURNS VOID
+LANGUAGE sql
+AS $$
+  UPDATE people
+     SET classification_generation       = classification_generation + 1,
+         classification_status           = 'pending',
+         classification_lease_token      = NULL,
+         classification_lease_expires_at = NULL,
+         updated_at                      = NOW()
+   WHERE person_id = p_person_id;
+$$;
+
 -- RPC publication boundary: do not rely implicitly on table grants.
 REVOKE EXECUTE ON FUNCTION commit_classification(UUID, UUID, UUID, TEXT, JSONB) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION reserve_classification_spend(INT, INT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION bump_classification_generation(UUID) FROM PUBLIC;
 GRANT  EXECUTE ON FUNCTION commit_classification(UUID, UUID, UUID, TEXT, JSONB) TO service_role;
 GRANT  EXECUTE ON FUNCTION reserve_classification_spend(INT, INT) TO service_role;
+GRANT  EXECUTE ON FUNCTION bump_classification_generation(UUID) TO service_role;
 
 COMMIT;
