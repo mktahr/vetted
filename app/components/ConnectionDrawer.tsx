@@ -6,9 +6,9 @@
 // ProfileDrawer overlay/nav conventions but renders connection-specific data:
 // the warm-path owners, classification, and the cached Crust enrichment.
 //
-// NOTE: the cached /person/enrich blob is a CURRENT-SNAPSHOT (basic_profile only
-// — no employment history / education). This drawer surfaces exactly what we
-// have; full-history axes arrive only with richer enrichment (PR 2b decision).
+// The cached /person/enrich blob carries full work history + education + skills
+// (fields=[basic_profile,experience,education,skills]). This drawer surfaces the
+// identity, warm path, classification, and that full enrichment.
 
 export interface ConnectionOwner {
   employee_id: string
@@ -84,15 +84,36 @@ function scoreColor(n: number): string {
   return 'var(--fg-disabled)'
 }
 
+function fmtMonthYear(d?: string | null): string {
+  if (!d) return ''
+  const dt = new Date(d)
+  return isNaN(dt.getTime()) ? '' : dt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+}
+function dateRange(start?: string | null, end?: string | null, isCurrent?: boolean): string {
+  const a = fmtMonthYear(start)
+  const b = isCurrent ? 'Present' : fmtMonthYear(end)
+  return [a, b].filter(Boolean).join(' — ')
+}
+function clamp(s: string, n: number): string {
+  return s.length > n ? s.slice(0, n).trimEnd() + '…' : s
+}
+
 export default function ConnectionDrawer({ detail, loading, isOpen, onClose, onPrev, onNext }: ConnectionDrawerProps) {
   if (!isOpen) return null
 
   const c = detail?.connection
   const e = detail?.enriched
-  const bp = e?.enriched_profile?.basic_profile ?? null
+  const ep = e?.enriched_profile ?? null
+  const bp = ep?.basic_profile ?? null
   const summary: string | null = bp?.summary ?? null
-  const languages: string[] = Array.isArray(bp?.languages) ? bp.languages : []
   const profilePic: string | null = bp?.profile_picture_permalink ?? null
+  const empl = ep?.experience?.employment_details ?? null
+  const workHistory: any[] = [
+    ...(Array.isArray(empl?.current) ? empl.current.map((r: any) => ({ ...r, _current: true })) : []),
+    ...(Array.isArray(empl?.past) ? empl.past.map((r: any) => ({ ...r, _current: false })) : []),
+  ]
+  const schools: any[] = Array.isArray(ep?.education?.schools) ? ep.education.schools : []
+  const skills: string[] = Array.isArray(ep?.skills?.professional_network_skills) ? ep.skills.professional_network_skills : []
   const bucket = c ? BUCKET_TAG[c.title_bucket] : null
 
   return (
@@ -201,7 +222,6 @@ export default function ConnectionDrawer({ detail, loading, isOpen, onClose, onP
                   <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', rowGap: 6, columnGap: 12 }}>
                     <span style={metaKey}>Title</span><span style={metaVal}>{e.current_title || c.current_title || '—'}</span>
                     <span style={metaKey}>Location</span><span style={metaVal}>{e.location_name || '—'}</span>
-                    {languages.length > 0 && (<><span style={metaKey}>Languages</span><span style={metaVal}>{languages.join(', ')}</span></>)}
                     <span style={metaKey}>Enriched</span><span style={metaVal}>{e.last_enriched_at ? new Date(e.last_enriched_at).toLocaleDateString() : '—'}</span>
                   </div>
                   {summary && (
@@ -210,12 +230,58 @@ export default function ConnectionDrawer({ detail, loading, isOpen, onClose, onP
                       <p style={{ fontSize: 'var(--fs-13)', color: 'var(--fg-secondary)', lineHeight: 1.5, marginTop: 4, whiteSpace: 'pre-wrap' }}>{summary}</p>
                     </div>
                   )}
-                  <div style={{ marginTop: 8, fontSize: 'var(--fs-11)', color: 'var(--fg-tertiary)' }}>
-                    Current snapshot only — no work history / education in this enrichment tier.
-                  </div>
                 </>
               )}
             </div>
+
+            {/* Work history (from the enrich blob) */}
+            {workHistory.length > 0 && (
+              <div style={{ marginBottom: 18 }}>
+                <div style={sectionLabel}>Work history</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {workHistory.map((r, i) => (
+                    <div key={i}>
+                      <div style={{ fontSize: 'var(--fs-13)', fontWeight: 600, color: 'var(--fg-primary)' }}>{r.title || '—'}</div>
+                      <div style={{ fontSize: 'var(--fs-12)', color: 'var(--fg-secondary)' }}>
+                        {[r.name, dateRange(r.start_date, r.end_date, r._current)].filter(Boolean).join(' · ')}
+                      </div>
+                      {r.description && (
+                        <p style={{ fontSize: 'var(--fs-12)', color: 'var(--fg-tertiary)', lineHeight: 1.5, marginTop: 4, whiteSpace: 'pre-wrap' }}>{clamp(String(r.description), 320)}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Education */}
+            {schools.length > 0 && (
+              <div style={{ marginBottom: 18 }}>
+                <div style={sectionLabel}>Education</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {schools.map((s, i) => (
+                    <div key={i}>
+                      <div style={{ fontSize: 'var(--fs-13)', fontWeight: 600, color: 'var(--fg-primary)' }}>{s.school || '—'}</div>
+                      <div style={{ fontSize: 'var(--fs-12)', color: 'var(--fg-secondary)' }}>
+                        {[s.degree, s.field_of_study, [s.start_year, s.end_year].filter(Boolean).join('–')].filter(Boolean).join(' · ')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Skills */}
+            {skills.length > 0 && (
+              <div style={{ marginBottom: 18 }}>
+                <div style={sectionLabel}>Skills</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {skills.map((s, i) => (
+                    <span key={i} style={{ fontSize: 'var(--fs-12)', color: 'var(--fg-secondary)', background: 'var(--bg-canvas)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: '2px 10px' }}>{s}</span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Footer meta */}
             <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 10, fontSize: 'var(--fs-12)', color: 'var(--fg-tertiary)' }}>

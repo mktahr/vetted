@@ -425,10 +425,16 @@ export async function writeCanonicalProfile(
     }
     personId = inserted.person_id;
   } else {
-    // Candidate path — unchanged from 6a: upsert by linkedin_url, no record_kind.
+    // Candidate path — upsert by linkedin_url, no record_kind (deliberate: writing
+    // it would demote a promoted/linked connection on re-ingest). BUT establish
+    // NATIVE provenance by clearing promoted_from_connection: a candidate ingest of
+    // a person who was previously a promoted connection ('both', flag=true) makes
+    // them a real candidate, so a later force-out must NOT demote them. Without this
+    // the flag lingers and the demote guard would treat them as connection-origin
+    // (Codex critical finding — the deferred candidate-ingest→both edge).
     const { data: person, error: personError } = await supabase
       .from('people')
-      .upsert(personRecord, { onConflict: 'linkedin_url' })
+      .upsert({ ...personRecord, promoted_from_connection: false }, { onConflict: 'linkedin_url' })
       .select('person_id')
       .single();
 

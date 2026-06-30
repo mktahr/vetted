@@ -12,12 +12,13 @@ import { useSearchParams } from 'next/navigation'
 import ConnectionDrawer, { ConnectionDetail } from '../../components/ConnectionDrawer'
 
 interface Owner { employee_id: string; full_name: string }
+interface PoolState { override: 'in' | 'out' | null; eligible: boolean; in_pool: boolean }
 interface Conn {
   connection_id: string; full_name: string; current_company: string | null; current_title: string | null
   title_bucket: 'yes' | 'maybe' | 'no'; status: string; specialty_normalized: string | null
   company_score: number | null; company_score_year: number | null
   enriched: boolean; last_enriched_at: string | null; raw_url: string | null; canonical_url: string
-  owners: Owner[]
+  owners: Owner[]; pool: PoolState
 }
 interface Employee { employee_id: string; full_name: string }
 
@@ -63,6 +64,7 @@ function ConnectionsInner() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [force, setForce] = useState(false)
   const [enriching, setEnriching] = useState(false)
+  const [promoting, setPromoting] = useState(false)
 
   // Detail drawer (PR 2 / 2a)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -137,11 +139,52 @@ function ConnectionsInner() {
     load()
   }
 
+  // Gated promotion — run the vetted-company auto-rule across the org.
+  async function autoPromote() {
+    setPromoting(true); setMsg(null)
+    const r = await fetch('/api/network/promote', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ org_id: orgId, mode: 'auto', scope: 'org' }),
+    }).then((r) => r.json())
+    setPromoting(false)
+    if (r.error) { setMsg(`Promotion error: ${r.error}`); return }
+    const s = r.summary
+    const bits = [`${s.promoted} promoted`, `${s.demoted} removed`]
+    if (s.needsEnrichment) bits.push(`${s.needsEnrichment} eligible but need enrichment first`)
+    if (s.keptNative) bits.push(`${s.keptNative} kept (real candidates)`)
+    if (s.failed) bits.push(`${s.failed} failed`)
+    setMsg(`Auto-promote: ${bits.join(' · ')}.`)
+    load()
+  }
+
+  // Per-row admin override (final say). 'in' / 'out' / 'clear' (revert to auto-rule).
+  async function setOverride(connectionId: string, override: 'in' | 'out' | 'clear') {
+    setPromoting(true); setMsg(null)
+    const r = await fetch('/api/network/promote', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ org_id: orgId, mode: 'set', override, connection_ids: [connectionId] }),
+    }).then((r) => r.json())
+    setPromoting(false)
+    if (r.error) { setMsg(`Promotion error: ${r.error}`); return }
+    const s = r.summary
+    if (s.needsEnrichment) setMsg('Marked for the pool — enrich this connection first, then it promotes.')
+    else if (s.failed) setMsg('Override failed — see console.')
+    load()
+  }
+
   const counts = useMemo(() => {
     const c = { yes: 0, maybe: 0, no: 0 }
     for (const r of rows) (c as any)[r.title_bucket]++
     return c
   }, [rows])
+
+  // Effective desired-pool label for the Pool column (mirrors the server rule).
+  function poolCell(p: PoolState): { label: string; color: string } {
+    if (p.in_pool) return { label: 'In pool', color: '#1e7e45' }
+    if (p.override === 'out') return { label: 'Out', color: 'var(--fg-tertiary)' }
+    if (p.override === 'in' || p.eligible) return { label: 'Eligible', color: 'var(--accent-600)' }
+    return { label: '—', color: 'var(--fg-disabled)' }
+  }
 
   if (!orgId) return <div style={wrap}>Missing org_id.</div>
 
@@ -154,6 +197,7 @@ function ConnectionsInner() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <a href={`/network/review?org_id=${orgId}`} style={{ ...btn, background: 'transparent', color: 'var(--fg-secondary)', border: '1px solid var(--border-subtle)', textDecoration: 'none' }}>Review queue ({counts.maybe})</a>
+          <button style={{ ...btn, opacity: promoting ? 0.6 : 1 }} disabled={promoting} onClick={autoPromote} title="Promote connections at vetted companies into the candidate pool">{promoting ? 'Promoting…' : 'Auto-promote vetted'}</button>
           <button style={{ ...btn, opacity: triaging ? 0.6 : 1 }} disabled={triaging} onClick={runTriage}>{triaging ? 'Triaging…' : 'Run LLM triage'}</button>
         </div>
       </div>
@@ -196,14 +240,14 @@ function ConnectionsInner() {
                   onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((r) => r.connection_id)) : new Set())} />
               </th>
               <th style={th}>Name</th><th style={th}>Company</th><th style={th}>Title</th>
-              <th style={th}>Bucket</th><th style={th}>Specialty</th><th style={th}>Enriched</th><th style={th}>Via</th>
+              <th style={th}>Bucket</th><th style={th}>Specialty</th><th style={th}>Enriched</th><th style={th}>Pool</th><th style={th}>Via</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td style={td} colSpan={8}>Loading…</td></tr>
+              <tr><td style={td} colSpan={9}>Loading…</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td style={td} colSpan={8}>No connections match these filters.</td></tr>
+              <tr><td style={td} colSpan={9}>No connections match these filters.</td></tr>
             ) : rows.map((c, idx) => (
               <tr key={c.connection_id} onClick={() => openDrawerAt(idx)} style={{ opacity: c.status === 'excluded' ? 0.55 : 1, cursor: 'pointer' }}>
                 <td style={{ ...td, width: 28 }} onClick={(ev) => ev.stopPropagation()}>
@@ -222,6 +266,23 @@ function ConnectionsInner() {
                 <td style={td}><span style={{ fontWeight: 700, fontSize: 'var(--fs-11)', color: BUCKET_LABEL[c.title_bucket]?.c }}>{BUCKET_LABEL[c.title_bucket]?.t}</span></td>
                 <td style={td}>{c.specialty_normalized || '—'}</td>
                 <td style={td}>{c.enriched ? '✓' : '—'}</td>
+                <td style={td} onClick={(ev) => ev.stopPropagation()}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {(() => { const p = poolCell(c.pool); return <span style={{ fontWeight: 700, fontSize: 'var(--fs-11)', color: p.color }}>{p.label}</span> })()}
+                    {c.pool.override && <span style={{ fontSize: 'var(--fs-10)', color: 'var(--fg-tertiary)', textTransform: 'uppercase' }}>({c.pool.override})</span>}
+                    <select
+                      style={{ ...sel, padding: '2px 4px', fontSize: 'var(--fs-11)', opacity: promoting ? 0.6 : 1 }}
+                      disabled={promoting}
+                      value={c.pool.override ?? 'auto'}
+                      onChange={(e) => setOverride(c.connection_id, e.target.value === 'auto' ? 'clear' : (e.target.value as 'in' | 'out'))}
+                      title="Admin override — final say over the auto-rule"
+                    >
+                      <option value="auto">Auto</option>
+                      <option value="in">Force in</option>
+                      <option value="out">Force out</option>
+                    </select>
+                  </span>
+                </td>
                 <td style={{ ...td, color: 'var(--fg-secondary)' }}>{c.owners.map((o) => o.full_name).join(', ') || '—'}</td>
               </tr>
             ))}

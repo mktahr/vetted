@@ -1,35 +1,35 @@
-# Session Handoff — 2026-06-29 (end of session)
+# Session Handoff — 2026-06-29 (end of session — gated promotion)
 
 ## Where we left off
 
-**Network Connections PR 2b (enriched-connection search integration) is MERGED + live on prod.**
-- **PR [#14](https://github.com/mktahr/vetted/pull/14)** squash-merged to `main` (`0f8aad2`); branch `network-connections-pr2b` deleted (local + remote). Prod deploy of `main` confirmed **green**.
-- **Migrations 080 (`people.record_kind`) + 081 (`connections.person_id`)** applied to dev + prod earlier in the session (inert until this code shipped). Prod post-deploy smoke: 84 people, all `record_kind='candidate'`, 0 connections, both columns present — the new pool filter is a verified no-op, candidate pool intact.
-- PR 2b delivers: enriched connections projected into `people` (`record_kind='network_connection'`) so the existing 25-axis search machinery is reused, **excluded from the default pool** (enrichment ≠ promotion); search-within-connections scope (org/employee). Built increment-by-increment (probe → migrations → filters → freshness → enrich mapper → `writeCanonicalProfile` extraction → `projectConnection` → search UI), each verified before the next; two Codex pressure-tests folded in (architecture) plus a third pre-merge review (5 findings, all fixed: freshness enforcement, merge link-before-promote + checked errors + repair-on-rerun, scope org_id filter, surfaced query errors, loading state).
+**Network Connections PR 2 (gated promotion + admin cross-org view) is MERGED + live on prod.**
+- **PR [#15](https://github.com/mktahr/vetted/pull/15)** squash-merged to `main`; branch `network-connections-gated-promotion` deleted. Prod deploy of `main`.
+- **Migration 082** (`connections.pool_override` + `people.promoted_from_connection`) applied dev + prod.
+- Delivers: promotion = flag flip `record_kind` network_connection→both + `person_id` link (no re-pay/re-enrich/re-score); vetted-company auto-rule (`review_status='vetted'`) + manual `pool_override` (final say); **demote-safety guard** (a native candidate is NEVER removed from the pool); admin cross-org view on the profile page + candidates drawer + a subtle list chain icon; connection-drawer rich-enrichment display fix; persistent org→connections navigation.
+- **Proven end-to-end on REAL data:** uploaded 17 real LinkedIn profiles to "Test Organization One", enriched 10 (Notion + Robinhood), promoted **Annie Cheng** into the candidate pool with a full profile.
+- **`codex loop`** (new command this session) ran a pre-merge adversarial review: DO-NOT-SHIP → 3 real fixes folded in (candidate-ingest provenance clear, fail-closed sibling read, row-count-verified guards). 4th finding (no auth) consciously deferred.
 
 ## What's in flight
 
-**Nothing open.** No open PRs. `main` clean + synced. Working tree clean after this handoff commit.
-
-**Local repo:** `~/DEV/vetted`, on `main`.
+**Nothing open.** No open PRs. `main` clean + synced. The PR 2 arc is complete.
 
 ## Next thing to do
 
-**Network Connections — GATED PROMOTION** (the next PR 2 sibling). Admin flips a connection from `network_connection` → the general pool, **gated on: company is vetted in our system AND the candidate passes our normal bar/checkpoints**. Mechanically: flip `record_kind` `network_connection`→`both` + ensure the link (no re-pay — the row is already projected and scored). The promotion bar **reads the score written at projection time** (connections are scored when projected, per the locked Q2 decision). Forms: manual add / add-anyone / future auto-rule (scored company → eligible).
-
-After gated promotion: **ADMIN CROSS-ORG VIEW** — for a given candidate, show every org + individual connected to them (schema already supports via `canonical_url` + `connection_owners`; no migration needed).
+Matt's pick between two threads (both teed up):
+1. **Companies CSV-curation + two-lists rework** (newly backlogged + saved to memory `companies-csv-two-lists`). Build `export-companies.mjs` → committed `reference/companies/company_roster.csv` + a diff-only sync-back for `review_status`/scores; split List 1 (all 1517 auto-created companies) from List 2 (the searchable scored+vetted set, ~767/99); make searchable views default to List 2. **This also resolves the gated-promotion eligibility-rule question** (vetted flag is noisy — 0 of 9 score-5 companies are vetted). Matt was reviewing `/Users/matt/Downloads/vetted-companies-ALL.csv` to decide.
+2. **Five-axis sub-PR 3 — LLM ingest inference** (the next taxonomy build). Reads full work history/skills/descriptions to infer function/specialty/title. Today's classification is title-dictionary only; the rich enriched data is now stored and ready to feed it.
 
 ## Open questions
 
-- **Define "passes our normal bar"** for promotion — "company is vetted" is concrete; the candidate-bar / checkpoint criteria need spec'ing (bucket threshold? manual review? both?). Decide before building the auto-rule.
+- **Gated-promotion eligibility rule:** keep `review_status='vetted'` (current, narrow/noisy) vs switch to score-based vs threshold. Isolated in `desiredInPool()` (one-line change). Tied to the companies-curation decision above.
+- **App-wide auth/admin workstream** (ROADMAP item 4): Matt agreed to do auth properly app-wide (not bolt onto the two new network routes). All service-role routes are currently open (pre-launch, single-admin) — the deferred Codex finding.
 
 ## Watch-outs
 
-- **Prod network module is empty (0 connections, and orgs likely 0).** To exercise projection end-to-end on prod you must first upload a `Connections.csv` (an org + employee) → classify → enrich → then `POST /api/network/project`. The full projection + merge + stale-refusal flow was verified on **dev** this session, not prod.
-- **Committed automated tests for `projectConnection` do NOT exist** — it transitively imports `@/lib` via `write-canonical`, which the node type-strip test loader can't resolve, so a pure unit test can't import it. Coverage is the manual dev-integration harness (in the session scratchpad). A committed seeded-dev integration harness (fresh / stale / merge / link-failure / promotion-failure / rerun-retry / cross-org / owner-query-failure) is a logged follow-up.
-- **081's SQL + live DB `COMMENT` say "1:1"** — cosmetic only; the real cardinality is **N:1** (many connections, across orgs, may link one person).
-- **Deferred (logged), pick up as needed:** warm-path indicator chip on connection rows; scope ProfileTable's dependent fetches (bucket/exp/edu/signals) to visible IDs (perf — currently whole-table, pre-existing); candidate-ingest→`both` symmetric promote (lattice completeness — only matters once a projected connection is later candidate-ingested); cross-URL-format `people` dedup (pre-existing — candidate ingest uses exact `linkedin_url` match).
-- **Free-tier Supabase idle-pause (~7 days)** — on NXDOMAIN / "Failed to fetch", restore both projects from the Supabase dashboard first.
-- **Stale `score-all.mjs`** — use `POST /api/admin/rescore-all` for any rescore.
-- **Dev-against-dev run** needs the `_DEV` Supabase vars exported over the canonical names before `next dev` (no committed `npm run dev:dev` script yet).
-- **`migrate:prod` is a deliberate `ask` guard** in `.claude/settings.local.json` — it prompts on every prod DB migration by design (not a misconfig).
+- **Test data in prod:** "Test Organization One" (`org_id=76f902eb-1bb8-45ff-9568-d04c9db84443`) + 17 real connections; **Annie Cheng + any other promoted connections are in the REAL candidate pool** as `record_kind='both'`. To remove: delete org `76f902eb…` (cascades connections/owners) + the promoted `people` rows. (`seed-gated-promotion-demo.mjs --cleanup` only handles the earlier MOCK fixture, already cleaned — it does NOT touch the real uploaded data.)
+- **Athletics extractor false-positive** (BUGS.md): "olympian"/"olympic" matches context-free (hit Annie's Airbnb role description "Online Olympian & Paralympian festivals"). Her bad signal was deleted manually but **re-fires on any re-extract/rescore** until the extractor is fixed.
+- **Deferred (logged) gated-promotion edge:** candidate-ingest→`both` symmetric promote — a `network_connection` person who is later candidate-ingested stays `network_connection` (not auto-promoted to the pool). The DEMOTE side of this edge is now fixed (Codex critical); the PROMOTE side is still deferred (BACKLOG).
+- **`scripts/seed-gated-promotion-demo.mjs`** left untracked (throwaway; not merged).
+- **Free-tier dev Supabase idle-pause (~7 days)** — restore from dashboard on NXDOMAIN.
+- **`migrate:prod` is a deliberate `ask` guard** — prompts on every prod migration by design.
+- Use `POST /api/admin/rescore-all` for rescores (`scripts/score-all.mjs` is a stale mirror).

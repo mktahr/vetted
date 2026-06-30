@@ -130,6 +130,13 @@ export default function NetworkUploadPage() {
           <input style={input} placeholder="New organization name" value={newOrgName} onChange={(e) => setNewOrgName(e.target.value)} />
           <button style={btnGhost} onClick={createOrg}>Create</button>
         </div>
+        {/* Persistent entry to review an existing org's connections (not just post-upload). */}
+        {orgId && (
+          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+            <a href={`/network/connections?org_id=${orgId}`} style={{ ...btn, textDecoration: 'none', display: 'inline-block' }}>View / review connections</a>
+            <a href={`/network/review?org_id=${orgId}`} style={{ ...btnGhost, textDecoration: 'none', display: 'inline-block' }}>Review queue</a>
+          </div>
+        )}
       </div>
 
       {/* Step 2 — employee */}

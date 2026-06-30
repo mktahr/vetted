@@ -66,6 +66,9 @@ export interface Person {
   // PR 2b: candidate | network_connection | both. Drives pool membership +
   // the network/warm-path indicator. Default 'candidate' for existing rows.
   record_kind: 'candidate' | 'network_connection' | 'both' | null
+  // Gated promotion (PR 2): TRUE only when pool membership came from promoting a
+  // pure network connection. Force-out demotes ONLY when TRUE (never a native candidate).
+  promoted_from_connection?: boolean | null
   // Derived signals (populated by scripts/compute-derived-fields.mjs)
   career_progression: 'rising' | 'flat' | 'declining' | 'insufficient_data' | null
   highest_seniority_reached: string | null
