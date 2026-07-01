@@ -18,13 +18,27 @@ const isStudentTitle = (t: string | null | undefined) => /\b(student|intern|inte
 
 export function pickPrimaryCurrentRole<T extends RoleForClassification>(exps: T[]): T | null {
   const current = exps.filter((e) => e.is_current);
-  if (current.length === 0) return null;
+  if (current.length > 0) {
+    return (
+      current.find((e) => e.is_primary_current) ??
+      current.find((e) => !isStudentTitle(e.title_raw)) ??
+      current.find((e) => e.title_raw) ??
+      current.slice().sort((a, b) => (b.start_date ?? '').localeCompare(a.start_date ?? ''))[0] ??
+      null
+    );
+  }
+  // Fallback: NO role flagged is_current (e.g. every role has an end-date, ~3/113 candidates).
+  // Use the MOST RECENT role (null/"present" end sorts newest, then latest end, then latest start)
+  // so the summary is never blank for someone who clearly has a classification on every role.
+  if (exps.length === 0) return null;
   return (
-    current.find((e) => e.is_primary_current) ??
-    current.find((e) => !isStudentTitle(e.title_raw)) ??
-    current.find((e) => e.title_raw) ??
-    current.slice().sort((a, b) => (b.start_date ?? '').localeCompare(a.start_date ?? ''))[0] ??
-    null
+    exps
+      .slice()
+      .sort(
+        (a, b) =>
+          (b.end_date ?? '9999').localeCompare(a.end_date ?? '9999') ||
+          (b.start_date ?? '').localeCompare(a.start_date ?? ''),
+      )[0] ?? null
   );
 }
 
