@@ -676,6 +676,28 @@ export default function ProfilePage() {
                   {exp.description_raw && (
                     <p className="text-muted-foreground text-sm mt-1">{exp.description_raw}</p>
                   )}
+                  {/* Five-axis classification (PREVIEW — inert columns, not used by search/scoring yet) */}
+                  {(() => {
+                    const fn = (exp as any).function_inferred as string[] | null
+                    const sp = (exp as any).specialty_inferred as string[] | null
+                    const sk = (exp as any).skills_inferred as string[] | null
+                    const tn = (exp as any).title_normalized_inferred as string | null
+                    const founding = (exp as any).is_founding_engineer_role as boolean
+                    if ((!fn || fn.length === 0) && (!sp || sp.length === 0) && !tn) return null
+                    const clean = (s: string) => s.replace(/_/g, ' ')
+                    return (
+                      <div className="mt-2 rounded border border-border bg-muted px-2.5 py-1.5 text-xs space-y-0.5">
+                        <div className="font-semibold uppercase" style={{ fontSize: '10px', letterSpacing: '0.05em', color: 'var(--accent-strong)' }}>
+                          AI Classification (preview)
+                        </div>
+                        {fn && fn.length > 0 && <div><span className="text-tertiary">function: </span><span className="text-foreground">{fn.map(clean).join(', ')}</span></div>}
+                        {sp && sp.length > 0 && <div><span className="text-tertiary">specialty: </span><span className="text-foreground">{sp.map(clean).join(', ')}</span></div>}
+                        {sk && sk.length > 0 && <div><span className="text-tertiary">skills: </span><span className="text-foreground">{sk.map(clean).join(', ')}</span></div>}
+                        {tn && <div><span className="text-tertiary">title: </span><span className="text-foreground">{tn}</span></div>}
+                        {founding && <div style={{ color: 'var(--accent-strong)' }}>★ founding / early engineer</div>}
+                      </div>
+                    )
+                  })()}
                 </div>
               ))}
             </div>

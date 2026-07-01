@@ -49,6 +49,7 @@ export interface DerivedFields {
   is_former_founder: boolean
   is_vc_backed_founder: boolean
   is_bootstrapped_founder: boolean
+  has_founding_engineer_experience: boolean
 }
 
 // Matches "Founder", "Co-Founder", "Cofounder", "Founder & CEO", etc. but
@@ -59,6 +60,19 @@ function isFounderExperience(exp: ExperienceRow): boolean {
   if (exp.seniority_normalized === 'founder') return true
   if (exp.title_raw && FOUNDER_TITLE_PATTERN.test(exp.title_raw)) return true
   return false
+}
+
+// Founding / early-ENGINEER title signal — DISTINCT from FOUNDER above: these people
+// ARE engineers (they classify to their real discipline), and "founding/early" is a
+// searchable STAGE tag. Title-driven today; a headcount/founding-date inference layer
+// can later OR into person_experiences.is_founding_engineer_role (roadmap). Requires an
+// "engineer" token, so "Founding Designer" / "Founding Product Manager" do NOT match.
+// "early" is adjacency-only to avoid catching "Early Career Engineer" (a junior title).
+export const FOUNDING_ENGINEER_TITLE_PATTERN =
+  /\bfounding\s+(?:[a-z][a-z/&+.-]*\s+){0,4}engineer\b|\bfirst\s+(?:[a-z][a-z/&+.-]*\s+){0,2}engineer\b|\bearly\s+engineer\b|\bengineer\s*#\s*\d+/i
+
+export function isFoundingEngineerTitle(title: string | null | undefined): boolean {
+  return !!title && FOUNDING_ENGINEER_TITLE_PATTERN.test(title)
 }
 
 interface ExperienceRow {
@@ -351,6 +365,19 @@ export async function computeDerivedFields(
   const isCurrentFounder = founderExps.some(e => e.is_current === true)
   const isFormerFounder = !isCurrentFounder && founderExps.some(e => e.is_current === false)
 
+  // 8a-bis. Founding/early-ENGINEER title tag (title-driven; SEPARATE from founder flags).
+  //   Persist the per-experience flag (mirrors the Head-Of seniority write above); the
+  //   column defaults FALSE and experiences are delete+reinserted on re-ingest, so a
+  //   set-true-for-matches pass is sufficient. Person-level aggregate feeds search.
+  const foundingEngExps = experiences.filter(e => isFoundingEngineerTitle(e.title_raw))
+  for (const e of foundingEngExps) {
+    await supabase
+      .from('person_experiences')
+      .update({ is_founding_engineer_role: true })
+      .eq('person_experience_id', e.person_experience_id)
+  }
+  const hasFoundingEngineerExperience = foundingEngExps.length > 0
+
   // 8b. VC-backed vs Bootstrapped founder taxonomy.
   //     Binary classification per locked spec. Re-runs on every scoreCandidate
   //     so candidates auto-reclassify as funding data improves over time.
@@ -464,6 +491,7 @@ export async function computeDerivedFields(
     is_former_founder: isFormerFounder,
     is_vc_backed_founder: isVcBackedFounder,
     is_bootstrapped_founder: isBootstrappedFounder,
+    has_founding_engineer_experience: hasFoundingEngineerExperience,
   }
 }
 
