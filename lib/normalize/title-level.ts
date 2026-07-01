@@ -99,6 +99,23 @@ function numericSuffixLevel(title: string): number | null {
   return null
 }
 
+// Leadership/level signals, highest-first (levels on the 1–10 title_level scale:
+// 6=staff/lead, 7=principal/manager, 9=director/VP, 10=C-suite).
+const LEADERSHIP_LEVEL: Array<{ re: RegExp; level: number }> = [
+  { re: /\bchief \w+ officer\b|\b(ceo|cfo|cto|coo|cmo|cio|ciso|chro|cpo)\b/i, level: 10 },
+  { re: /\b(svp|evp)\b|\b(senior|executive) vice president\b/i, level: 9 },
+  { re: /\bvice president\b|\bvp\b|\bmanaging director\b/i, level: 9 },
+  { re: /\b(senior |associate )?director\b/i, level: 9 },
+  { re: /\b(senior |group |sr\.? )?(engineering )?manager\b|\bhead of\b/i, level: 7 },
+  { re: /\bprincipal\b|\bdistinguished\b/i, level: 7 },
+  { re: /\bstaff\b|\b(tech(nical)? )?lead\b/i, level: 6 },
+  { re: /\bsenior\b|\bsr\.?\b/i, level: 5 },
+]
+function leadershipLevel(title: string): number | null {
+  for (const { re, level } of LEADERSHIP_LEVEL) if (re.test(title)) return level
+  return null
+}
+
 // ─── Main extractor ─────────────────────────────────────────────────────────
 
 export function extractTitleLevel(
@@ -114,7 +131,13 @@ export function extractTitleLevel(
   }
 
   // Phase 2: numeric suffix fallback
-  return numericSuffixLevel(t)
+  const num = numericSuffixLevel(t)
+  if (num !== null) return num
+
+  // Phase 3: leadership/level fallback for compound titles the dictionary doesn't list
+  // (e.g. "Robotics Software Engineering Manager"). Mirrors the seniority title fix — a
+  // manager/director/VP title should not read as unleveled (which tanks the progression slope).
+  return leadershipLevel(t)
 }
 
 /** Convenience: load rules + extract in one call. */
