@@ -54,6 +54,11 @@ interface ExperienceLite {
   employment_type: string | null
   title_raw: string | null
   description_raw: string | null
+  function_inferred_preview: string[] | null
+  specialty_inferred_preview: string[] | null
+  skills_inferred_preview: string[] | null
+  title_normalized_inferred_preview: string | null
+  classification_preview_version: string | null
 }
 
 interface EducationLite {
@@ -435,7 +440,7 @@ export default function ProfileTable() {
           { data: fieldOfStudyData },
         ] = await Promise.all([
           supabase.from('candidate_bucket_assignments').select('person_id, candidate_bucket, flagged_reasons, assignment_reason, effective_at').order('effective_at', { ascending: false }),
-          supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, seniority_normalized, start_date, end_date, is_current, employment_type_normalized, title_raw, description_raw'),
+          supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, seniority_normalized, start_date, end_date, is_current, employment_type_normalized, title_raw, description_raw, function_inferred_preview, specialty_inferred_preview, skills_inferred_preview, title_normalized_inferred_preview, classification_preview_version'),
           supabase.from('person_education').select('person_id, school_id, school_name_raw, degree_raw, degree_level, field_of_study_raw, field_of_study_normalized, start_year, end_year'),
           supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
           fetchAllRows<any>('companies', 'company_id, company_name, primary_industry, industries, category, review_status, legacy_primary_industry_tag, company_groups', 'company_name').then(data => ({ data })),
@@ -486,6 +491,11 @@ export default function ProfileTable() {
             end_date: (r as any).end_date ?? null, is_current: (r as any).is_current ?? false,
             employment_type: (r as any).employment_type_normalized ?? null,
             title_raw: (r as any).title_raw ?? null, description_raw: (r as any).description_raw ?? null,
+            function_inferred_preview: (r as any).function_inferred_preview ?? null,
+            specialty_inferred_preview: (r as any).specialty_inferred_preview ?? null,
+            skills_inferred_preview: (r as any).skills_inferred_preview ?? null,
+            title_normalized_inferred_preview: (r as any).title_normalized_inferred_preview ?? null,
+            classification_preview_version: (r as any).classification_preview_version ?? null,
           })
           if ((r as any).specialty_normalized) { if (!allSpecs[pid]) allSpecs[pid] = new Set(); allSpecs[pid].add((r as any).specialty_normalized) }
         }
@@ -1252,7 +1262,7 @@ export default function ProfileTable() {
                     </th>
                     <th style={{ ...eyebrow, width: 28, padding: '8px 4px' }} title="Add to list" />
                     {[
-                      {h:'Name',field:null},{h:'Bucket',field:null},{h:'Company',field:null},{h:'Title',field:null},{h:'Specialty',field:null},{h:'School',field:null},
+                      {h:'Name',field:null},{h:'Bucket',field:null},{h:'Company',field:null},{h:'Title',field:null},{h:'School',field:null},
                       {h:'Yrs',field:'years_experience_estimate' as SortField},
                       {h:'Cur Ten',field:'current_tenure' as SortField},
                       {h:'Avg Ten',field:'avg_tenure' as SortField},
@@ -1346,10 +1356,6 @@ export default function ProfileTable() {
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-primary)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {(person.current_title_normalized || person.current_title_raw || '—').split(/\s*[|–—]\s*/)[0].split(/,\s*/)[0]}
                       </td>
-                      {/* Specialty */}
-                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)' }}>
-                        {person.primary_specialty ? person.primary_specialty.replace(/_/g, ' ') : <span style={{ opacity: 0.4 }}>—</span>}
-                      </td>
                       {/* School */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {(() => {
@@ -1420,6 +1426,11 @@ export default function ProfileTable() {
             end_date: e.end_date,
             is_current: e.is_current,
             employment_type: e.employment_type,
+            function_inferred_preview: e.function_inferred_preview,
+            specialty_inferred_preview: e.specialty_inferred_preview,
+            skills_inferred_preview: e.skills_inferred_preview,
+            title_normalized_inferred_preview: e.title_normalized_inferred_preview,
+            classification_preview_version: e.classification_preview_version,
           } satisfies DrawerExperience))
         })()}
         onClose={() => { setIsDrawerOpen(false); setSelectedPerson(null) }}

@@ -15,6 +15,11 @@ export interface DrawerExperience {
   end_date: string | null
   is_current: boolean
   employment_type: string | null
+  function_inferred_preview?: string[] | null
+  specialty_inferred_preview?: string[] | null
+  skills_inferred_preview?: string[] | null
+  title_normalized_inferred_preview?: string | null
+  classification_preview_version?: string | null
 }
 
 export interface DrawerEducation {
@@ -219,18 +224,11 @@ export default function ProfileDrawer({ person, experiences, education, signals,
               </Field>
             )}
 
-            {/* Classification metadata — quiet label-value pairs */}
-            {(person.primary_specialty || person.current_function_normalized || currentSeniority || person.highest_seniority_reached) && (
+            {/* Classification metadata — quiet label-value pairs.
+                PREVIEW: legacy person-level Specialty/Secondary/Function removed (they showed the
+                old deterministic "fullstack"); the new per-role classification is in Work History below. */}
+            {(currentSeniority || person.highest_seniority_reached) && (
               <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 12px', fontSize: 'var(--fs-13)', fontFamily: 'var(--font-sans)' }}>
-                {person.primary_specialty && (
-                  <><span style={{ color: 'var(--fg-tertiary)' }}>Specialty</span><span style={{ color: 'var(--fg-primary)' }}>{person.primary_specialty.replace(/_/g, ' ')}</span></>
-                )}
-                {person.secondary_specialty && (
-                  <><span style={{ color: 'var(--fg-tertiary)' }}>Secondary</span><span style={{ color: 'var(--fg-primary)' }}>{person.secondary_specialty.replace(/_/g, ' ')}</span></>
-                )}
-                {person.current_function_normalized && (
-                  <><span style={{ color: 'var(--fg-tertiary)' }}>Function</span><span style={{ color: 'var(--fg-primary)' }}>{person.current_function_normalized.replace(/_/g, ' ')}</span></>
-                )}
                 {currentSeniority && (
                   <><span style={{ color: 'var(--fg-tertiary)' }}>Seniority</span><span style={{ color: 'var(--fg-primary)' }}>{formatSeniorityLabel(currentSeniority)}</span></>
                 )}
@@ -406,6 +404,25 @@ export default function ProfileDrawer({ person, experiences, education, signals,
                         <div style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)', marginTop: 2, fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
                           {dateRange}{duration ? ` · ${duration}` : ''}
                         </div>
+                        {/* NEW five-axis classification (preview) for this role */}
+                        {(() => {
+                          const fn = exp.function_inferred_preview
+                          const sp = exp.specialty_inferred_preview
+                          const sk = exp.skills_inferred_preview
+                          const tn = exp.title_normalized_inferred_preview
+                          const ver = exp.classification_preview_version
+                          if ((!fn || fn.length === 0) && (!sp || sp.length === 0) && !tn) return null
+                          const clean = (s: string) => s.replace(/_/g, ' ')
+                          return (
+                            <div style={{ marginTop: 6, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-muted, rgba(255,255,255,0.03))', padding: '6px 8px', fontSize: 'var(--fs-12)', display: 'grid', gap: 1 }}>
+                              <div style={{ fontSize: '10px', letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: 600, color: 'var(--accent-strong)' }}>AI Classification (preview{ver ? ` · ${ver}` : ''})</div>
+                              {fn && fn.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>function: </span><span style={{ color: 'var(--fg-primary)' }}>{fn.map(clean).join(', ')}</span></div>}
+                              {sp && sp.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>specialty: </span><span style={{ color: 'var(--fg-primary)' }}>{sp.map(clean).join(', ')}</span></div>}
+                              {sk && sk.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>skills: </span><span style={{ color: 'var(--fg-primary)' }}>{sk.map(clean).join(', ')}</span></div>}
+                              {tn && <div><span style={{ color: 'var(--fg-tertiary)' }}>title: </span><span style={{ color: 'var(--fg-primary)' }}>{tn}</span></div>}
+                            </div>
+                          )
+                        })()}
                       </div>
                     )
                   })}
