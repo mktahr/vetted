@@ -52,10 +52,24 @@ export function pickPrimaryCurrentRole<T extends RoleForClassification>(exps: T[
   );
 }
 
-/** Current-role function + specialties from the preview. `unknown`/abstentions are dropped
- *  (they are not useful recruiter metadata) so callers can render "—" when both are empty. */
+const hasRealClassification = (e: RoleForClassification | null | undefined): boolean => {
+  const f = e?.function_inferred_preview?.[0];
+  return (!!f && f !== 'unknown') || !!e?.specialty_inferred_preview?.some((s) => s && s !== 'unknown');
+};
+
+/** Current-role function + specialties from the preview. `unknown`/abstentions are dropped.
+ *  If the primary-current role itself is unknown/empty (e.g. a joke title like "Robot Whisperer",
+ *  or an empty-description role), fall back to the MOST RECENT role that has a real classification —
+ *  a person's function/specialty should come from their career, not a novelty current title. */
 export function currentRoleClassification(exps: RoleForClassification[]): { fn: string | null; specs: string[] } {
-  const pick = pickPrimaryCurrentRole(exps);
+  let pick = pickPrimaryCurrentRole(exps);
+  if (!hasRealClassification(pick)) {
+    const classified = exps
+      .slice()
+      .sort((a, b) => (b.end_date ?? '9999').localeCompare(a.end_date ?? '9999') || (b.start_date ?? '').localeCompare(a.start_date ?? ''))
+      .find(hasRealClassification);
+    if (classified) pick = classified;
+  }
   if (!pick) return { fn: null, specs: [] };
   const fnRaw = pick.function_inferred_preview?.[0] ?? null;
   const fn = !fnRaw || fnRaw === 'unknown' ? null : fnRaw;
