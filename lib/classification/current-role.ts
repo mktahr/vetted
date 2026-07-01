@@ -9,6 +9,7 @@ export interface RoleForClassification {
   is_current: boolean
   is_primary_current?: boolean | null
   start_date: string | null
+  end_date: string | null
   title_raw: string | null
   function_inferred_preview?: string[] | null
   specialty_inferred_preview?: string[] | null
