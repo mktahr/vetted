@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { Person, CandidateBucket } from '../types'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from './CompanyLogo'
 import { formatSeniorityLabel } from '@/lib/normalize/seniority'
+import { currentRoleClassification } from '@/lib/classification/current-role'
 
 export interface DrawerExperience {
   company_id: string | null
@@ -14,6 +15,7 @@ export interface DrawerExperience {
   start_date: string | null
   end_date: string | null
   is_current: boolean
+  is_primary_current?: boolean | null
   employment_type: string | null
   function_inferred_preview?: string[] | null
   specialty_inferred_preview?: string[] | null
@@ -224,11 +226,17 @@ export default function ProfileDrawer({ person, experiences, education, signals,
               </Field>
             )}
 
-            {/* Classification metadata — quiet label-value pairs.
-                PREVIEW: legacy person-level Specialty/Secondary/Function removed (they showed the
-                old deterministic "fullstack"); the new per-role classification is in Work History below. */}
-            {(currentSeniority || person.highest_seniority_reached) && (
+            {/* Classification metadata — quiet label-value pairs. Function/Specialty come from the
+                NEW five-axis preview on the person's CURRENT role (shared helper — same derivation
+                as the list). Legacy person-level "fullstack" fields removed. */}
+            {(() => { const cls = currentRoleClassification(experiences); return (cls.fn || cls.specs.length > 0 || currentSeniority || person.highest_seniority_reached) && (
               <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 12px', fontSize: 'var(--fs-13)', fontFamily: 'var(--font-sans)' }}>
+                {cls.fn && (
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Function</span><span style={{ color: 'var(--fg-primary)' }}>{cls.fn.replace(/_/g, ' ')}</span></>
+                )}
+                {cls.specs.length > 0 && (
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Specialty</span><span style={{ color: 'var(--fg-primary)' }}>{cls.specs.map(s => s.replace(/_/g, ' ')).join(', ')}</span></>
+                )}
                 {currentSeniority && (
                   <><span style={{ color: 'var(--fg-tertiary)' }}>Seniority</span><span style={{ color: 'var(--fg-primary)' }}>{formatSeniorityLabel(currentSeniority)}</span></>
                 )}
@@ -242,7 +250,7 @@ export default function ProfileDrawer({ person, experiences, education, signals,
                   <><span style={{ color: 'var(--fg-tertiary)' }}>Slope</span><span style={{ color: 'var(--fg-primary)' }}>{person.slope_score}</span></>
                 )}
               </div>
-            )}
+            )})()}
 
             {person.location_name && <Field label="Location"><span style={{ color: 'var(--fg-primary)' }}>{person.location_name}</span></Field>}
 

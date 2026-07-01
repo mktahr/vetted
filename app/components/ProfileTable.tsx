@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, fetchAllRows } from '@/lib/supabase'
 import { Person, SortField, SortDirection, CandidateBucket } from '../types'
 import ProfileDrawer, { DrawerExperience, DrawerEducation, DrawerSignal } from './ProfileDrawer'
+import { currentRoleClassification } from '@/lib/classification/current-role'
 import AddToListMenu from './AddToListMenu'
 import TopNav from './TopNav'
 import { MultiSelectOption } from './MultiSelect'
@@ -51,6 +52,7 @@ interface ExperienceLite {
   start_date: string | null
   end_date: string | null
   is_current: boolean
+  is_primary_current: boolean
   employment_type: string | null
   title_raw: string | null
   description_raw: string | null
@@ -440,7 +442,7 @@ export default function ProfileTable() {
           { data: fieldOfStudyData },
         ] = await Promise.all([
           supabase.from('candidate_bucket_assignments').select('person_id, candidate_bucket, flagged_reasons, assignment_reason, effective_at').order('effective_at', { ascending: false }),
-          supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, seniority_normalized, start_date, end_date, is_current, employment_type_normalized, title_raw, description_raw, function_inferred_preview, specialty_inferred_preview, skills_inferred_preview, title_normalized_inferred_preview, classification_preview_version'),
+          supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, seniority_normalized, start_date, end_date, is_current, is_primary_current, employment_type_normalized, title_raw, description_raw, function_inferred_preview, specialty_inferred_preview, skills_inferred_preview, title_normalized_inferred_preview, classification_preview_version'),
           supabase.from('person_education').select('person_id, school_id, school_name_raw, degree_raw, degree_level, field_of_study_raw, field_of_study_normalized, start_year, end_year'),
           supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
           fetchAllRows<any>('companies', 'company_id, company_name, primary_industry, industries, category, review_status, legacy_primary_industry_tag, company_groups', 'company_name').then(data => ({ data })),
@@ -489,6 +491,7 @@ export default function ProfileTable() {
             specialty: (r as any).specialty_normalized ?? null, seniority: (r as any).seniority_normalized ?? null,
             start_date: (r as any).start_date ?? null,
             end_date: (r as any).end_date ?? null, is_current: (r as any).is_current ?? false,
+            is_primary_current: (r as any).is_primary_current ?? false,
             employment_type: (r as any).employment_type_normalized ?? null,
             title_raw: (r as any).title_raw ?? null, description_raw: (r as any).description_raw ?? null,
             function_inferred_preview: (r as any).function_inferred_preview ?? null,
@@ -1262,7 +1265,7 @@ export default function ProfileTable() {
                     </th>
                     <th style={{ ...eyebrow, width: 28, padding: '8px 4px' }} title="Add to list" />
                     {[
-                      {h:'Name',field:null},{h:'Bucket',field:null},{h:'Company',field:null},{h:'Title',field:null},{h:'School',field:null},
+                      {h:'Name',field:null},{h:'Bucket',field:null},{h:'Company',field:null},{h:'Title',field:null},{h:'Classification',field:null},{h:'School',field:null},
                       {h:'Yrs',field:'years_experience_estimate' as SortField},
                       {h:'Cur Ten',field:'current_tenure' as SortField},
                       {h:'Avg Ten',field:'avg_tenure' as SortField},
@@ -1356,6 +1359,24 @@ export default function ProfileTable() {
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-primary)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {(person.current_title_normalized || person.current_title_raw || '—').split(/\s*[|–—]\s*/)[0].split(/,\s*/)[0]}
                       </td>
+                      {/* Classification (current role's NEW five-axis preview: function + specialty) */}
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontSize: 'var(--fs-13)' }}>
+                        {(() => {
+                          const { fn, specs } = currentRoleClassification(person.experiences_lite)
+                          if (!fn && specs.length === 0) return <span style={{ opacity: 0.4 }}>—</span>
+                          const specFull = specs.map(s => s.replace(/_/g, ' ')).join(', ')
+                          return (
+                            <div style={{ lineHeight: 1.25 }}>
+                              <div style={{ color: 'var(--fg-secondary)' }}>{fn ? fn.replace(/_/g, ' ') : '—'}</div>
+                              {specs.length > 0 && (
+                                <div title={specFull} style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {specs[0].replace(/_/g, ' ')}{specs.length > 1 ? ` +${specs.length - 1}` : ''}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}
+                      </td>
                       {/* School */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {(() => {
@@ -1425,6 +1446,7 @@ export default function ProfileTable() {
             start_date: e.start_date,
             end_date: e.end_date,
             is_current: e.is_current,
+            is_primary_current: e.is_primary_current,
             employment_type: e.employment_type,
             function_inferred_preview: e.function_inferred_preview,
             specialty_inferred_preview: e.specialty_inferred_preview,
