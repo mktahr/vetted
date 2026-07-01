@@ -68,8 +68,13 @@ function isFounderExperience(exp: ExperienceRow): boolean {
 // can later OR into person_experiences.is_founding_engineer_role (roadmap). Requires an
 // "engineer" token, so "Founding Designer" / "Founding Product Manager" do NOT match.
 // "early" is adjacency-only to avoid catching "Early Career Engineer" (a junior title).
+// "founding" is a strong company-stage word (allow qualifiers between: Founding [X] Engineer).
+// "first"/"early" are weaker: they signal founding ONLY when adjacent or before a genuine
+// discipline word — NOT when the next word is a role-qualifier like quality/reliability/test
+// ("First Quality Engineer" is a QA title, not an employee-#1 signal). Negative-lookahead
+// excludes those; "Early Software Engineer" now correctly matches. See test-founding-regex.ts.
 export const FOUNDING_ENGINEER_TITLE_PATTERN =
-  /\bfounding\s+(?:[a-z][a-z/&+.-]*\s+){0,4}engineer\b|\bfirst\s+(?:[a-z][a-z/&+.-]*\s+){0,2}engineer\b|\bearly\s+engineer\b|\bengineer\s*#\s*\d+/i
+  /\bfounding\s+(?:[a-z][a-z/&+.-]*\s+){0,4}engineer\b|\b(?:first|early)\s+(?!(?:quality|reliability|test|qa|safety|field|support|responder|career|stage)\b)(?:[a-z][a-z/&+.-]*\s+){0,2}engineer\b|\bengineer\s*#\s*\d+/i
 
 export function isFoundingEngineerTitle(title: string | null | undefined): boolean {
   return !!title && FOUNDING_ENGINEER_TITLE_PATTERN.test(title)

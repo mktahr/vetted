@@ -73,4 +73,6 @@ export interface ClassifyBatchSummary {
   skipped: number;
   noop: number;
   results: ClassifyOutcome[];
+  /** Set when the batch halted early on a sustained infra/API outage (not spend cap). */
+  haltedReason?: string;
 }

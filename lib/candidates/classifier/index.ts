@@ -136,9 +136,13 @@ export async function classifyCandidate(supabase: SupabaseClient, personId: stri
       return out(personId, 'discarded', { runId, reason: `empty_commit:${res.data ?? res.error?.message}` });
     }
 
+    // ── Candidate-level SUPPLEMENTARY context (headline + summary) — passed separately,
+    //    scoped by the prompt's rule 7 (never overrides a role's own description).
+    const { data: personCtx } = await supabase.from('people').select('headline_raw, summary_raw').eq('person_id', personId).maybeSingle();
+
     // ── Over-context guard: clean fail, never silently truncate.
     const systemPrompt = buildSystemPrompt(v);
-    const userPrompt = buildUserPrompt(experiences);
+    const userPrompt = buildUserPrompt(experiences, { headline: personCtx?.headline_raw, summary: personCtx?.summary_raw });
     if (systemPrompt.length + userPrompt.length > MAX_INPUT_CHARS) {
       await markFailed(supabase, personId, token, runId, priorFailures, 'over_context', 0, 0);
       return out(personId, 'failed', { runId, reason: 'over_context' });
@@ -150,7 +154,12 @@ export async function classifyCandidate(supabase: SupabaseClient, personId: stri
     let callCount = 0;
     let lastErrors: string[] = [];
     for (let attempt = 0; attempt <= MAX_VALIDATION_RETRIES; attempt++) {
-      const { data: reserved } = await supabase.rpc('reserve_classification_spend', { p_cents: EST_CENTS_PER_CALL, p_cap: MAX_DAILY_CENTS });
+      const { data: reserved, error: reserveErr } = await supabase.rpc('reserve_classification_spend', { p_cents: EST_CENTS_PER_CALL, p_cap: MAX_DAILY_CENTS });
+      if (reserveErr) {
+        // Infra error must SURFACE as a discard — never masquerade as spend_cap.
+        await releaseToPending(supabase, personId, token); await closeRun(supabase, runId, 'discarded', `reserve_rpc_error:${reserveErr.message}`, tokensUsed, callCount * EST_CENTS_PER_CALL);
+        return out(personId, 'discarded', { runId, reason: `reserve_rpc_error:${reserveErr.message}`, tokens: tokensUsed });
+      }
       if (reserved !== true) {
         await releaseToPending(supabase, personId, token); await closeRun(supabase, runId, 'discarded', 'spend_cap', tokensUsed, callCount * EST_CENTS_PER_CALL);
         return out(personId, 'capped', { runId, reason: 'daily_spend_cap', tokens: tokensUsed });
@@ -161,7 +170,7 @@ export async function classifyCandidate(supabase: SupabaseClient, personId: stri
       tokensUsed += call.inputTokens + call.outputTokens;
       if (call.error) {
         await releaseToPending(supabase, personId, token); await closeRun(supabase, runId, 'discarded', `api_error:${call.error}`, tokensUsed, callCount * EST_CENTS_PER_CALL);
-        return out(personId, 'discarded', { runId, reason: call.error, tokens: tokensUsed });
+        return out(personId, 'discarded', { runId, reason: `api_error:${call.error}`, tokens: tokensUsed });
       }
       const valid = validateClassification(call.output, expectedIds, v);
       if (valid.ok) {
@@ -200,12 +209,19 @@ export async function classifyPending(supabase: SupabaseClient, limit = 50): Pro
   if (!eligible || eligible.length === 0) return summary;
   const vocab = await loadActiveVocab(supabase);
 
+  let consecutiveInfraErrors = 0;
   for (const row of eligible) {
     const r = await classifyCandidate(supabase, (row as any).person_id, vocab);
     summary.attempted++;
     summary.results.push(r);
     summary[r.action] = (summary[r.action] as number) + 1;
     if (r.action === 'capped') break; // every subsequent reserve will also fail today
+    // HALT on a sustained infra/API outage instead of firing one failing call per candidate
+    // (the class of bug the credit outage exposed — don't let it silently repeat 129x).
+    const infra = r.action === 'discarded' && (String(r.reason).startsWith('api_error:') || String(r.reason).startsWith('reserve_rpc_error:'));
+    if (infra) {
+      if (++consecutiveInfraErrors >= 3) { summary.haltedReason = `sustained infra/API failure (${consecutiveInfraErrors} consecutive discards): ${r.reason}`; break; }
+    } else consecutiveInfraErrors = 0;
   }
   return summary;
 }

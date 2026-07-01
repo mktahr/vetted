@@ -7,7 +7,7 @@ export const CLASSIFIER_MODEL = 'claude-haiku-4-5';
 // Bumped when the prompt OR output contract changes — part of the run provenance
 // and a re-classification trigger (a version change makes done rows eligible again,
 // surfaced by re-queueing on deploy if desired). Keep in sync with prompt.ts.
-export const PROMPT_VERSION = 'cls-2026-06-30d';
+export const PROMPT_VERSION = 'cls-2026-07-01d';
 
 // Lease must exceed the worst case: two Haiku calls (initial + one validation
 // retry) + the commit round-trip. 5 min is comfortably above that; a too-short

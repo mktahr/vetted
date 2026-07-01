@@ -678,17 +678,18 @@ export default function ProfilePage() {
                   )}
                   {/* Five-axis classification (PREVIEW — inert columns, not used by search/scoring yet) */}
                   {(() => {
-                    const fn = (exp as any).function_inferred as string[] | null
-                    const sp = (exp as any).specialty_inferred as string[] | null
-                    const sk = (exp as any).skills_inferred as string[] | null
-                    const tn = (exp as any).title_normalized_inferred as string | null
+                    const fn = (exp as any).function_inferred_preview as string[] | null
+                    const sp = (exp as any).specialty_inferred_preview as string[] | null
+                    const sk = (exp as any).skills_inferred_preview as string[] | null
+                    const tn = (exp as any).title_normalized_inferred_preview as string | null
                     const founding = (exp as any).is_founding_engineer_role as boolean
+                    const ver = (exp as any).classification_preview_version as string | null
                     if ((!fn || fn.length === 0) && (!sp || sp.length === 0) && !tn) return null
                     const clean = (s: string) => s.replace(/_/g, ' ')
                     return (
                       <div className="mt-2 rounded border border-border bg-muted px-2.5 py-1.5 text-xs space-y-0.5">
                         <div className="font-semibold uppercase" style={{ fontSize: '10px', letterSpacing: '0.05em', color: 'var(--accent-strong)' }}>
-                          AI Classification (preview)
+                          AI Classification (preview{ver ? ` · ${ver}` : ''})
                         </div>
                         {fn && fn.length > 0 && <div><span className="text-tertiary">function: </span><span className="text-foreground">{fn.map(clean).join(', ')}</span></div>}
                         {sp && sp.length > 0 && <div><span className="text-tertiary">specialty: </span><span className="text-foreground">{sp.map(clean).join(', ')}</span></div>}

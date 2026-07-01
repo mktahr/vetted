@@ -32,53 +32,63 @@ async function main(){
 
   const cands = fixture.candidates.filter((c:any)=>c.experiences.length>0)
   const people:any[] = []
-  let n=0, flaggedRoles=0, totalRoles=0
+  // Honest buckets — errors and both-unknown are NEVER folded into "agreement".
+  const counts = { agree:0, disagree:0, both_unknown:0, error:0, no_ref:0 }
+  let n=0
   for (const c of cands){
     n++
     const ids = c.experiences.map((e:any)=>e.person_experience_id)
-    let got: Record<string,any> = {}
-    try {
-      const call = await callClassifier(system, buildUserPrompt(c.experiences))
-      const valid = validateClassification(call.output, ids, vocab)
-      for (const t of valid.tuples) got[t.exp_id]=t
-    } catch { /* leave got empty -> rows show (classifier error) */ }
+    const got: Record<string,any> = {}
+    const call = await callClassifier(system, buildUserPrompt(c.experiences))
+    // FAIL LOUD on API error — a report built from failed calls is a lie (this is the bug that produced the fake 95%).
+    if (call.error) throw new Error(`classify-report HALTING on API error (report would be misleading, nothing written): ${call.error}`)
+    const valid = validateClassification(call.output, ids, vocab)
+    const valFailed = !valid.ok
+    if (!valFailed) for (const t of valid.tuples) got[t.exp_id]=t
     const roles = c.experiences.map((e:any)=>{
       const g = got[e.person_experience_id]
-      const haiku = g ? (g.function_inferred[0]||'unknown') : '(error)'
+      const haiku = valFailed ? '(validation-failed)' : (g ? (g.function_inferred[0]||'unknown') : '(missing)')
       const spec = g ? (g.specialty_inferred[0]||'') : ''
       const r = ref[e.person_experience_id] || {opus:'',sonnet:''}
       const cmp = r.opus || r.sonnet     // strong reference
       const src = r.opus ? 'Opus' : (r.sonnet?'Sonnet':'')
-      const flag = cmp && haiku!=='(error)' && haiku!==cmp
-      totalRoles++; if(flag) flaggedRoles++
-      return { title:e.title_raw, company:e.company_name, haiku, spec, cmp, src, flag,
+      let status:'agree'|'disagree'|'both_unknown'|'error'|'no_ref'
+      if (haiku.startsWith('(')) status='error'
+      else if (!cmp) status='no_ref'
+      else if (haiku==='unknown' && cmp==='unknown') status='both_unknown'  // NOT agreement
+      else if (haiku===cmp) status='agree'
+      else status='disagree'
+      counts[status]++
+      const flag = status==='disagree' || status==='error'
+      return { title:e.title_raw, company:e.company_name, haiku, spec, cmp, src, status, flag,
                desc:(e.description_raw||'').replace(/\s+/g,' ').slice(0,160) }
     })
     people.push({ name:c.full_name, url:urlBy[c.person_id]||'', roles, flags: roles.filter((r:any)=>r.flag).length })
     if(n%10===0) console.log(`  classified ${n}/${cands.length}`)
   }
 
-  // Report: flagged people first (most divergences), then the rest.
+  const totalRoles = counts.agree+counts.disagree+counts.both_unknown+counts.error+counts.no_ref
+  const comparable = counts.agree+counts.disagree   // both sides gave a real (non-unknown) label
   people.sort((a,b)=> b.flags-a.flags || a.name.localeCompare(b.name))
   const L:string[] = []
   L.push(`# Classifier review — Haiku over ${cands.length} candidates (${totalRoles} roles)`)
   L.push(``)
-  L.push(`${flaggedRoles} roles differ from the strong reference (Opus/Sonnet) — those are marked ⚠ and sorted to the top. Everything else, Haiku agreed with the reference.`)
-  L.push(``)
-  L.push(`Tell me by voice: "<person>, the <role> should be <X>" for anything wrong. You don't need to touch this file.`)
+  L.push(`Honest tallies (errors + both-unknown are NOT counted as agreement):`)
+  L.push(`  agree ${counts.agree} · disagree ${counts.disagree} · both-unknown ${counts.both_unknown} · classifier-error ${counts.error} · no-reference ${counts.no_ref}`)
+  L.push(`  agreement over COMPARABLE roles (both sides gave a real label, n=${comparable}): ${comparable?((100*counts.agree/comparable).toFixed(1)+'%'):'n/a'}`)
+  L.push(`  ⚠ = disagreements + classifier-errors, marked and sorted to the top.`)
   L.push(``)
   for (const p of people){
-    const handle = p.url ? p.url.replace('https://www.linkedin.com/in/','').replace(/\/$/,'') : 'no-url'
     L.push(`## ${p.name}  ·  ${p.url||'(no linkedin)'}${p.flags?`   [${p.flags} to check]`:''}`)
     for (const r of p.roles){
       const mark = r.flag ? '⚠' : ' '
-      const ref = r.flag ? `   (${r.src} said: ${r.cmp})` : ''
+      const note = r.status==='disagree' ? `   (${r.src} said: ${r.cmp})` : ''
       L.push(`  ${mark} ${r.title} @ ${r.company}`)
-      L.push(`      → ${r.haiku}${r.spec?` / ${r.spec}`:''}${ref}`)
+      L.push(`      → ${r.haiku}${r.spec?` / ${r.spec}`:''}${note}`)
     }
     L.push(``)
   }
   writeFileSync('reference/eval/classify-report.md', L.join('\n'))
-  console.log(`\nWrote reference/eval/classify-report.md — ${flaggedRoles}/${totalRoles} roles flagged for review across ${people.filter(p=>p.flags).length} candidates.`)
+  console.log(`\nWrote classify-report.md — agree ${counts.agree} / disagree ${counts.disagree} / both-unknown ${counts.both_unknown} / error ${counts.error} / no-ref ${counts.no_ref} (comparable agreement ${comparable?((100*counts.agree/comparable).toFixed(1)+'%'):'n/a'}).`)
 }
 main().catch(e=>{console.error('REPORT ERROR:', e); process.exit(1)})
