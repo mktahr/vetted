@@ -528,17 +528,11 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Classification metadata — quiet label-value grid */}
+        {/* Classification metadata — quiet label-value grid.
+            PREVIEW: the OLD person-level Specialty / Secondary / Function rows (driven by the
+            legacy deterministic classifier — e.g. the bogus "fullstack") are hidden here so the
+            ONLY classification shown is the new per-role "AI Classification (preview)" panel below. */}
         <div className="grid gap-x-4 gap-y-0.5 mb-6 text-sm" style={{ gridTemplateColumns: 'auto 1fr', maxWidth: 400 }}>
-          {person.primary_specialty && (
-            <><span className="text-muted-foreground">Specialty</span><span>{person.primary_specialty.replace(/_/g, ' ')}</span></>
-          )}
-          {person.secondary_specialty && (
-            <><span className="text-muted-foreground">Secondary</span><span>{person.secondary_specialty.replace(/_/g, ' ')}</span></>
-          )}
-          {person.current_function_normalized && (
-            <><span className="text-muted-foreground">Function</span><span>{person.current_function_normalized.replace(/_/g, ' ')}</span></>
-          )}
           {(() => {
             const currentExp = experiences.find(e => e.is_current && e.seniority_normalized && e.seniority_normalized !== 'unknown')
             const currentSen = currentExp?.seniority_normalized ?? null
