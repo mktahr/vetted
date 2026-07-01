@@ -17,6 +17,15 @@ export interface RoleForClassification {
 
 const isStudentTitle = (t: string | null | undefined) => /\b(student|intern|internship|co-?op|apprentice)\b/i.test(t || '');
 
+// Display formatter for axis values: snake_case -> Title Case, with known acronyms uppercased.
+// "software_engineering" -> "Software Engineering"; "ai_engineering" -> "AI Engineering";
+// "ml_platform_engineering" -> "ML Platform Engineering".
+const ACRONYMS = new Set(['ai','ml','api','sre','rf','gnc','fpga','asic','soc','hdl','cad','fea','dsp','pcb','ui','ux','qa','etl','llm','ros','slam','mbse','cnc','io','nlp','cv','hvac','iot','sql','gpu','cpu','vlsi','ip','os','ci','cd','ar','vr','pcba']);
+export function formatAxisLabel(v: string | null | undefined): string {
+  if (!v) return '';
+  return v.split('_').map((w) => (ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1))).join(' ');
+}
+
 export function pickPrimaryCurrentRole<T extends RoleForClassification>(exps: T[]): T | null {
   const current = exps.filter((e) => e.is_current);
   if (current.length > 0) {

@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, fetchAllRows } from '@/lib/supabase'
 import { Person, SortField, SortDirection, CandidateBucket } from '../types'
 import ProfileDrawer, { DrawerExperience, DrawerEducation, DrawerSignal } from './ProfileDrawer'
-import { currentRoleClassification } from '@/lib/classification/current-role'
+import { currentRoleClassification, formatAxisLabel } from '@/lib/classification/current-role'
 import AddToListMenu from './AddToListMenu'
 import TopNav from './TopNav'
 import { MultiSelectOption } from './MultiSelect'
@@ -1265,7 +1265,7 @@ export default function ProfileTable() {
                     </th>
                     <th style={{ ...eyebrow, width: 28, padding: '8px 4px' }} title="Add to list" />
                     {[
-                      {h:'Name',field:null},{h:'Bucket',field:null},{h:'Company',field:null},{h:'Title',field:null},{h:'Classification',field:null},{h:'School',field:null},
+                      {h:'Name',field:null},{h:'Bucket',field:null},{h:'Company',field:null},{h:'Title',field:null},{h:'Function',field:null},{h:'Specialty',field:null},{h:'School',field:null},
                       {h:'Yrs',field:'years_experience_estimate' as SortField},
                       {h:'Cur Ten',field:'current_tenure' as SortField},
                       {h:'Avg Ten',field:'avg_tenure' as SortField},
@@ -1359,24 +1359,23 @@ export default function ProfileTable() {
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-primary)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {(person.current_title_normalized || person.current_title_raw || '—').split(/\s*[|–—]\s*/)[0].split(/,\s*/)[0]}
                       </td>
-                      {/* Classification (current role's NEW five-axis preview: function + specialty) */}
-                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontSize: 'var(--fs-13)' }}>
-                        {(() => {
-                          const { fn, specs } = currentRoleClassification(person.experiences_lite)
-                          if (!fn && specs.length === 0) return <span style={{ opacity: 0.4 }}>—</span>
-                          const specFull = specs.map(s => s.replace(/_/g, ' ')).join(', ')
-                          return (
-                            <div style={{ lineHeight: 1.25 }}>
-                              <div style={{ color: 'var(--fg-secondary)' }}>{fn ? fn.replace(/_/g, ' ') : '—'}</div>
-                              {specs.length > 0 && (
-                                <div title={specFull} style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                  {specs[0].replace(/_/g, ' ')}{specs.length > 1 ? ` +${specs.length - 1}` : ''}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })()}
-                      </td>
+                      {/* Function + Specialty (current role's NEW five-axis preview), separate columns */}
+                      {(() => {
+                        const { fn, specs } = currentRoleClassification(person.experiences_lite)
+                        const specFull = specs.map(formatAxisLabel).join(', ')
+                        return (
+                          <>
+                            <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)' }}>
+                              {fn ? formatAxisLabel(fn) : <span style={{ opacity: 0.4 }}>—</span>}
+                            </td>
+                            <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }} title={specs.length > 1 ? specFull : undefined}>
+                              {specs.length > 0
+                                ? <>{formatAxisLabel(specs[0])}{specs.length > 1 ? <span style={{ color: 'var(--fg-tertiary)' }}>{` +${specs.length - 1}`}</span> : null}</>
+                                : <span style={{ opacity: 0.4 }}>—</span>}
+                            </td>
+                          </>
+                        )
+                      })()}
                       {/* School */}
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {(() => {

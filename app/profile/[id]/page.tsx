@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { formatAxisLabel } from '@/lib/classification/current-role'
 import { Person, Experience, Education, BucketAssignment, CandidateBucket, FlaggedReason, ClearanceLevel, ScoreComponent } from '../../types'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from '../../components/CompanyLogo'
 import CrossOrgNetwork from '../../components/CrossOrgNetwork'
@@ -679,7 +680,7 @@ export default function ProfilePage() {
                     const founding = (exp as any).is_founding_engineer_role as boolean
                     const ver = (exp as any).classification_preview_version as string | null
                     if ((!fn || fn.length === 0) && (!sp || sp.length === 0) && !tn) return null
-                    const clean = (s: string) => s.replace(/_/g, ' ')
+                    const clean = formatAxisLabel
                     return (
                       <div className="mt-2 rounded border border-border bg-muted px-2.5 py-1.5 text-xs space-y-0.5">
                         <div className="font-semibold uppercase" style={{ fontSize: '10px', letterSpacing: '0.05em', color: 'var(--accent-strong)' }}>

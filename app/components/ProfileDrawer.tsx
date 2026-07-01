@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react'
 import { Person, CandidateBucket } from '../types'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from './CompanyLogo'
 import { formatSeniorityLabel } from '@/lib/normalize/seniority'
-import { currentRoleClassification } from '@/lib/classification/current-role'
+import { currentRoleClassification, formatAxisLabel } from '@/lib/classification/current-role'
 
 export interface DrawerExperience {
   company_id: string | null
@@ -232,10 +232,10 @@ export default function ProfileDrawer({ person, experiences, education, signals,
             {(() => { const cls = currentRoleClassification(experiences); return (cls.fn || cls.specs.length > 0 || currentSeniority || person.highest_seniority_reached) && (
               <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 12px', fontSize: 'var(--fs-13)', fontFamily: 'var(--font-sans)' }}>
                 {cls.fn && (
-                  <><span style={{ color: 'var(--fg-tertiary)' }}>Function</span><span style={{ color: 'var(--fg-primary)' }}>{cls.fn.replace(/_/g, ' ')}</span></>
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Function</span><span style={{ color: 'var(--fg-primary)' }}>{formatAxisLabel(cls.fn)}</span></>
                 )}
                 {cls.specs.length > 0 && (
-                  <><span style={{ color: 'var(--fg-tertiary)' }}>Specialty</span><span style={{ color: 'var(--fg-primary)' }}>{cls.specs.map(s => s.replace(/_/g, ' ')).join(', ')}</span></>
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Specialty</span><span style={{ color: 'var(--fg-primary)' }}>{cls.specs.map(formatAxisLabel).join(', ')}</span></>
                 )}
                 {currentSeniority && (
                   <><span style={{ color: 'var(--fg-tertiary)' }}>Seniority</span><span style={{ color: 'var(--fg-primary)' }}>{formatSeniorityLabel(currentSeniority)}</span></>
@@ -420,7 +420,7 @@ export default function ProfileDrawer({ person, experiences, education, signals,
                           const tn = exp.title_normalized_inferred_preview
                           const ver = exp.classification_preview_version
                           if ((!fn || fn.length === 0) && (!sp || sp.length === 0) && !tn) return null
-                          const clean = (s: string) => s.replace(/_/g, ' ')
+                          const clean = formatAxisLabel
                           return (
                             <div style={{ marginTop: 6, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-muted, rgba(255,255,255,0.03))', padding: '6px 8px', fontSize: 'var(--fs-12)', display: 'grid', gap: 1 }}>
                               <div style={{ fontSize: '10px', letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: 600, color: 'var(--accent-strong)' }}>AI Classification (preview{ver ? ` · ${ver}` : ''})</div>
