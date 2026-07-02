@@ -25,6 +25,11 @@ These were intentionally cut from PR A scope. All have hooks in the already-ship
 - **Trigger:** when ready to broaden the scoring signal beyond career_slope
 - **Scope:** ~150 LOC. Trajectory of `company_year_scores.company_score` across the candidate's last 2-3 FT roles, similar pattern to `career_progression` but on raw company scores. Write to a new `people.company_quality_slope` derived column (rising/flat/declining/insufficient_data); `score-candidate.ts` reads it like `title_level_slope`
 
+### Slope redesign — continuous speed-to-senior/lead grade (NOT committed)
+- **Status:** design exploration only — floated by Matt, explicitly not committed. Current `people.slope_score` (migration 068) grades title-*level* trajectory across roles.
+- **Trigger:** only if slope becomes a primary ranking vector AND the current title-level `slope_score` proves too noisy in practice.
+- **Scope:** replace trajectory-based slope with a continuous grade on **years from graduation → first Senior OR Lead title** (no year thresholds). Requires reliable per-role seniority detection + a clean graduation anchor (both exist today). **Unsolved design question:** senior-vs-lead precedence in result ranking (senior-in-2yrs vs lead-in-5yrs — which surfaces first, or is it a toggle?). Recommendation on file (2026-06-30): do NOT build before five-axis + AI chat ship — it reorders effort away from the wedge and isn't clearly better than the shipped `slope_score`. The earlier year-threshold variant (senior <5/<7, lead <9/<12) was explicitly abandoned by Matt in favor of this continuous framing — don't resurrect it.
+
 ---
 
 ## Data Quality
@@ -102,6 +107,46 @@ These were intentionally cut from PR A scope. All have hooks in the already-ship
 
 ### Function taxonomy consistency — promote disciplines from specialty to function
 - **Promoted to ROADMAP item #3** (Four-axis candidate taxonomy rebuild — 2026-05-29). This IS the work — promoted from "domain-by-domain refactor" backlog into the four-axis taxonomy build as sub-PR 2b (`function_dictionary` expansion to first-class disciplines: software_engineering, mechanical_engineering, electrical_engineering, etc.). See ROADMAP for full scope including the three other axes (specialty, skills, industry context) the function expansion plugs into.
+
+### Custom ranking within lists (candidate + company)
+- **Status:** concept; `lists` / `list_items` exist (migration 038) but carry no ordering or tier.
+- **Trigger:** when recruiters/admin start handing curated lists back to portfolio companies and ordering matters (ties to the ROADMAP CSV-export / list-building item).
+- **Scope:** add per-list-item ranking — either a tier label (1/2/3) or an explicit manual 1→N order — for both candidate and company lists. Surfaces as drag-reorder or a tier chip in `[app/lists/[id]/page.tsx]`. Needs an `order_index` (and/or `tier`) column on `list_items`. Feeds the CSV export (ranked output). ~1 day.
+
+### Saved searches: store filters + search-by-filter
+- **Status:** `saved_searches` table exists (migration 038) — schema only, no UI, and it does not yet persist the individual filter facets in a queryable way.
+- **Trigger:** when recruiters accumulate enough searches that re-finding one matters.
+- **Scope:** persist each saved search's filter tags (YOE, companies, location, seniority, function, etc.) + a saved date, then let the user **search their own saved searches by facet** ("all my SF searches", "all my senior + SWE + SF searches" regardless of the other filters). The cross-reference query is the actual feature — the re-run capability is table stakes. ~1–2 days incl. the saved-search browse UI.
+
+### Richer hide-from-view semantics
+- **Status:** `hidden_items` table exists (migration 038) — schema only. Today there's no UI and only a single flat "hidden" concept.
+- **Trigger:** pairs with the auth / user-admin split (ROADMAP #4) — team-scoped semantics need real users.
+- **Scope:** expand hide-from-view to: hide for **current search only** / **forever (me)** / **forever (whole team)** / add a **DNC tag** / attach a **personal note** / attach a **team-visible note**. Schema: extend `hidden_items` with a scope enum + optional note fields; DNC likely its own tag concept. ~1–2 days.
+
+### Regulated-environment / sector / regulator filters
+- **Status:** concept; no schema. Signals whether a candidate has built in regulated environments (DoD, DOE, SEC, FINRA, FDA, FAA, NRC, etc.), by sector (Defense / Energy / Finance / Health / Aerospace), and by specific regulator.
+- **Trigger:** when leadership/senior search becomes a focused use case — this is a strong signal for roles that require building-to-standard and navigating regulator scrutiny.
+- **Scope:** research pass first (which regulators/sectors matter, mapped to company industry/domain tags + candidate experience). Then a derived regulatory-exposure dimension on experiences (from the company's sector/domain) surfaced as a search filter. Overlaps company taxonomy (`domain_tags`) — may be derivable rather than net-new data. ~2–3 days after the research scoping.
+
+### School-group buckets — top-CS / hard-tech / Ivy / top-STEM-N
+- **Status:** `school_groups` exists but only holds "top law firms"-style groups; no CS/hard-tech/Ivy/STEM buckets. **Distinct from** the "School → Programs expansion UI" item above (that expands programs *within* one school; this is group-level buckets *across* schools).
+- **Trigger:** when school-based filtering becomes a common search vector (esp. for UR/early-career sourcing).
+- **Scope:** define + seed group buckets — top general CS programs, "practical hard-tech" schools (racing-club / rocketry tier), Ivy, Top-STEM (top-10 / 20 / 50, US or global) — as `school_groups` rows with membership, surfaced as a school-filter shortcut. Also note the parallel **company-groups** expansion (top consultancies, top investment banks — currently only top law firms; possibly admin-hidden as noise for now). ~1–2 days.
+
+### UX rethink (post-AI-chat) — result presentation
+- **Status:** concept / note-to-self. Current side-drawer (Juicebox-style) presentation is functional but Matt is not sold on it.
+- **Trigger:** explicitly deferred until AFTER AI chat search ships — do not touch presentation before the wedge lands.
+- **Scope:** explore (a) moving off the off-to-the-side drawer to a **centered overlay**, (b) an **expanded list view** where one row pops open to ~3 rows of inline detail (not a drawer), (c) a general full-profile-page polish pass. Design exploration, not a defined build yet.
+
+### Company detail drawer + accordion row-expand
+- **Status:** concept. Candidates have a detail drawer; companies do not. The companies table has no inline expansion.
+- **Trigger:** when company browsing/curation volume makes click-through-to-detail painful.
+- **Scope:** give companies the same slide-out/overlay detail treatment candidates have, plus inline **accordion row-expand** (1–2 extra rows of info per company on click) and an **expand-all** toggle on the companies table. Overlaps the UX-rethink item — decide the drawer-vs-overlay pattern once for both. ~1–2 days.
+
+### Clearance placement — deferred product question (recommend HOLD)
+- **Status:** Matt floated moving clearance out of its own filter and into signals (or a new specialty/signals split). **Recommendation on file (2026-06-30): do NOT do this.** Clearance as a first-class, manually-verified `people.clearance_level` filter is arguably correct — defense/aerospace recruiters filter hard on it, and it's never inferred (unlike text-extracted signals). Burying it in the signals pile would weaken it.
+- **Trigger:** revisit only if the filter sidebar gets meaningfully reorganized and clearance genuinely no longer fits as a standalone dimension.
+- **Scope:** N/A unless the recommendation is overturned. Logged so the idea isn't lost.
 
 ---
 
@@ -204,10 +249,30 @@ PR 1 (the pipeline) shipped 2026-06-24 via PR [#10](https://github.com/mktahr/ve
 - **Trigger:** when sourcing pipeline phases are stable
 - **Scope:** cron-style backend agent that monitors news / fundraising announcements / press, surfaces new startups for admin review and database addition. Reduces manual curation overhead
 
-### AI narrative summary
-- **Status:** scoped earlier; depends on company data enrichment having enough signal for useful summaries
+### AI narrative summary — multiple distinct summaries
+- **Status:** scoped earlier; depends on company data enrichment having enough signal for useful summaries. **Upgraded (2026-06-30):** not one paragraph — **three separable angles**.
 - **Trigger:** when company enrichment lands
-- **Scope:** Claude API generates a short story-of-the-candidate paragraph from structured data (experiences + company context + education). **Summarization, not judgment** — scoring and bucketing stay deterministic
+- **Scope:** Claude API generates, from structured data (experiences + company context + education), **three distinct summaries**: (a) **why they fit *this* role**, (b) **what makes them stand out**, (c) **their story** — inferring career decisions and flagging acquisitions / layoffs / headcount drops during their tenure (the narrative a recruiter builds in their head). Fit-vs-about likely two clean calls to keep separation. **Summarization, not judgment** — scoring and bucketing stay deterministic.
+
+### Forward-potential classification for early-career ("what they COULD do")
+- **Status:** concept; feeds AI chat search. Core to the UR / early-career wedge.
+- **Trigger:** builds on the five-axis taxonomy + AI chat search (ROADMAP #2/#3).
+- **Scope:** for thin-title, cross-domain early-career candidates (elite new-grads who dabbled across HW/SW/AI/EE via internships, hackathons, personal projects), **project the plausible roles they could fill** so they surface in *multiple* role searches — e.g. an EE new-grad appears in both hardware AND embedded-SWE searches. Distinct from five-axis matching (which classifies what they *did*); this projects what they *could do*. Many such candidates lack a clear current title, so the system must assist/guide rather than read a title. Pairs with the multi-summary feature (surface the "here's why they could do X" reasoning).
+
+### Role-archetype reasoning ("what good looks like") — feeds AI chat search
+- **Status:** concept; a reasoning layer under AI chat search (ROADMAP #3).
+- **Trigger:** with/after AI chat search V1.
+- **Scope:** reframe search from literal-title ("find Heads of Eng at startups") to **capability** ("find people who could be a great Head of Eng — will build X, manage Y"), surfacing non-obvious fits (scoped managers/directors, CTOs of failed startups, technical founders) with AI-generated reasons for why. Combination of our own backend guidance (how to think about a role archetype) + LLM granularity. The system should "think" on every free-text search, not just pattern-match filters.
+
+### AI outlier-flagging → learning feedback loop
+- **Status:** concept; a calibration flywheel for the deterministic engine.
+- **Trigger:** pairs with the five-axis calibration pass (ROADMAP #2 sub-PR 7).
+- **Scope:** teach the LLM to flag profiles it (a) can't confidently rank/categorize or (b) disagrees with vs. the deterministic score given our logic. Those edge cases become the queue for improving the rules — constantly unearthing cases that sharpen title/specialty/skills/education/signal handling against career-history context. Feedback loop only; scoring stays deterministic.
+
+### MCP / Slack-native search
+- **Status:** concept. Natural-language candidate search from Slack via an MCP connector. **Distinct** from the Slack↔ATS integrations under Pipelines.
+- **Trigger:** post-launch, after AI chat search is stable — meet founders where they already work.
+- **Scope:** an MCP server exposing Vetted search so a user can query from Slack ("@vetted top 20 mechanical-eng leads in <geo> at a company this size, ranked by slope, 3+ yrs tenure"). **Scope-first unknown:** how MCP pipes filter state + results back and forth, and how a large result set (e.g. 500) gets filtered/ranked/paginated into a Slack-legible answer. Design that hand-off before building.
 
 ---
 
@@ -236,6 +301,11 @@ PR 1 (the pipeline) shipped 2026-06-24 via PR [#10](https://github.com/mktahr/ve
 - **Trigger:** when mid-tier coverage breadth matters more than precision
 - **Scope:** Claude + Excel pipeline to auto-apply tier scores to mid-tier companies based on founding date and other signals. Output tagged as `AI-averaged` vs `manually ranked` (add a column or reuse `company_score_mode`). Deliverable: CSV that re-seeds `company_year_scores` in bulk
 
+### Recursive company scoring from people
+- **Status:** concept; a **different method** from "Bulk company scoring" above (which is founding-date + firmographic heuristics). This one derives a company's score from **its people**.
+- **Trigger:** when we want directionally-useful automated scores for unscored companies at scale, and have enough scored companies/schools to anchor it.
+- **Scope:** pull a company's candidates → score them → score the company from the aggregate: educational pedigree + already-scored prior companies its people came from + candidate signal-spikes (fellowships/hackathons/uni clubs) + investors. **Known risk (flag in the design):** looped scoring where people and companies score each other can drift — anchor on a basis of knowns (scored schools, scored ex-companies, investor tiers) to keep it stable. Output tagged `AI-derived` and always admin-reviewable before it feeds candidate scores.
+
 ### PDL Preview API
 - **Status:** evaluation; not started
 - **Trigger:** when alternative coverage or pricing matters
@@ -255,6 +325,16 @@ PR 1 (the pipeline) shipped 2026-06-24 via PR [#10](https://github.com/mktahr/ve
 - **Status:** concept; long-term
 - **Trigger:** post-launch, after Slack integrations validate the recruiter-flow hypothesis
 - **Scope:** a Slack-first ATS for recruiters who don't want Ashby/Greenhouse complexity. Stretch goal
+
+---
+
+## Five-Axis Classification
+
+### DB-level atomic job claim for classify-pending (upgrade from app-layer lease)
+- **What:** upgrade the `classify-pending` job claim from the app-layer expiring lease to a **database-level claim** — a Postgres function using row-level locking (`SELECT … FOR UPDATE SKIP LOCKED`) for fully atomic job handout (claim + complete inside the DB).
+- **Why deferred:** single-admin app; only two possible concurrent workers (the daily cron + a manual on-demand run), so realistic max contention is **one overlap**. The shipped app-layer design — expiring lease + reclaim, conditional mark-done, and commit-time input-hash recheck (discard + re-queue if the input changed) — is **already correct at this load**. A DB-level claim adds permanent maintenance surface (an in-database function living separately from the app code, harder to change and debug) for robustness only needed under **high** concurrency.
+- **When to revisit:** if we ever observe real claim collisions / double-processing; OR run many concurrent classification workers (multi-user, parallelized batch); OR move classification off the single daily cron.
+- **Cost to switch later:** **contained** — claim/complete sits behind one interface, so this is a mechanism swap without touching the rest of the pipeline.
 
 ---
 

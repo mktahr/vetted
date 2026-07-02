@@ -6,6 +6,36 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 
 ---
 
+## 2026-07-01 — Five-axis sub-PR 3: classifier tuned + validated in-app; integrity hardening; legacy seniority/title-level fixes
+
+**Shipped** (branch `five-axis-subpr3-classify` — pushed, NOT merged; prod migrations 083/084/088/089 applied, 085/086/087 dev-only)
+- **Classifier engine tuned + frozen at `cls-2026-07-01d`** (stable **88.2–89.0%** comparable agreement over 3 runs, error=0). Prompt rules: IS-IT-vs-TOUCHED-IT governing principle; function-list-only + skills-axis constraints; don't-abstain on clear titles; AI/ML build-vs-use (explicit ML title→`ml_engineering`, vague AI→`software[ai_engineering]`); machinist/trades→unknown; embedded→firmware; propulsion→aerospace; `systems_engineering` is its own function; Rule 6 leadership (current-org primary, no old-discipline bleed); Rule 7 headline/summary scoped context; founding-engineer regex (26 fixture tests).
+- **Integrity fixes (Codex review, after a credit-outage silent-failure incident)**: `classifyPending` halts on sustained infra/API outage; `reserve_classification_spend` surfaces RPC errors instead of masquerading as spend_cap; `classify-report` honest buckets (never counts unknown==unknown or errors as agreement); populate scripts stripped of lifecycle writes + error-checked; tuning-run mirrors production validation-retry. Hardening-before-merge logged in BUGS.md.
+- **Eval methodology**: candidate-split (never by experience) — TUNING 23 / HOLDOUT 23 (locked) / POOL 67, stratified; `build-eval-sets.ts`, `tuning-run.ts` (trend log). Frozen fixture 129 cands / 996 exp.
+- **Safe in-app preview** (migration 089): SEPARATE `*_inferred_preview` columns + provenance (never touches lifecycle / real `_inferred`). `populate-preview.ts` wrote 985 roles/129 cands ($1.18). Profile page + drawer work-history render per-role "AI Classification (preview)" cards (Matt confirmed these are keepers); list has **Function** + **Specialty** columns; drawer header shows current-role function/specialty + a LinkedIn icon; shared `lib/classification/current-role.ts` derives the person-level summary (career fallback for novelty/sparse titles) + `formatAxisLabel` (Title Case + acronyms).
+- **Legacy (pre-classifier) bug fixes + prod backfills**: SENIORITY — compound leadership titles ("Robotics Software Engineering Manager", "Director of X") fell to IC because title-matching was exact-only and the manager/director signals only scanned descriptions; fixed BOTH resolvers to scan the title; backfilled 257 experience values + highest_seniority. TITLE_LEVEL/PROGRESSION — same compound-title bug (manager titles → title_level NULL → dropped from slope → "declining" for people promoted into management); added a leadership fallback to `extractTitleLevel`; re-leveled 88 experiences + recomputed derived slopes (Makai: declining→rising).
+
+**Decisions**
+- Founder is an attribute (`is_current/former_founder`), NOT a function — 087 keeps founder off the function axis; founding engineers route to their real discipline.
+- Retire the write-to-real-`_inferred`/lifecycle preview approach (Codex caught `classification_status` is the live queue key) → separate `_inferred_preview` columns; real classifier populates prod POST-MERGE.
+- Tune off frozen artifacts, not live prod; in-app review via preview columns + a Vercel preview link.
+- Freeze bar = STABLE across runs, not one lucky run. Holdout stays LOCKED until the prompt is frozen + run ONCE.
+- Legacy drawer fields (seniority/progression/score/full-time) are a SEPARATE cleanup from the classifier — batch, don't whack-a-mole.
+
+**Where we left off**
+- Classifier frozen + validated in-app; Matt reviewing real profiles on the preview. Next real classifier work is the **tuning batch**: Pavlo (use About → `backend`+`data_pipeline` on sparse role), Michael (career → `fullstack`), Joanne (stop inventing niche specialties without evidence). Queued on Matt's go: prompt change → ~$0.22 tuning re-run → re-populate ($1.18).
+
+**Open questions**
+- `mission_systems_engineering` (aerospace parent under a software function): keep, or collapse to `systems_engineering`? (Matt's taxonomy call.)
+- Holdout generalization run (one-shot) + full-corpus POOL run — after the tuning batch + freeze.
+
+**Watch-outs**
+- Seniority/title-level backfills changed LIVE prod data but SCORES/BUCKETS were NOT re-run → drawer score numbers are STALE until the ship-time full re-score.
+- 085/086/087 (taxonomy) are DEV-ONLY. Prod taxonomy + `person_experiences.specialty_normalized/function_normalized` cascade happen AT MERGE, followed by a full prod re-score.
+- `reference/eval/*` is PII (real candidate text) and gitignored (added `*.md` this session) — never commit it.
+- `employment_type`/`is_full_time_role` not captured on some ingests (e.g. all of Makai's roles flagged non-full-time) → affects tenure + scoring; separate legacy cleanup.
+- Preview writes used DEV vocab into prod `_inferred_preview` columns; fine for review, but the real classifier (with prod vocab post-merge) is the source of truth.
+
 ## 2026-06-29 — Network Connections PR 2: gated promotion + admin cross-org view (PR #15) — later session
 
 **Shipped** (branch `network-connections-gated-promotion`, PR [#15](https://github.com/mktahr/vetted/pull/15) — MERGED to main; migration 082 dev+prod)
