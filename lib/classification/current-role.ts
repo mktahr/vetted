@@ -13,6 +13,8 @@ export interface RoleForClassification {
   title_raw: string | null
   function_inferred_preview?: string[] | null
   specialty_inferred_preview?: string[] | null
+  /** DETERMINISTIC career-fallback twin (code-computed, lower confidence — render muted). */
+  specialty_inherited_preview?: string[] | null
 }
 
 const isStudentTitle = (t: string | null | undefined) => /\b(student|intern|internship|co-?op|apprentice)\b/i.test(t || '');
@@ -54,14 +56,22 @@ export function pickPrimaryCurrentRole<T extends RoleForClassification>(exps: T[
 
 const hasRealClassification = (e: RoleForClassification | null | undefined): boolean => {
   const f = e?.function_inferred_preview?.[0];
-  return (!!f && f !== 'unknown') || !!e?.specialty_inferred_preview?.some((s) => s && s !== 'unknown');
+  return (
+    (!!f && f !== 'unknown') ||
+    !!e?.specialty_inferred_preview?.some((s) => s && s !== 'unknown') ||
+    !!e?.specialty_inherited_preview?.some((s) => s && s !== 'unknown')
+  );
 };
 
 /** Current-role function + specialties from the preview. `unknown`/abstentions are dropped.
  *  If the primary-current role itself is unknown/empty (e.g. a joke title like "Robot Whisperer",
  *  or an empty-description role), fall back to the MOST RECENT role that has a real classification —
- *  a person's function/specialty should come from their career, not a novelty current title. */
-export function currentRoleClassification(exps: RoleForClassification[]): { fn: string | null; specs: string[] } {
+ *  a person's function/specialty should come from their career, not a novelty current title.
+ *  `specs` = EVIDENCED (LLM); `inheritedSpecs` = deterministic career-fallback (code) — render
+ *  muted/outlined. NOTE: no aggressive fall-through when the picked role has a function but no
+ *  specialty — the deterministic layer already encodes exactly when inheritance is justified;
+ *  an empty specialty on a genuinely-unclear role is CORRECT (conservative by design). */
+export function currentRoleClassification(exps: RoleForClassification[]): { fn: string | null; specs: string[]; inheritedSpecs: string[] } {
   let pick = pickPrimaryCurrentRole(exps);
   if (!hasRealClassification(pick)) {
     const classified = exps
@@ -70,9 +80,10 @@ export function currentRoleClassification(exps: RoleForClassification[]): { fn: 
       .find(hasRealClassification);
     if (classified) pick = classified;
   }
-  if (!pick) return { fn: null, specs: [] };
+  if (!pick) return { fn: null, specs: [], inheritedSpecs: [] };
   const fnRaw = pick.function_inferred_preview?.[0] ?? null;
   const fn = !fnRaw || fnRaw === 'unknown' ? null : fnRaw;
   const specs = (pick.specialty_inferred_preview ?? []).filter((s) => s && s !== 'unknown');
-  return { fn, specs };
+  const inheritedSpecs = (pick.specialty_inherited_preview ?? []).filter((s) => s && s !== 'unknown' && !specs.includes(s));
+  return { fn, specs, inheritedSpecs };
 }

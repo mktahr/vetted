@@ -13,6 +13,8 @@ import { buildSystemPrompt, buildUserPrompt, buildRetryNote } from '../../lib/ca
 import { callClassifier } from '../../lib/candidates/classifier/claude.ts'
 import { validateClassification } from '../../lib/candidates/classifier/validate.ts'
 import { loadActiveVocab } from '../../lib/candidates/classifier/index.ts'
+import { enforceRoboticsCarveOutGuard } from '../../lib/candidates/classifier/carve-out-guard.ts'
+import { computeCareerFallback } from '../../lib/classification/career-fallback.ts'
 import { PROMPT_VERSION, CLASSIFIER_MODEL, MAX_VALIDATION_RETRIES } from '../../lib/candidates/classifier/config.ts'
 
 const IN_PER_M = 1.0, OUT_PER_M = 5.0
@@ -32,8 +34,14 @@ async function main(){
   const system = buildSystemPrompt(vocab)
   const stamp = new Date().toISOString()
 
-  const { data: people, error: pErr } = await prod.from('people').select('person_id, full_name, headline_raw, summary_raw').in('record_kind',['candidate','both']).order('created_at')
+  // Optional targeted mode: --ids=<uuid,uuid,...> re-runs ONLY those candidates (cheap
+  // iteration on specific cases without a full $1.8 populate).
+  const idsArg = process.argv.find(a=>a.startsWith('--ids='))?.slice(6)
+  let peopleQuery = prod.from('people').select('person_id, full_name, headline_raw, summary_raw').in('record_kind',['candidate','both']).order('created_at')
+  if (idsArg) peopleQuery = prod.from('people').select('person_id, full_name, headline_raw, summary_raw').in('person_id', idsArg.split(',')).order('created_at')
+  const { data: people, error: pErr } = await peopleQuery
   if (pErr) throw new Error(`people query failed: ${pErr.message}`)
+  if (idsArg) console.log(`TARGETED run: ${(people??[]).length} candidate(s).`)
   const ids = (people??[]).map((p:any)=>p.person_id)
   const { data: exps, error: eErr } = await prod.from('person_experiences')
     .select('person_experience_id, person_id, title_raw, start_date, end_date, is_current, description_raw, companies:company_id ( company_name )')
@@ -57,11 +65,22 @@ async function main(){
       const prompt = attempt===0 ? basePrompt : `${basePrompt}\n\n${buildRetryNote(valid.errors)}`
       const call = await callOrHalt(system, prompt)
       inTok+=call.inputTokens||0; outTok+=call.outputTokens||0
-      valid = validateClassification(call.output, expIds, vocab, { repairParentMismatch: attempt === MAX_VALIDATION_RETRIES, repairUnknownSkills: attempt === MAX_VALIDATION_RETRIES })
+      valid = validateClassification(call.output, expIds, vocab, { repairParentMismatch: attempt === MAX_VALIDATION_RETRIES, repairUnknownSkills: attempt === MAX_VALIDATION_RETRIES, repairUnknownSpecialties: attempt === MAX_VALIDATION_RETRIES })
       if (valid.ok){ ok=true; break }
     }
     if (ok && valid.repairs?.length) console.log(`  REPAIRED ${p.full_name}: ${valid.repairs.join(' | ').slice(0, 300)}`)
     if (!ok){ valFail++; console.error(`  VAL-FAIL ${p.full_name} (left preview NULL): ${JSON.stringify(valid.errors).slice(0,120)}`); continue }
+    // DETERMINISTIC robotics carve-out guard (before inheritance, mirroring the real engine).
+    const guarded = enforceRoboticsCarveOutGuard(valid.tuples, experiences.map((e:any)=>({person_experience_id:e.person_experience_id,title_raw:e.title_raw,description_raw:e.description_raw})))
+    valid.tuples = guarded.tuples
+    if (guarded.repairs.length) console.log(`  CARVE-OUT-GUARD ${p.full_name}: ${guarded.repairs.map(r=>r.note).join(' | ').slice(0,300)}`)
+    // DETERMINISTIC career-fallback (same pure function as the real engine) -> preview twin column.
+    const inherited = computeCareerFallback(
+      valid.tuples.map((t:any)=>{ const e = experiences.find((x:any)=>x.person_experience_id===t.exp_id)!; return {
+        exp_id: t.exp_id, title_raw: e.title_raw, company_name: e.company_name,
+        start_date: e.start_date, end_date: e.end_date, is_current: e.is_current,
+        function_inferred: t.function_inferred, specialty_inferred: t.specialty_inferred,
+      }}), vocab.specialtyParents)
     const byId: Record<string,any> = {}
     for (const t of valid.tuples) byId[t.exp_id]=t
     for (const e of experiences){
@@ -71,6 +90,7 @@ async function main(){
         specialty_inferred_preview: t.specialty_inferred,
         skills_inferred_preview: t.skills_inferred,
         title_normalized_inferred_preview: t.title_normalized_inferred,
+        specialty_inherited_preview: inherited[t.exp_id] ?? [],
         classification_preview_version: PROMPT_VERSION,
         classification_preview_at: stamp,
       }).eq('person_experience_id', e.person_experience_id)

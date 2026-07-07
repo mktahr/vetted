@@ -675,11 +675,12 @@ export default function ProfilePage() {
                   {(() => {
                     const fn = (exp as any).function_inferred_preview as string[] | null
                     const sp = (exp as any).specialty_inferred_preview as string[] | null
+                    const inh = (exp as any).specialty_inherited_preview as string[] | null
                     const sk = (exp as any).skills_inferred_preview as string[] | null
                     const tn = (exp as any).title_normalized_inferred_preview as string | null
                     const founding = (exp as any).is_founding_engineer_role as boolean
                     const ver = (exp as any).classification_preview_version as string | null
-                    if ((!fn || fn.length === 0) && (!sp || sp.length === 0) && !tn) return null
+                    if ((!fn || fn.length === 0) && (!sp || sp.length === 0) && (!inh || inh.length === 0) && !tn) return null
                     const clean = formatAxisLabel
                     return (
                       <div className="mt-2 rounded border border-border bg-muted px-2.5 py-1.5 text-xs space-y-0.5">
@@ -688,6 +689,7 @@ export default function ProfilePage() {
                         </div>
                         {fn && fn.length > 0 && <div><span className="text-tertiary">function: </span><span className="text-foreground">{fn.map(clean).join(', ')}</span></div>}
                         {sp && sp.length > 0 && <div><span className="text-tertiary">specialty: </span><span className="text-foreground">{sp.map(clean).join(', ')}</span></div>}
+                        {inh && inh.length > 0 && <div><span className="text-tertiary">inherited: </span><span className="text-tertiary italic" title="Deterministic career fallback — inferred from prior roles (lower confidence)">{inh.map(clean).join(', ')} ⓘ</span></div>}
                         {sk && sk.length > 0 && <div><span className="text-tertiary">skills: </span><span className="text-foreground">{sk.map(clean).join(', ')}</span></div>}
                         {tn && <div><span className="text-tertiary">title: </span><span className="text-foreground">{tn}</span></div>}
                         {founding && <div style={{ color: 'var(--accent-strong)' }}>★ founding / early engineer</div>}

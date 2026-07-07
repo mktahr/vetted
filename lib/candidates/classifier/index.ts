@@ -19,6 +19,8 @@ import {
 import { buildSystemPrompt, buildUserPrompt, buildRetryNote } from './prompt';
 import { callClassifier } from './claude';
 import { validateClassification } from './validate';
+import { enforceRoboticsCarveOutGuard } from './carve-out-guard';
+import { computeCareerFallback } from '../../classification/career-fallback';
 import type {
   ActiveVocab, ExperienceForClassification, ClassifyOutcome, ClassifyBatchSummary, ClassifyAction,
 } from './types';
@@ -185,9 +187,28 @@ export async function classifyCandidate(supabase: SupabaseClient, personId: stri
       }
       // REJECT-then-REPAIR: strict on attempt 0 (retry lets the model fix either axis);
       // on the FINAL attempt strip parent-mismatched specialties instead of failing.
-      const valid = validateClassification(call.output, expectedIds, v, { repairParentMismatch: attempt === MAX_VALIDATION_RETRIES, repairUnknownSkills: attempt === MAX_VALIDATION_RETRIES });
+      const valid = validateClassification(call.output, expectedIds, v, { repairParentMismatch: attempt === MAX_VALIDATION_RETRIES, repairUnknownSkills: attempt === MAX_VALIDATION_RETRIES, repairUnknownSpecialties: attempt === MAX_VALIDATION_RETRIES });
       if (valid.ok) {
-        const res = await supabase.rpc('commit_classification', { p_person_id: personId, p_lease_token: token, p_run_id: runId, p_classifier_version: classifierVersion, p_assignments: valid.tuples });
+        // DETERMINISTIC robotics carve-out guard (code, not LLM): reroute employer-name
+        // leaks BEFORE inheritance so the corrected software role can inherit properly.
+        const guarded = enforceRoboticsCarveOutGuard(valid.tuples, experiences);
+        valid.tuples = guarded.tuples;
+        valid.repairs.push(...guarded.repairs.map((r) => r.note));
+        // DETERMINISTIC career-fallback (code, not LLM): attach specialty_inherited to
+        // each tuple so it publishes atomically inside the same fenced commit.
+        const inherited = computeCareerFallback(
+          valid.tuples.map((t) => {
+            const e = experiences.find((x) => x.person_experience_id === t.exp_id)!;
+            return {
+              exp_id: t.exp_id, title_raw: e.title_raw, company_name: e.company_name,
+              start_date: e.start_date, end_date: e.end_date, is_current: e.is_current,
+              function_inferred: t.function_inferred, specialty_inferred: t.specialty_inferred,
+            };
+          }),
+          v.specialtyParents,
+        );
+        const assignments = valid.tuples.map((t) => ({ ...t, specialty_inherited: inherited[t.exp_id] ?? [] }));
+        const res = await supabase.rpc('commit_classification', { p_person_id: personId, p_lease_token: token, p_run_id: runId, p_classifier_version: classifierVersion, p_assignments: assignments });
         if (res.error) { await releaseToPending(supabase, personId, token); await closeRun(supabase, runId, 'discarded', `commit_rpc_error:${res.error.message}`, tokensUsed, callCount * EST_CENTS_PER_CALL); return out(personId, 'discarded', { runId, reason: res.error.message, tokens: tokensUsed }); }
         if (res.data === 'committed') {
           await supabase.from('candidate_classification_runs').update({ tokens: tokensUsed, cost_cents: callCount * EST_CENTS_PER_CALL }).eq('run_id', runId);

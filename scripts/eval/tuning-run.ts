@@ -11,6 +11,8 @@ import { buildSystemPrompt, buildUserPrompt, buildRetryNote } from '../../lib/ca
 import { callClassifier } from '../../lib/candidates/classifier/claude.ts'
 import { validateClassification } from '../../lib/candidates/classifier/validate.ts'
 import { loadActiveVocab } from '../../lib/candidates/classifier/index.ts'
+import { enforceRoboticsCarveOutGuard } from '../../lib/candidates/classifier/carve-out-guard.ts'
+import { computeCareerFallback } from '../../lib/classification/career-fallback.ts'
 import { PROMPT_VERSION, MAX_VALIDATION_RETRIES } from '../../lib/candidates/classifier/config.ts'
 
 const IN_PER_M = 1.0, OUT_PER_M = 5.0
@@ -62,18 +64,33 @@ async function main(){
       const prompt = attempt===0 ? basePrompt : `${basePrompt}\n\n${buildRetryNote(valid.errors)}`
       const call = await callOrHalt(system, prompt)   // halts on sustained API error
       inTok+=call.inputTokens||0; outTok+=call.outputTokens||0
-      valid = validateClassification(call.output, ids2, vocab, { repairParentMismatch: attempt === MAX_VALIDATION_RETRIES, repairUnknownSkills: attempt === MAX_VALIDATION_RETRIES })
+      valid = validateClassification(call.output, ids2, vocab, { repairParentMismatch: attempt === MAX_VALIDATION_RETRIES, repairUnknownSkills: attempt === MAX_VALIDATION_RETRIES, repairUnknownSpecialties: attempt === MAX_VALIDATION_RETRIES })
       for (const m of (valid.errors as string[])) { const mm = m.match(/: skill "([^"]+)" not in active vocabulary/); if (mm) recordGap(mm[1], 'rejected', c.full_name) }
       if (valid.ok){ valFailed=false; break }
     }
     for (const m of ((valid.repairs ?? []) as string[])) { const mm = m.match(/stripped skill "([^"]+)"/); if (mm) recordGap(mm[1], 'stripped', c.full_name) }
     if (!valFailed && valid.repairs?.length) console.log(`  REPAIRED ${c.full_name}: ${valid.repairs.join(' | ').slice(0, 300)}`)
+    // DETERMINISTIC robotics carve-out guard (before inheritance, mirroring the real engine).
+    if (!valFailed){
+      const guarded = enforceRoboticsCarveOutGuard(valid.tuples, c.experiences.map((e:any)=>({person_experience_id:e.person_experience_id,title_raw:e.title_raw,description_raw:e.description_raw})))
+      valid.tuples = guarded.tuples
+      for (const r of guarded.repairs) console.log(`  CARVE-OUT-GUARD ${c.full_name}: ${r.note}`)
+    }
     const byId: Record<string,any> = {}
     if (!valFailed) for (const t of valid.tuples) byId[t.exp_id]=t
+    // DETERMINISTIC career-fallback (code, not LLM) — shown in the report so inheritance
+    // behavior is reviewable in the cheap tuning run before a full populate.
+    const inherited: Record<string,string[]> = valFailed ? {} : computeCareerFallback(
+      valid.tuples.map((t:any)=>{ const e = c.experiences.find((x:any)=>x.person_experience_id===t.exp_id)!; return {
+        exp_id: t.exp_id, title_raw: e.title_raw, company_name: e.company_name,
+        start_date: e.start_date, end_date: e.end_date, is_current: e.is_current,
+        function_inferred: t.function_inferred, specialty_inferred: t.specialty_inferred,
+      }}), vocab.specialtyParents)
     const roles = c.experiences.map((e:any)=>{
       const g = byId[e.person_experience_id]
       const haiku = valFailed ? '(validation-failed)' : (g ? (g.function_inferred[0]||'unknown') : '(missing)')
       const spec = g ? (g.specialty_inferred||[]).join(', ') : ''
+      const inh = (inherited[e.person_experience_id] ?? []).join(', ')
       const skills = g ? (g.skills_inferred||[]).join(', ') : ''
       const cmp = ref[e.person_experience_id] || ''
       let status:string
@@ -83,7 +100,7 @@ async function main(){
       else if (haiku===cmp) status='agree'
       else status='disagree'
       ;(counts as any)[status]++
-      return { title:e.title_raw, company:e.company_name, desc:(e.description_raw||'').replace(/\s+/g,' ').slice(0,150), haiku, spec, skills, cmp, status, flag: status==='disagree'||status==='error' }
+      return { title:e.title_raw, company:e.company_name, desc:(e.description_raw||'').replace(/\s+/g,' ').slice(0,150), haiku, spec, inh, skills, cmp, status, flag: status==='disagree'||status==='error' }
     })
     people.push({ name:c.full_name, ctx, roles, flags: roles.filter((r:any)=>r.flag).length, repairs: (!valFailed && valid.repairs?.length) ? valid.repairs : [] })
     if(valFailed) console.error(`  VAL-FAIL ${c.full_name}: ${JSON.stringify(valid.errors).slice(0,140)}`)
@@ -115,7 +132,7 @@ async function main(){
       const note = r.status==='disagree' ? `   (ref: ${r.cmp})` : ''
       L.push(`  ${mark} ${r.title} @ ${r.company}`)
       if (r.desc) L.push(`      desc: ${r.desc}`)
-      L.push(`      → fn: ${r.haiku}${r.spec?`  spec: ${r.spec}`:''}${r.skills?`  skills: ${r.skills}`:''}${note}`)
+      L.push(`      → fn: ${r.haiku}${r.spec?`  spec: ${r.spec}`:''}${r.inh?`  inherited(code): ${r.inh}`:''}${r.skills?`  skills: ${r.skills}`:''}${note}`)
     }
     L.push(``)
   }

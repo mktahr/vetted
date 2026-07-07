@@ -29,6 +29,9 @@ export interface ClassificationTuple {
   specialty_inferred: string[];         // ordered, position 0 = primary (may be empty)
   skills_inferred: string[];            // set (may be empty)
   title_normalized_inferred: string;    // cleaned canonical title
+  /** DETERMINISTIC career-fallback (computeCareerFallback) — attached in CODE after
+   *  validation, never LLM output. Rides the same commit for atomicity. */
+  specialty_inherited?: string[];
 }
 
 /** Raw model output shape (before validation). */

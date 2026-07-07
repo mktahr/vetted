@@ -19,6 +19,7 @@ export interface DrawerExperience {
   employment_type: string | null
   function_inferred_preview?: string[] | null
   specialty_inferred_preview?: string[] | null
+  specialty_inherited_preview?: string[] | null
   skills_inferred_preview?: string[] | null
   title_normalized_inferred_preview?: string | null
   classification_preview_version?: string | null
@@ -238,13 +239,20 @@ export default function ProfileDrawer({ person, experiences, education, signals,
             {/* Classification metadata — quiet label-value pairs. Function/Specialty come from the
                 NEW five-axis preview on the person's CURRENT role (shared helper — same derivation
                 as the list). Legacy person-level "fullstack" fields removed. */}
-            {(() => { const cls = currentRoleClassification(experiences); return (cls.fn || cls.specs.length > 0 || currentSeniority || person.highest_seniority_reached) && (
+            {(() => { const cls = currentRoleClassification(experiences); return (cls.fn || cls.specs.length > 0 || cls.inheritedSpecs.length > 0 || currentSeniority || person.highest_seniority_reached) && (
               <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 12px', fontSize: 'var(--fs-13)', fontFamily: 'var(--font-sans)' }}>
                 {cls.fn && (
                   <><span style={{ color: 'var(--fg-tertiary)' }}>Function</span><span style={{ color: 'var(--fg-primary)' }}>{formatAxisLabel(cls.fn)}</span></>
                 )}
-                {cls.specs.length > 0 && (
-                  <><span style={{ color: 'var(--fg-tertiary)' }}>Specialty</span><span style={{ color: 'var(--fg-primary)' }}>{cls.specs.map(formatAxisLabel).join(', ')}</span></>
+                {(cls.specs.length > 0 || cls.inheritedSpecs.length > 0) && (
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Specialty</span><span style={{ color: 'var(--fg-primary)' }}>
+                    {cls.specs.map(formatAxisLabel).join(', ')}
+                    {cls.inheritedSpecs.length > 0 && (
+                      <span style={{ color: 'var(--fg-tertiary)', fontStyle: 'italic' }} title="Deterministic career fallback — inferred from prior roles (lower confidence)">
+                        {cls.specs.length > 0 ? ', ' : ''}{cls.inheritedSpecs.map(formatAxisLabel).join(', ')} ⓘ
+                      </span>
+                    )}
+                  </span></>
                 )}
                 {currentSeniority && (
                   <><span style={{ color: 'var(--fg-tertiary)' }}>Seniority</span><span style={{ color: 'var(--fg-primary)' }}>{formatSeniorityLabel(currentSeniority)}</span></>
@@ -416,16 +424,18 @@ export default function ProfileDrawer({ person, experiences, education, signals,
                         {(() => {
                           const fn = exp.function_inferred_preview
                           const sp = exp.specialty_inferred_preview
+                          const inh = exp.specialty_inherited_preview
                           const sk = exp.skills_inferred_preview
                           const tn = exp.title_normalized_inferred_preview
                           const ver = exp.classification_preview_version
-                          if ((!fn || fn.length === 0) && (!sp || sp.length === 0) && !tn) return null
+                          if ((!fn || fn.length === 0) && (!sp || sp.length === 0) && (!inh || inh.length === 0) && !tn) return null
                           const clean = formatAxisLabel
                           return (
                             <div style={{ marginTop: 6, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-muted, rgba(255,255,255,0.03))', padding: '6px 8px', fontSize: 'var(--fs-12)', display: 'grid', gap: 1 }}>
                               <div style={{ fontSize: '10px', letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: 600, color: 'var(--accent-strong)' }}>AI Classification (preview{ver ? ` · ${ver}` : ''})</div>
                               {fn && fn.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>function: </span><span style={{ color: 'var(--fg-primary)' }}>{fn.map(clean).join(', ')}</span></div>}
                               {sp && sp.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>specialty: </span><span style={{ color: 'var(--fg-primary)' }}>{sp.map(clean).join(', ')}</span></div>}
+                              {inh && inh.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>inherited: </span><span style={{ color: 'var(--fg-tertiary)', fontStyle: 'italic' }} title="Deterministic career fallback — inferred from prior roles (lower confidence)">{inh.map(clean).join(', ')} ⓘ</span></div>}
                               {sk && sk.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>skills: </span><span style={{ color: 'var(--fg-primary)' }}>{sk.map(clean).join(', ')}</span></div>}
                               {tn && <div><span style={{ color: 'var(--fg-tertiary)' }}>title: </span><span style={{ color: 'var(--fg-primary)' }}>{tn}</span></div>}
                             </div>

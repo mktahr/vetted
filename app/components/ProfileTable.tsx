@@ -58,6 +58,7 @@ interface ExperienceLite {
   description_raw: string | null
   function_inferred_preview: string[] | null
   specialty_inferred_preview: string[] | null
+  specialty_inherited_preview: string[] | null
   skills_inferred_preview: string[] | null
   title_normalized_inferred_preview: string | null
   classification_preview_version: string | null
@@ -442,7 +443,7 @@ export default function ProfileTable() {
           { data: fieldOfStudyData },
         ] = await Promise.all([
           supabase.from('candidate_bucket_assignments').select('person_id, candidate_bucket, flagged_reasons, assignment_reason, effective_at').order('effective_at', { ascending: false }),
-          supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, seniority_normalized, start_date, end_date, is_current, is_primary_current, employment_type_normalized, title_raw, description_raw, function_inferred_preview, specialty_inferred_preview, skills_inferred_preview, title_normalized_inferred_preview, classification_preview_version'),
+          supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, seniority_normalized, start_date, end_date, is_current, is_primary_current, employment_type_normalized, title_raw, description_raw, function_inferred_preview, specialty_inferred_preview, specialty_inherited_preview, skills_inferred_preview, title_normalized_inferred_preview, classification_preview_version'),
           supabase.from('person_education').select('person_id, school_id, school_name_raw, degree_raw, degree_level, field_of_study_raw, field_of_study_normalized, start_year, end_year'),
           supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
           fetchAllRows<any>('companies', 'company_id, company_name, primary_industry, industries, category, review_status, legacy_primary_industry_tag, company_groups', 'company_name').then(data => ({ data })),
@@ -496,6 +497,7 @@ export default function ProfileTable() {
             title_raw: (r as any).title_raw ?? null, description_raw: (r as any).description_raw ?? null,
             function_inferred_preview: (r as any).function_inferred_preview ?? null,
             specialty_inferred_preview: (r as any).specialty_inferred_preview ?? null,
+            specialty_inherited_preview: (r as any).specialty_inherited_preview ?? null,
             skills_inferred_preview: (r as any).skills_inferred_preview ?? null,
             title_normalized_inferred_preview: (r as any).title_normalized_inferred_preview ?? null,
             classification_preview_version: (r as any).classification_preview_version ?? null,
@@ -1359,19 +1361,24 @@ export default function ProfileTable() {
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-primary)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {(person.current_title_normalized || person.current_title_raw || '—').split(/\s*[|–—]\s*/)[0].split(/,\s*/)[0]}
                       </td>
-                      {/* Function + Specialty (current role's NEW five-axis preview), separate columns */}
+                      {/* Function + Specialty (current role's NEW five-axis preview), separate columns.
+                          Evidenced specialties render normal; career-INHERITED (deterministic code
+                          fallback) render muted+italic — lower confidence, inferred from prior roles. */}
                       {(() => {
-                        const { fn, specs } = currentRoleClassification(person.experiences_lite)
-                        const specFull = specs.map(formatAxisLabel).join(', ')
+                        const { fn, specs, inheritedSpecs } = currentRoleClassification(person.experiences_lite)
+                        const specFull = [...specs.map(formatAxisLabel), ...inheritedSpecs.map((s) => `${formatAxisLabel(s)} (inherited)`)].join(', ')
+                        const total = specs.length + inheritedSpecs.length
                         return (
                           <>
                             <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)' }}>
                               {fn ? formatAxisLabel(fn) : <span style={{ opacity: 0.4 }}>—</span>}
                             </td>
-                            <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }} title={specs.length > 1 ? specFull : undefined}>
+                            <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }} title={total > 1 ? specFull : (inheritedSpecs.length ? 'Inherited from prior roles (lower confidence)' : undefined)}>
                               {specs.length > 0
-                                ? <>{formatAxisLabel(specs[0])}{specs.length > 1 ? <span style={{ color: 'var(--fg-tertiary)' }}>{` +${specs.length - 1}`}</span> : null}</>
-                                : <span style={{ opacity: 0.4 }}>—</span>}
+                                ? <>{formatAxisLabel(specs[0])}{total > 1 ? <span style={{ color: 'var(--fg-tertiary)' }}>{` +${total - 1}`}</span> : null}</>
+                                : inheritedSpecs.length > 0
+                                  ? <><span style={{ color: 'var(--fg-tertiary)', fontStyle: 'italic' }}>{formatAxisLabel(inheritedSpecs[0])}<span style={{ opacity: 0.7 }}> ⓘ</span></span>{total > 1 ? <span style={{ color: 'var(--fg-tertiary)' }}>{` +${total - 1}`}</span> : null}</>
+                                  : <span style={{ opacity: 0.4 }}>—</span>}
                             </td>
                           </>
                         )
@@ -1449,6 +1456,7 @@ export default function ProfileTable() {
             employment_type: e.employment_type,
             function_inferred_preview: e.function_inferred_preview,
             specialty_inferred_preview: e.specialty_inferred_preview,
+            specialty_inherited_preview: e.specialty_inherited_preview,
             skills_inferred_preview: e.skills_inferred_preview,
             title_normalized_inferred_preview: e.title_normalized_inferred_preview,
             classification_preview_version: e.classification_preview_version,

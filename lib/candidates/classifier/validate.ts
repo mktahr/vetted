@@ -23,6 +23,12 @@ export interface ValidateOptions {
    *  skills list the model occasionally invents plausible near-misses ("JavaFx",
    *  "Trigger.dev"); a stray garnish skill must not fail an entire candidate. */
   repairUnknownSkills?: boolean;
+  /** FINAL attempt: strip out-of-vocab SPECIALTY names instead of rejecting. Same
+   *  pattern as the other two guards — the gap that val-failed 2 candidates on the
+   *  2026-07-06 populate run (invented "ml_engineering" / "mechanism_design" as
+   *  specialties). The role stays searchable by function; the stray name is recorded
+   *  in result.repairs as vocab-gap signal. */
+  repairUnknownSpecialties?: boolean;
 }
 
 export function validateClassification(
@@ -76,7 +82,11 @@ export function validateClassification(
     const fnSet = new Set(fn);
     const keptSp: string[] = [];
     for (const v of sp) {
-      if (!specs.has(v)) { errors.push(`${id}: specialty "${v}" not in active vocabulary`); continue; }
+      if (!specs.has(v)) {
+        if (opts?.repairUnknownSpecialties) { repairs.push(`${id}: stripped specialty "${v}" — not in active vocabulary`); continue; }
+        errors.push(`${id}: specialty "${v}" not in active vocabulary`);
+        continue;
+      }
       const parents = vocab.specialtyParents[v];
       // Defensive: missing/empty parent metadata => guard doesn't apply.
       const mismatched = parents && parents.length > 0 && !parents.some((p) => fnSet.has(p));
