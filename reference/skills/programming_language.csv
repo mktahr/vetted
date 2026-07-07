@@ -1,3 +1,23 @@
 canonical_name,category,aliases,primary_specialty,description,is_active,is_searchable
-Python,programming_language,,backend,"General-purpose programming language; ubiquitous in backend, ML, scripting, and data work.",true,true
-Verilog,programming_language,,asic_engineering;chip_verification;hardware_description_languages,Hardware description language for digital circuit design and ASIC/FPGA implementation + verification.,true,true
+C,programming_language,,embedded_engineering;firmware_engineering;kernel_engineering;driver_engineering,Low-level systems,true,true
+C#,programming_language,csharp,backend_engineering;fullstack_engineering,.NET backend,true,true
+C++,programming_language,cpp;cplusplus,embedded_engineering;firmware_engineering;backend_engineering;autonomy_engineering;computer_vision_engineering,Systems/performance/robotics,true,true
+Elixir,programming_language,,backend_engineering;distributed_systems_engineering,Concurrent backend,true,true
+Go,programming_language,golang,backend_engineering;infrastructure_engineering;distributed_systems_engineering;platform_engineering,Systems/backend language,true,true
+hardware_description_languages,programming_language,hdl,fpga_engineering;digital_design_engineering,HDL family,true,true
+Java,programming_language,,backend_engineering;distributed_systems_engineering;mobile_android_engineering,Enterprise/backend/Android,true,true
+JavaScript,programming_language,js,frontend_engineering;backend_engineering;fullstack_engineering,Core web language,true,true
+Kotlin,programming_language,,mobile_android_engineering;backend_engineering,Android/backend,true,true
+MATLAB,programming_language,,controls_engineering;dsp_engineering;mechanical_engineering;aerodynamics_engineering,Numerical/controls/simulation,true,true
+Objective-C,programming_language,objc,mobile_ios_engineering,Legacy iOS,true,true
+PHP,programming_language,,backend_engineering;fullstack_engineering,Backend web,true,true
+Python,programming_language,py,backend_engineering;applied_ml_engineering;data_pipeline_engineering;ml_research_engineering,General-purpose; dominant in ML/data,true,true
+R,programming_language,,applied_ml_engineering;data_pipeline_engineering,Statistical computing,true,true
+Ruby,programming_language,,backend_engineering;fullstack_engineering,Backend web (Rails),true,true
+Rust,programming_language,,backend_engineering;infrastructure_engineering;embedded_engineering;distributed_systems_engineering,Memory-safe systems language,true,true
+Scala,programming_language,,backend_engineering;data_pipeline_engineering;distributed_systems_engineering,JVM; big-data,true,true
+SQL,programming_language,,backend_engineering;data_pipeline_engineering;data_platform_engineering,Query language,true,true
+Swift,programming_language,,mobile_ios_engineering,iOS/macOS,true,true
+TypeScript,programming_language,ts,frontend_engineering;backend_engineering;fullstack_engineering,Typed JavaScript,true,true
+Verilog,programming_language,systemverilog,fpga_engineering;digital_design_engineering;asic_engineering;chip_verification_engineering,Hardware description,true,true
+VHDL,programming_language,,fpga_engineering;digital_design_engineering;asic_engineering,Hardware description,true,true

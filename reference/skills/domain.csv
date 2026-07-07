@@ -1,2 +1,42 @@
 canonical_name,category,aliases,primary_specialty,description,is_active,is_searchable
-SLAM,domain,simultaneous localization and mapping,robotics;perception_software;robotic_perception;autonomy_software,Simultaneous Localization and Mapping — core robotics/perception algorithm class for autonomous systems.,true,true
+ASIC Design,domain,,asic_engineering;soc_design_engineering,Custom silicon,true,true
+Avionics,domain,,avionics_engineering,Aircraft electronics,true,true
+CFD,domain,computational fluid dynamics,fluid_dynamics_engineering;aerodynamics_engineering;thermal_engineering,Fluid simulation,true,true
+CNC Machining,domain,cnc,manufacturing_engineering;fabrication_engineering;tooling_engineering,Machining,true,true
+Composites,domain,,composites_engineering;materials_engineering;aerospace_structures_engineering,Composite materials,true,true
+Computer Vision,domain,cv,computer_vision_engineering;perception_engineering;robotic_perception_engineering,CV domain (touched),true,true
+Data Streaming,domain,streaming,data_pipeline_engineering;distributed_systems_engineering,Realtime pipelines,true,true
+Data Warehousing,domain,,data_platform_engineering,Warehouse design,true,true
+Deep Learning,domain,dl;neural networks,applied_ml_engineering;ml_research_engineering;computer_vision_engineering;nlp_engineering,Neural network work,true,true
+Device Drivers,domain,,driver_engineering;firmware_engineering;kernel_engineering,Driver development,true,true
+FEA,domain,finite element analysis,fea_analysis_engineering;structural_engineering;stress_analysis_engineering,Finite element analysis,true,true
+GNC,domain,guidance navigation control,gnc_engineering;guidance_engineering;navigation_engineering,Aerospace GNC,true,true
+Hardware Bring-up,domain,board bringup,hardware_engineering;hardware_integration_engineering,Board validation,true,true
+Kinematics,domain,,mechanism_design_engineering;autonomy_engineering,Motion analysis,true,true
+LLMs / GenAI,domain,llm;genai;generative ai;large language models,llm_engineering;ai_engineering,LLM/GenAI (touched),true,true
+Machine Learning,domain,ml,applied_ml_engineering;ml_research_engineering;recommendation_ranking_engineering,ML work (general),true,true
+Materials Characterization,domain,,materials_characterization_engineering;materials_engineering,Material analysis,true,true
+Metallurgy,domain,,metallurgical_engineering;materials_engineering,Metals,true,true
+Motion Planning,domain,path planning,motion_planning_engineering;autonomy_engineering,Robot planning,true,true
+Natural Language Processing,domain,nlp,nlp_engineering;llm_engineering,NLP domain (touched),true,true
+Optical Design,domain,,optical_design_engineering;optics_engineering,Lens/system design,true,true
+Orbital Mechanics,domain,astrodynamics,orbital_mechanics_engineering;space_systems_engineering,Orbit analysis,true,true
+PCB Layout,domain,,pcb_design_engineering,Board layout,true,true
+Photonics,domain,,photonics_engineering;optics_engineering,Light-based systems,true,true
+Physical Design,domain,,physical_design_engineering;asic_engineering,Chip layout,true,true
+PID Control,domain,pid,control_systems_engineering;controls_engineering,Feedback control,true,true
+Power Electronics,domain,,power_electronics_engineering;power_systems_engineering,Power conversion,true,true
+Propulsion,domain,,propulsion_engineering,Propulsion systems,true,true
+RAG,domain,retrieval augmented generation,ai_engineering;llm_engineering,Retrieval-augmented generation,true,true
+Recommendation Systems,domain,recsys;ranking,recommendation_ranking_engineering,RecSys/ranking,true,true
+Reinforcement Learning,domain,rl,ml_research_engineering;autonomy_engineering,RL,true,true
+Requirements Management,domain,doors,requirements_engineering;systems_engineering,Requirements,true,true
+RF Design,domain,radio frequency,rf_engineering;wireless_engineering;antenna_design_engineering,RF engineering,true,true
+RTL Design,domain,rtl,digital_design_engineering;asic_engineering;soc_design_engineering,Register-transfer level,true,true
+Sensor Fusion,domain,,sensor_fusion_engineering;perception_engineering,Multi-sensor integration,true,true
+Signal Processing,domain,dsp,dsp_engineering;communications_engineering,DSP work,true,true
+SLAM,domain,simultaneous localization mapping,slam_engineering;perception_engineering;autonomy_engineering,Localization/mapping,true,true
+State Estimation,domain,kalman filter,control_systems_engineering;sensor_fusion_engineering;gnc_engineering,Estimation,true,true
+Test Automation,domain,,test_engineering;validation_engineering,Automated testing,true,true
+Thermal Analysis,domain,,thermal_engineering,Thermal design,true,true
+Vector Databases,domain,vector search;pinecone;weaviate;pgvector;embeddings,ai_engineering;llm_engineering;backend_engineering,"Vector/semantic search and embedding stores (Pinecone, Weaviate, pgvector) — core of the modern AI-product retrieval stack.",true,true

@@ -43,6 +43,13 @@ async function main(){
   const counts = { agree:0, disagree:0, both_unknown:0, error:0, no_ref:0 }
   let inTok=0, outTok=0
   const people:any[] = []
+  // Out-of-vocab SKILL aggregate (vocab-gap signal): both attempt-0 rejections
+  // (model often self-corrects on retry) and final-attempt guard strips.
+  const skillGaps = new Map<string, {rejected:number, stripped:number, cands:Set<string>}>()
+  const recordGap = (skill:string, kind:'rejected'|'stripped', cand:string) => {
+    const g = skillGaps.get(skill) ?? {rejected:0, stripped:0, cands:new Set<string>()}
+    g[kind]++; g.cands.add(cand); skillGaps.set(skill, g)
+  }
   let n=0
   for (const c of cands){
     n++
@@ -55,9 +62,12 @@ async function main(){
       const prompt = attempt===0 ? basePrompt : `${basePrompt}\n\n${buildRetryNote(valid.errors)}`
       const call = await callOrHalt(system, prompt)   // halts on sustained API error
       inTok+=call.inputTokens||0; outTok+=call.outputTokens||0
-      valid = validateClassification(call.output, ids2, vocab)
+      valid = validateClassification(call.output, ids2, vocab, { repairParentMismatch: attempt === MAX_VALIDATION_RETRIES, repairUnknownSkills: attempt === MAX_VALIDATION_RETRIES })
+      for (const m of (valid.errors as string[])) { const mm = m.match(/: skill "([^"]+)" not in active vocabulary/); if (mm) recordGap(mm[1], 'rejected', c.full_name) }
       if (valid.ok){ valFailed=false; break }
     }
+    for (const m of ((valid.repairs ?? []) as string[])) { const mm = m.match(/stripped skill "([^"]+)"/); if (mm) recordGap(mm[1], 'stripped', c.full_name) }
+    if (!valFailed && valid.repairs?.length) console.log(`  REPAIRED ${c.full_name}: ${valid.repairs.join(' | ').slice(0, 300)}`)
     const byId: Record<string,any> = {}
     if (!valFailed) for (const t of valid.tuples) byId[t.exp_id]=t
     const roles = c.experiences.map((e:any)=>{
@@ -75,7 +85,7 @@ async function main(){
       ;(counts as any)[status]++
       return { title:e.title_raw, company:e.company_name, desc:(e.description_raw||'').replace(/\s+/g,' ').slice(0,150), haiku, spec, skills, cmp, status, flag: status==='disagree'||status==='error' }
     })
-    people.push({ name:c.full_name, ctx, roles, flags: roles.filter((r:any)=>r.flag).length })
+    people.push({ name:c.full_name, ctx, roles, flags: roles.filter((r:any)=>r.flag).length, repairs: (!valFailed && valid.repairs?.length) ? valid.repairs : [] })
     if(valFailed) console.error(`  VAL-FAIL ${c.full_name}: ${JSON.stringify(valid.errors).slice(0,140)}`)
   }
 
@@ -89,9 +99,17 @@ async function main(){
   L.push(`  agreement over COMPARABLE roles (both gave a real label, n=${comparable}): ${comparable?((100*counts.agree/comparable).toFixed(1)+'%'):'n/a'}`)
   L.push(`  ⚠ = disagreement-vs-Opus or classifier-error, sorted to the top. Review these by voice.`)
   L.push(``)
+  if (skillGaps.size){
+    L.push(`## Out-of-vocab skills encountered (vocab-gap signal — review: real skill to ADD vs junk to keep stripping)`)
+    for (const [k, g] of [...skillGaps.entries()].sort((a,b)=> b[1].cands.size - a[1].cands.size || (b[1].rejected+b[1].stripped) - (a[1].rejected+a[1].stripped))){
+      L.push(`  - "${k}" — stripped ×${g.stripped} (final attempt) / rejected ×${g.rejected} (attempt 0) — ${g.cands.size} candidate(s): ${[...g.cands].join(', ')}${g.cands.size>1?'   ⚠ MULTI-CANDIDATE':''}`)
+    }
+    L.push(``)
+  }
   for (const p of people){
     L.push(`## ${p.name}${p.flags?`   [${p.flags} to check]`:''}`)
     if (p.ctx.headline) L.push(`   headline: ${String(p.ctx.headline).slice(0,160)}`)
+    for (const rep of p.repairs) L.push(`   ⚠ GUARD-REPAIRED: ${rep}`)
     for (const r of p.roles){
       const mark = r.flag ? '⚠' : ' '
       const note = r.status==='disagree' ? `   (ref: ${r.cmp})` : ''

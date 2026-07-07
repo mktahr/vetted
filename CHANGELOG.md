@@ -6,6 +6,42 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 
 ---
 
+## 2026-07-07 — Five-axis sub-PR 3: tuning batch cls-2026-07-02a + validator guards; skills dictionary 14→188; specialty gap-fill (migration 090)
+
+**Shipped** (branch `five-axis-subpr3-classify` — pushed, NOT merged, no PR yet; migration 090 DEV-only)
+- **Tuning batch `cls-2026-07-02a`** (4 prompt fixes): Pavlo (concrete About/summary IS evidence for sparse roles), Michael (career fallback — sparse engineering role inherits the career's stable specialty), Joanne (evidence bar — never guess a niche specialty; empty is correct), Aadhya (title-keyword trap — "<X> Software Engineer" is a software engineer; defense employer / "Mission" buzzword doesn't pull to aerospace).
+- **Validator guards (reject-then-repair, `validate.ts`)**: (1) parent-function guard — a specialty whose `parent_function` excludes every assigned function is rejected on attempt 0 (retry feedback lets the model fix either axis) and STRIPPED on the final attempt (recorded in `result.repairs`); (2) unknown-skill guard — same pattern for out-of-vocab skills (big vocab made the model invent near-misses like "JavaFx"). Wired via `loadActiveVocab` (now loads `parent_function` map; parents in the vocab hash) into the live engine + both eval scripts. Tuning report gets GUARD-REPAIRED lines + an out-of-vocab-skills aggregate (attempt-0 rejections + final strips, per candidate).
+- **Read-only vocab gap analysis** over the 129-candidate preview cohort (`reference/eval/vocab-gap-report.md`): found the PROMPT-VOCAB DRIFT (prompt Rule 5 instructed sre/devops/platform_engineering which didn't exist — evidenced misfile: SRE→reliability_engineering) + CV/NLP both-levels holes.
+- **Migration 090 (DEV-only, joins 085–087 at merge)**: +5 specialties — computer_vision_engineering + nlp_engineering (ml_engineering), sre_engineering + devops_engineering + platform_engineering (software_engineering). Dev vocab now 148 active specialties. Fixes the prompt drift with zero prompt change.
+- **Skills dictionary rebuilt 14→188** via `/reference/skills/*.csv` (Matt-designed content, diff-first reconciliation before install): +176 added / ~10 re-tagged / renames (ROS2→ROS alias, CAN Bus, Hardware-in-the-Loop) verified intentional; 5 cleanups applied (CI/CD restored, machining→methodology.csv fixing an alphabetical sync-ordering collision, CAN Bus aliases restored, alias collisions resolved, ROS hint deduped); Vector Databases row added; the 4 dev-only 086 rows preserved. Synced to dev.
+- **sync-reference.mjs hardening**: `--dev` flag (script was prod-only; classifier reads DEV vocab) + hard validation that every skills `primary_specialty` hint is an ACTIVE specialty on the TARGET DB (fails loud, runs in --dry-run too).
+- **Tuning trend**: 89.7% (02a, 4-skill vocab) → 90.2% w/ 35 errors (187-skill vocab exposed skill hallucination) → **91.2% (n=136), error=0** after the unknown-skill guard. Cost ~$0.29–0.35/run.
+- **Preview re-populated** against complete vocab (980 roles / 129 candidates, $1.82 actual vs $1.45 estimate — retry volume underestimated; treat populate estimates as ±30%). Preview URL: `vetted-git-five-axis-subpr3-classify-matt-tahrtechs-projects.vercel.app`.
+- **Docs/infra**: CLAUDE.md "ALWAYS provide the URL" rule (+ memory); BACKLOG pgvector "similar candidates" entry; stale CLAUDE.md claims corrected (sync-reference does NOT validate specialty parent_function; taxonomy is migrations-only).
+
+**Decisions**
+- REJECT-then-REPAIR hybrid for both guards (reverses "off-hint is a metric, not a gate"): strict first so the model can fix whichever axis is wrong; strip-and-commit on the final attempt so one stray value never burns a candidate's failure budget.
+- `mission_systems_engineering` open question RESOLVED: route by work + the guard; the specialty stays (aerospace-parented) but can't ride under software.
+- Skills dictionary is FLAT; `primary_specialty` is a soft multi-domain HINT (never ownership); crossover = multiple tags.
+- llm_engineering stays single-parented to ml_engineering (software-side LLM work = ai_engineering per build-vs-use).
+- No PROMPT_VERSION bump for vocab-only changes (vocab hash carries provenance); guards shipped without prompt edits.
+
+**Where we left off**
+- Preview is LIVE with complete vocab (148 specialties + 188 skills, frozen prompt cls-2026-07-02a). **Matt still needs to verify the fixes in-app** — checklist + deep links in SESSION_HANDOFF.
+
+**Open questions**
+- Parent-widening: thermal_engineering (+aerospace), reliability_engineering (+electrical) from the gap report, plus the strip-review cases (Guy Bitton autonomy, SeJun motor_drives, Nick integration_test, Makai robotics-under-software) pending Matt's in-app judgment.
+- Add CAD + Simulation skill rows? (both hit multiple candidates in populate strips.)
+- Loosen the evidence bar so Aadhya's "aspiring full-stack" About earns `fullstack`? (Currently correctly-conservative empty.)
+- Keep tuning vs freeze + holdout one-shot after Matt's review.
+
+**Watch-outs**
+- **2 candidates show STALE 01d preview data** (Jessica Henson, Thomas A.) — val-failed on out-of-vocab SPECIALTY names ("ml_engineering", "mechanism_design"); the repair guard covers skills + parent-mismatch but NOT unknown specialties. Fix (extend strip-on-final to unknown specialties) + ~$0.04 targeted re-run queued on Matt's go.
+- Migration 090 is DEV-only — prod gets it at merge with 085–087 + cascade + full re-score.
+- tuning-trend.log: last three lines share PROMPT_VERSION cls-2026-07-02a but ran against DIFFERENT vocab sizes (4 → 187 → 188 skills) — compare within, not across.
+- Populate cost estimates need a ±30% band until two data points at this vocab size.
+- All prior watch-outs stand: reference/eval PII, cost-estimate-first/no auto-reruns, `classification_status` untouchable by previews, stale scores until ship-time re-score.
+
 ## 2026-07-01 — Five-axis sub-PR 3: classifier tuned + validated in-app; integrity hardening; legacy seniority/title-level fixes
 
 **Shipped** (branch `five-axis-subpr3-classify` — pushed, NOT merged; prod migrations 083/084/088/089 applied, 085/086/087 dev-only)

@@ -57,9 +57,10 @@ async function main(){
       const prompt = attempt===0 ? basePrompt : `${basePrompt}\n\n${buildRetryNote(valid.errors)}`
       const call = await callOrHalt(system, prompt)
       inTok+=call.inputTokens||0; outTok+=call.outputTokens||0
-      valid = validateClassification(call.output, expIds, vocab)
+      valid = validateClassification(call.output, expIds, vocab, { repairParentMismatch: attempt === MAX_VALIDATION_RETRIES, repairUnknownSkills: attempt === MAX_VALIDATION_RETRIES })
       if (valid.ok){ ok=true; break }
     }
+    if (ok && valid.repairs?.length) console.log(`  REPAIRED ${p.full_name}: ${valid.repairs.join(' | ').slice(0, 300)}`)
     if (!ok){ valFail++; console.error(`  VAL-FAIL ${p.full_name} (left preview NULL): ${JSON.stringify(valid.errors).slice(0,120)}`); continue }
     const byId: Record<string,any> = {}
     for (const t of valid.tuples) byId[t.exp_id]=t

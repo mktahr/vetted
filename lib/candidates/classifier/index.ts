@@ -36,7 +36,7 @@ function hashVocab(parts: string[]): string {
 export async function loadActiveVocab(supabase: SupabaseClient): Promise<ActiveVocab> {
   const [fnRes, spRes, skRes] = await Promise.all([
     supabase.from('function_dictionary').select('function_normalized').eq('active', true),
-    supabase.from('specialty_dictionary').select('specialty_normalized').eq('active', true),
+    supabase.from('specialty_dictionary').select('specialty_normalized, parent_function').eq('active', true),
     supabase.from('skills_dictionary').select('canonical_name').eq('is_active', true),
   ]);
   if (fnRes.error) throw new Error(`loadActiveVocab function_dictionary: ${fnRes.error.message}`);
@@ -46,8 +46,19 @@ export async function loadActiveVocab(supabase: SupabaseClient): Promise<ActiveV
   const specialties = (spRes.data ?? []).map((r: any) => r.specialty_normalized).filter(Boolean).sort();
   const skills = (skRes.data ?? []).map((r: any) => r.canonical_name).filter(Boolean).sort();
   if (functions.length === 0) throw new Error('loadActiveVocab: no active functions (vocab not seeded?)');
-  const version = hashVocab([`f:${functions.join(',')}`, `s:${specialties.join(',')}`, `k:${skills.join(',')}`]);
-  return { functions, specialties, skills, version };
+  // specialty -> parent_function[] map, feeding the validator's parent-function guard.
+  const specialtyParents: Record<string, string[]> = {};
+  for (const r of (spRes.data ?? []) as any[]) {
+    if (r.specialty_normalized) specialtyParents[r.specialty_normalized] = Array.isArray(r.parent_function) ? r.parent_function : [];
+  }
+  // Parents are behaviorally significant (guard), so they participate in the vocab hash.
+  const version = hashVocab([
+    `f:${functions.join(',')}`,
+    `s:${specialties.join(',')}`,
+    `k:${skills.join(',')}`,
+    `p:${specialties.map((s) => `${s}=${(specialtyParents[s] ?? []).join('+')}`).join(',')}`,
+  ]);
+  return { functions, specialties, skills, specialtyParents, version };
 }
 
 const out = (personId: string, action: ClassifyAction, extra?: Partial<ClassifyOutcome>): ClassifyOutcome =>
@@ -172,13 +183,15 @@ export async function classifyCandidate(supabase: SupabaseClient, personId: stri
         await releaseToPending(supabase, personId, token); await closeRun(supabase, runId, 'discarded', `api_error:${call.error}`, tokensUsed, callCount * EST_CENTS_PER_CALL);
         return out(personId, 'discarded', { runId, reason: `api_error:${call.error}`, tokens: tokensUsed });
       }
-      const valid = validateClassification(call.output, expectedIds, v);
+      // REJECT-then-REPAIR: strict on attempt 0 (retry lets the model fix either axis);
+      // on the FINAL attempt strip parent-mismatched specialties instead of failing.
+      const valid = validateClassification(call.output, expectedIds, v, { repairParentMismatch: attempt === MAX_VALIDATION_RETRIES, repairUnknownSkills: attempt === MAX_VALIDATION_RETRIES });
       if (valid.ok) {
         const res = await supabase.rpc('commit_classification', { p_person_id: personId, p_lease_token: token, p_run_id: runId, p_classifier_version: classifierVersion, p_assignments: valid.tuples });
         if (res.error) { await releaseToPending(supabase, personId, token); await closeRun(supabase, runId, 'discarded', `commit_rpc_error:${res.error.message}`, tokensUsed, callCount * EST_CENTS_PER_CALL); return out(personId, 'discarded', { runId, reason: res.error.message, tokens: tokensUsed }); }
         if (res.data === 'committed') {
           await supabase.from('candidate_classification_runs').update({ tokens: tokensUsed, cost_cents: callCount * EST_CENTS_PER_CALL }).eq('run_id', runId);
-          return out(personId, 'committed', { runId, tokens: tokensUsed });
+          return out(personId, 'committed', { runId, tokens: tokensUsed, reason: valid.repairs.length ? `repaired_specialties:${valid.repairs.length}` : undefined });
         }
         await releaseToPending(supabase, personId, token); await closeRun(supabase, runId, 'discarded', `commit:${res.data}`, tokensUsed, callCount * EST_CENTS_PER_CALL);
         return out(personId, 'discarded', { runId, reason: String(res.data), tokens: tokensUsed });

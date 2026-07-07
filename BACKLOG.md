@@ -234,6 +234,11 @@ PR 1 (the pipeline) shipped 2026-06-24 via PR [#10](https://github.com/mktahr/ve
 
 ## AI Features
 
+### pgvector semantic search — "similar candidates" feature
+- **Status:** concept; not started
+- **Trigger:** slot after AI-chat-search
+- **Scope:** Supabase ships pgvector natively; enable the extension + an embedding column when we build it. A LAYER ON TOP of structured taxonomy search, never a replacement — embeddings can't make the IS-IT vs TOUCHED-IT distinction or do hard filters. Powers "similar candidates" (find people whose career shape/skills resemble a given profile).
+
 ### AI sourcing partner mode
 - **Status:** concept; not started
 - **Trigger:** post-launch, after AI chat search is stable

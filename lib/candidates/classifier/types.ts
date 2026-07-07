@@ -16,6 +16,8 @@ export interface ActiveVocab {
   functions: string[];
   specialties: string[];
   skills: string[];
+  /** specialty -> parent_function[] (enforced by the validator's parent-function guard). */
+  specialtyParents: Record<string, string[]>;
   /** Short hash of the sorted vocab — part of run provenance + a re-classify trigger. */
   version: string;
 }
@@ -46,6 +48,9 @@ export interface ValidationResult {
   ok: boolean;
   errors: string[];
   tuples: ClassificationTuple[];
+  /** Parent-function-guard repairs applied (final attempt only): specialties stripped
+   *  because their parent_function excluded every assigned function. */
+  repairs: string[];
 }
 
 export type ClassifyAction =

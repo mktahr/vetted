@@ -1,4 +1,56 @@
 canonical_name,category,aliases,primary_specialty,description,is_active,is_searchable
-Docker,tool,,infrastructure;devops,Container runtime and image format; foundational to modern infrastructure and CI/CD.,true,true
-Kubernetes,tool,k8s,infrastructure;devops;ml_ops,Container orchestration platform; standard for production infrastructure and ML serving.,true,true
-KiCad,tool,,pcb_design;hardware_design;electrical_engineering,Open-source PCB design and electrical schematic capture tool.,true,true
+Altium Designer,tool,altium,pcb_design_engineering;electrical_engineering,PCB design,true,true
+Ansible,tool,,devops_engineering;infrastructure_engineering,Config management,true,true
+ANSYS,tool,,fea_analysis_engineering;thermal_engineering;structural_engineering;aerospace_structures_engineering,FEA/simulation,true,true
+Apache Airflow,tool,airflow,data_pipeline_engineering,Workflow orchestration,true,true
+AWS,tool,amazon web services,infrastructure_engineering;devops_engineering;platform_engineering;backend_engineering,Cloud platform,true,true
+Azure,tool,,infrastructure_engineering;devops_engineering;platform_engineering,Cloud platform,true,true
+BigQuery,tool,,data_platform_engineering;data_pipeline_engineering,Cloud warehouse,true,true
+Cadence,tool,,asic_engineering;analog_design_engineering;pcb_design_engineering,EDA suite,true,true
+Cassandra,tool,,distributed_systems_engineering;data_platform_engineering,Wide-column DB,true,true
+CATIA,tool,,mechanical_design_engineering;cad_design_engineering;aerospace_structures_engineering,CAD,true,true
+ClickHouse,tool,,data_platform_engineering;data_pipeline_engineering,OLAP DB,true,true
+Creo,tool,ptc creo,mechanical_design_engineering;cad_design_engineering,CAD,true,true
+Databricks,tool,,data_platform_engineering;data_pipeline_engineering,Lakehouse platform,true,true
+Datadog,tool,,sre_engineering;devops_engineering,Observability,true,true
+dbt,tool,,data_pipeline_engineering;data_platform_engineering,Data transformation,true,true
+Docker,tool,,devops_engineering;platform_engineering;infrastructure_engineering;backend_engineering,Containers,true,true
+DynamoDB,tool,,backend_engineering;distributed_systems_engineering,NoSQL (AWS),true,true
+Elasticsearch,tool,,backend_engineering;data_pipeline_engineering;recommendation_ranking_engineering,Search engine,true,true
+Embedded Linux,tool,,embedded_engineering;firmware_engineering;low_level_systems_engineering,Linux on devices,true,true
+Firebase,tool,,backend_engineering;mobile_ios_engineering;mobile_android_engineering,BaaS,true,true
+Fusion 360,tool,fusion360,mechanical_design_engineering;cad_design_engineering,CAD,true,true
+Gazebo,tool,,ros_engineering;autonomy_engineering;simulation_engineering,Robot simulation,true,true
+GCP,tool,google cloud,infrastructure_engineering;devops_engineering;platform_engineering,Cloud platform,true,true
+GitHub Actions,tool,,devops_engineering;platform_engineering,CI/CD,true,true
+Grafana,tool,,sre_engineering;devops_engineering;platform_engineering,Observability,true,true
+Jenkins,tool,,devops_engineering;platform_engineering,CI/CD,true,true
+Kafka,tool,apache kafka,backend_engineering;data_pipeline_engineering;distributed_systems_engineering,Event streaming,true,true
+KiCad,tool,,pcb_design_engineering;electrical_engineering,PCB design (open),true,true
+Kubeflow,tool,,ml_platform_engineering,ML on k8s,true,true
+Kubernetes,tool,k8s,devops_engineering;platform_engineering;infrastructure_engineering;distributed_systems_engineering,Orchestration,true,true
+MLflow,tool,,ml_platform_engineering;applied_ml_engineering,ML lifecycle,true,true
+MongoDB,tool,mongo,backend_engineering;data_platform_engineering,Document DB,true,true
+MySQL,tool,,backend_engineering;data_platform_engineering,Relational DB,true,true
+Nginx,tool,,backend_engineering;infrastructure_engineering;platform_engineering,Web server/proxy,true,true
+Oscilloscope,tool,,hardware_engineering;electrical_engineering;test_engineering,Debug instrument,true,true
+PLM,tool,product lifecycle management,manufacturing_engineering;systems_engineering,Lifecycle mgmt,true,true
+PostgreSQL,tool,postgres;psql,backend_engineering;data_platform_engineering,Relational DB,true,true
+Prometheus,tool,,sre_engineering;devops_engineering;platform_engineering,Monitoring,true,true
+RabbitMQ,tool,,backend_engineering;distributed_systems_engineering,Message broker,true,true
+Redis,tool,,backend_engineering;distributed_systems_engineering,In-memory store,true,true
+RTOS,tool,freertos;real-time os,rtos_engineering;firmware_engineering;embedded_engineering,Real-time OS,true,true
+SageMaker,tool,,ml_platform_engineering;applied_ml_engineering,AWS ML platform,true,true
+SEM,tool,scanning electron microscopy,materials_characterization_engineering,Microscopy,true,true
+Simulink,tool,matlab simulink,controls_engineering;control_systems_engineering;dsp_engineering,Model-based control,true,true
+Snowflake,tool,,data_platform_engineering;data_pipeline_engineering,Cloud warehouse,true,true
+SolidWorks,tool,,mechanical_design_engineering;cad_design_engineering,CAD,true,true
+SPICE,tool,ltspice,analog_design_engineering;electrical_engineering,Circuit simulation,true,true
+Supabase,tool,,backend_engineering;fullstack_engineering,Postgres BaaS,true,true
+Synopsys,tool,,asic_engineering;digital_design_engineering;chip_verification_engineering,EDA suite,true,true
+SysML,tool,,model_based_systems_engineering;systems_engineering,Systems modeling language,true,true
+Terraform,tool,,devops_engineering;platform_engineering;infrastructure_engineering,IaC,true,true
+Vertex AI,tool,,ml_platform_engineering;applied_ml_engineering,GCP ML platform,true,true
+Weights & Biases,tool,wandb,ml_platform_engineering;ml_research_engineering,Experiment tracking,true,true
+Yocto,tool,,embedded_engineering,Embedded Linux build,true,true
+Zemax,tool,,optical_design_engineering;optics_engineering,Optical design software,true,true
