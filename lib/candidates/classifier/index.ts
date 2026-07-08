@@ -107,11 +107,16 @@ export async function classifyCandidate(supabase: SupabaseClient, personId: stri
   const leaseExpires = new Date(Date.now() + LEASE_MINUTES * 60_000).toISOString();
 
   // ── CLAIM: eligible = pending | failed-retryable | expired-in_progress.
+  // .select() with NO column list is deliberate (select=*): PostgREST 14.1 (prod,
+  // 2026-07-08) mis-compiles PATCH + or= + a NAMED returning column list into SQL
+  // that fails 42703 ("column people.classification_status does not exist");
+  // select=* and PostgREST >=14.5 (dev) are both fine. Found on the first prod
+  // classifier run — the engine had only ever exercised this path against dev.
   const { data: claimedRows, error: claimErr } = await supabase.from('people')
     .update({ classification_status: 'in_progress', classification_lease_token: token, classification_lease_expires_at: leaseExpires, updated_at: nowIso })
     .eq('person_id', personId)
     .or(`classification_status.eq.pending,and(classification_status.eq.failed,classification_failure_count.lt.${MAX_FAILURES}),and(classification_status.eq.in_progress,classification_lease_expires_at.lt.${nowIso})`)
-    .select('person_id, classification_generation, classification_failure_count');
+    .select();
   if (claimErr) return out(personId, 'skipped', { reason: `claim_error: ${claimErr.message}` });
   if (!claimedRows || claimedRows.length !== 1) return out(personId, 'skipped', { reason: 'not_eligible' });
   const generation = (claimedRows[0] as any).classification_generation as number;
