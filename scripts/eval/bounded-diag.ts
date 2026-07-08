@@ -38,11 +38,13 @@ async function main(){
   const selected:any[] = []; let total=0
   for (const pat of POOL){
     if (total >= HARD_CAP) break
-    const { data: person } = await prod.from('people').select('person_id, full_name').ilike('full_name', pat).limit(1).maybeSingle()
+    const { data: person, error: pErr } = await prod.from('people').select('person_id, full_name').ilike('full_name', pat).limit(1).maybeSingle()
+    if (pErr) throw new Error(`people lookup failed for ${pat}: ${pErr.message}`) // hardening 2026-07-08
     if (!person) { console.error(`  (no match for ${pat})`); continue }
-    const { data: exps } = await prod.from('person_experiences')
+    const { data: exps, error: eErr } = await prod.from('person_experiences')
       .select('person_experience_id, title_raw, start_date, end_date, is_current, description_raw, companies:company_id ( company_name )')
       .eq('person_id', person.person_id).order('start_date',{ascending:false})
+    if (eErr) throw new Error(`experiences lookup failed for ${person.full_name}: ${eErr.message}`) // hardening 2026-07-08
     const experiences = (exps??[]).map((e:any)=>({person_experience_id:e.person_experience_id,company_name:e.companies?.company_name??null,title_raw:e.title_raw,start_date:e.start_date,end_date:e.end_date,is_current:e.is_current,description_raw:e.description_raw}))
     if (total + experiences.length > HARD_CAP){ console.error(`  (skipping ${person.full_name}: ${experiences.length} exps would exceed cap ${HARD_CAP}, at ${total})`); continue }
     selected.push({ ...person, experiences }); total += experiences.length

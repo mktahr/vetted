@@ -8,6 +8,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
 import { buildSystemPrompt, buildUserPrompt } from '../../lib/candidates/classifier/prompt.ts'
+import { validateClassification } from '../../lib/candidates/classifier/validate.ts'
 import { loadActiveVocab } from '../../lib/candidates/classifier/index.ts'
 import { loadSpecialtyDictionary, resolveSpecialty } from '../../lib/normalize/specialty.ts'
 import { isFoundingEngineerTitle } from '../../lib/scoring/compute-derived.ts'
@@ -19,13 +20,20 @@ const snippet = (s:string|null)=> (s??'').replace(/\s+/g,' ').slice(0,140)
 // Hard-tech disciplines = the coverage Matt just seeded; used for the landing report.
 const HARD_TECH = new Set(['electrical_engineering','mechanical_engineering','hardware_engineering','materials_engineering','manufacturing_engineering','robotics_engineering','firmware_engineering','optics_engineering','aerospace_engineering','chip_engineering','controls_engineering','systems_engineering','test_engineering'])
 
+// Hardening 2026-07-08: an API error HALTS (one retry) instead of silently yielding
+// null labels — draft rows feed adjudication, so a blank Sonnet column must never
+// masquerade as "Sonnet abstained".
 async function sonnet(apiKey:string, system:string, user:string): Promise<any> {
-  const r = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01'},body:JSON.stringify({model:SONNET,max_tokens:4096,temperature:0,system,messages:[{role:'user',content:user}]})})
-  if(!r.ok){ console.error('sonnet',r.status, (await r.text()).slice(0,200)); return null }
-  const d = await r.json(); const t = d?.content?.[0]?.text ?? ''
-  const f = t.replace(/```(?:json)?/gi,'').trim()
-  try { return JSON.parse(f) } catch {}
-  const i=t.indexOf('{'), j=t.lastIndexOf('}'); try { return JSON.parse(t.slice(i,j+1)) } catch { return null }
+  let lastErr = ''
+  for (let attempt=0; attempt<2; attempt++){
+    const r = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01'},body:JSON.stringify({model:SONNET,max_tokens:4096,temperature:0,system,messages:[{role:'user',content:user}]})})
+    if(!r.ok){ lastErr = `${r.status} ${(await r.text()).slice(0,200)}`; if(attempt===0) console.error(`  (sonnet API error, one retry): ${lastErr}`); continue }
+    const d = await r.json(); const t = d?.content?.[0]?.text ?? ''
+    const f = t.replace(/```(?:json)?/gi,'').trim()
+    try { return JSON.parse(f) } catch {}
+    const i=t.indexOf('{'), j=t.lastIndexOf('}'); try { return JSON.parse(t.slice(i,j+1)) } catch { return null } // unparseable output: caller marks rows contested
+  }
+  throw new Error(`Sonnet API error after 1 retry — HALTING (no silent blank labels): ${lastErr}`)
 }
 
 async function main() {
@@ -48,10 +56,23 @@ async function main() {
   for (const c of cands) {
     n++
     const out = await sonnet(env.ANTHROPIC_API_KEY, system, buildUserPrompt(c.experiences))
+    // Hardening 2026-07-08: VALIDATE Sonnet's output (vocab membership + coverage) —
+    // invalid rows must never become silent "ground truth". Invalid/missing tuples get
+    // blank sonnet labels + forced contested=true so they route to the Opus pass.
+    const expIds = c.experiences.map((e:any)=>e.person_experience_id)
+    const sonnetValid = validateClassification(out, expIds, vocab)
+    const validById: Record<string, any> = {}
+    for (const t of sonnetValid.tuples) validById[t.exp_id] = t
+    const invalidIds = new Set<string>()
+    if (!sonnetValid.ok) {
+      for (const err of sonnetValid.errors) { const m = err.match(/^([0-9a-f-]{36}):/); if (m) invalidIds.add(m[1]) }
+      console.error(`  SONNET-INVALID ${c.full_name} (${sonnetValid.errors.length} error(s); affected rows forced contested): ${sonnetValid.errors.slice(0,3).join(' | ').slice(0,200)}`)
+    }
     const byId: Record<string, any> = {}
     for (const a of (out?.assignments ?? [])) byId[a.exp_id] = a
     c.experiences.forEach((e:any, idx:number)=>{
-      const s = byId[e.person_experience_id] ?? {}
+      const invalid = invalidIds.has(e.person_experience_id) || (!sonnetValid.ok && !validById[e.person_experience_id])
+      const s = invalid ? {} : (byId[e.person_experience_id] ?? {})
       const sFn = Array.isArray(s.function_inferred)? s.function_inferred[0] : ''
       const sSpec = Array.isArray(s.specialty_inferred)? s.specialty_inferred[0] : ''
       const rule = resolveSpecialty(e.title_raw, e.description_raw, null, [] as any)
@@ -63,6 +84,7 @@ async function main() {
       // engineer-titled but Sonnet abstained -> a CONTESTED row for the Opus pass.
       const engTitledUnknown = (!sFn || sFn==='unknown') && /engineer|developer|swe|sde|architect|scientist/i.test(e.title_raw??'') && !/intern|manager|recruit|sales|analyst|support|audio|curriculum|content/i.test(e.title_raw??'')
       const flags:string[] = []
+      if (invalid) flags.push('sonnet_invalid')
       if (genuineConflict) flags.push('genuine_conflict')
       if (multiParent.has(sSpec) || multiParent.has(rSpec)) flags.push('multi_parent')
       if (/\b(manager|director|vp|chief|head|principal|lead)\b/i.test(e.title_raw??'')) flags.push('leadership')
@@ -70,7 +92,7 @@ async function main() {
       const discipline = sFn || rFn || 'unknown'
       const tier = genuineConflict ? 0 : (flags.length ? 1 : 2)
       rows.push({
-        tier, discipline, flagsN: flags.length, contested: (genuineConflict || engTitledUnknown),
+        tier, discipline, flagsN: flags.length, contested: (genuineConflict || engTitledUnknown || invalid),
         exp_id: e.person_experience_id, person_id: c.person_id, seeded: seededIds.has(c.person_id)?'Y':'',
         candidate:c.full_name, role:idx+1, title:e.title_raw, company:e.company_name, desc:snippet(e.description_raw),
         sonnet_function:arr(s.function_inferred), sonnet_specialty:arr(s.specialty_inferred), sonnet_skills:arr(s.skills_inferred), sonnet_title:s.title_normalized_inferred??'',

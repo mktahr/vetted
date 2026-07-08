@@ -64,7 +64,7 @@ async function main(){
       const prompt = attempt===0 ? basePrompt : `${basePrompt}\n\n${buildRetryNote(valid.errors)}`
       const call = await callOrHalt(system, prompt)   // halts on sustained API error
       inTok+=call.inputTokens||0; outTok+=call.outputTokens||0
-      valid = validateClassification(call.output, ids2, vocab, { repairParentMismatch: attempt === MAX_VALIDATION_RETRIES, repairUnknownSkills: attempt === MAX_VALIDATION_RETRIES, repairUnknownSpecialties: attempt === MAX_VALIDATION_RETRIES })
+      valid = validateClassification(call.output, ids2, vocab, { repairParentMismatch: attempt === MAX_VALIDATION_RETRIES, repairUnknownSkills: attempt === MAX_VALIDATION_RETRIES, repairUnknownSpecialties: attempt === MAX_VALIDATION_RETRIES, repairContradictions: attempt === MAX_VALIDATION_RETRIES, repairEmptyTitle: attempt === MAX_VALIDATION_RETRIES })
       for (const m of (valid.errors as string[])) { const mm = m.match(/: skill "([^"]+)" not in active vocabulary/); if (mm) recordGap(mm[1], 'rejected', c.full_name) }
       if (valid.ok){ valFailed=false; break }
     }

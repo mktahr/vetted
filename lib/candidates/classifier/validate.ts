@@ -29,6 +29,15 @@ export interface ValidateOptions {
    *  specialties). The role stays searchable by function; the stray name is recorded
    *  in result.repairs as vocab-gap signal. */
   repairUnknownSpecialties?: boolean;
+  /** FINAL attempt (hardening-before-merge, 2026-07-08): repair semantically
+   *  contradictory tuples instead of rejecting — "unknown" mixed with real functions
+   *  (drop the "unknown"), and specialties attached to an unknown-only function
+   *  (strip the specialties). Strict-rejected on attempt 0 so the retry can fix. */
+  repairContradictions?: boolean;
+  /** FINAL attempt (hardening-before-merge, 2026-07-08): tolerate an empty
+   *  title_normalized_inferred (commits NULL) instead of rejecting — recorded in
+   *  repairs. Strict-rejected on attempt 0 (the field is documented REQUIRED). */
+  repairEmptyTitle?: boolean;
 }
 
 export function validateClassification(
@@ -57,13 +66,38 @@ export function validateClassification(
     if (seen.has(id)) { errors.push(`duplicate exp_id ${id}`); continue; }
     seen.add(id);
 
-    const fn = Array.isArray(a.function_inferred) ? a.function_inferred : [];
-    const sp = Array.isArray(a.specialty_inferred) ? a.specialty_inferred : [];
+    let fn = Array.isArray(a.function_inferred) ? a.function_inferred : [];
+    let sp = Array.isArray(a.specialty_inferred) ? a.specialty_inferred : [];
     const sk = Array.isArray(a.skills_inferred) ? a.skills_inferred : [];
     const title = typeof a.title_normalized_inferred === 'string' ? a.title_normalized_inferred.trim() : '';
 
     if (fn.length === 0) errors.push(`${id}: function_inferred is empty (use ["unknown"] if undetermined)`);
     for (const v of fn) if (!fns.has(v)) errors.push(`${id}: function "${v}" not in active vocabulary`);
+
+    // Semantic contradictions (hardening 2026-07-08): "unknown" is an abstention, not
+    // a discipline — it cannot coexist with real functions, and an unknown-only role
+    // cannot carry specialties.
+    if (fn.includes('unknown') && fn.length > 1) {
+      if (opts?.repairContradictions) {
+        repairs.push(`${id}: dropped "unknown" — mixed with real function(s) [${fn.filter((v) => v !== 'unknown').join(', ')}]`);
+        fn = fn.filter((v) => v !== 'unknown');
+      } else {
+        errors.push(`${id}: "unknown" cannot be mixed with real functions [${fn.join(', ')}] — drop "unknown" or classify as unknown only`);
+      }
+    }
+    if (fn.length > 0 && fn.every((v) => v === 'unknown') && sp.length > 0) {
+      if (opts?.repairContradictions) {
+        repairs.push(`${id}: stripped specialties [${sp.join(', ')}] — attached to an unknown-only function`);
+        sp = [];
+      } else {
+        errors.push(`${id}: specialties [${sp.join(', ')}] attached to an unknown-only function — an abstained role carries no specialty`);
+      }
+    }
+    // title_normalized_inferred is documented REQUIRED — reject empty (repair: tolerate as NULL).
+    if (!title) {
+      if (opts?.repairEmptyTitle) repairs.push(`${id}: empty title_normalized_inferred tolerated (commits NULL)`);
+      else errors.push(`${id}: title_normalized_inferred is empty (REQUIRED — return the cleaned canonical title)`);
+    }
     // Skills: vocab membership, with final-attempt repair (strip, don't fail).
     const keptSk: string[] = [];
     for (const v of sk) {

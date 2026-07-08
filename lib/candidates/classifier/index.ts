@@ -66,18 +66,23 @@ export async function loadActiveVocab(supabase: SupabaseClient): Promise<ActiveV
 const out = (personId: string, action: ClassifyAction, extra?: Partial<ClassifyOutcome>): ClassifyOutcome =>
   ({ personId, action, ...extra });
 
-/** Conditionally release our lease back to pending (never stomps a newer lease). */
+/** Conditionally release our lease back to pending (never stomps a newer lease).
+ *  Errors are LOGGED (hardening 2026-07-08) — a failed release self-heals via lease
+ *  expiry, but a silent one hides an infra fault. */
 async function releaseToPending(supabase: SupabaseClient, personId: string, token: string) {
-  await supabase.from('people')
+  const { error } = await supabase.from('people')
     .update({ classification_status: 'pending', classification_lease_token: null, classification_lease_expires_at: null, updated_at: new Date().toISOString() })
     .eq('person_id', personId).eq('classification_status', 'in_progress').eq('classification_lease_token', token);
+  if (error) console.error(`[classifier] releaseToPending failed for ${personId} (lease will self-heal at expiry): ${error.message}`);
 }
 
-/** Mark a run terminal. */
+/** Mark a run terminal. Errors LOGGED (hardening 2026-07-08) — a stuck 'claimed' run
+ *  is superseded on the next claim, but silence hides the fault. */
 async function closeRun(supabase: SupabaseClient, runId: string, status: 'failed' | 'discarded', error: string | null, tokens?: number, costCents?: number) {
-  await supabase.from('candidate_classification_runs')
+  const { error: dbErr } = await supabase.from('candidate_classification_runs')
     .update({ status, error, completed_at: new Date().toISOString(), tokens: tokens ?? null, cost_cents: costCents ?? null })
     .eq('run_id', runId).eq('status', 'claimed');
+  if (dbErr) console.error(`[classifier] closeRun(${status}) failed for run ${runId}: ${dbErr.message}`);
 }
 
 /**
@@ -117,9 +122,10 @@ export async function classifyCandidate(supabase: SupabaseClient, personId: stri
   let runId: string | null = null;
   try {
     // Supersede any stale 'claimed' run (crashed worker) before inserting ours.
-    await supabase.from('candidate_classification_runs')
+    const { error: supersedeErr } = await supabase.from('candidate_classification_runs')
       .update({ status: 'discarded', error: 'superseded_by_reclaim', completed_at: nowIso })
       .eq('person_id', personId).eq('status', 'claimed');
+    if (supersedeErr) console.error(`[classifier] stale-run supersede failed for ${personId}: ${supersedeErr.message}`);
 
     const { data: runRow, error: runErr } = await supabase.from('candidate_classification_runs')
       .insert({ person_id: personId, lease_token: token, claimed_generation: generation, model: CLASSIFIER_MODEL, prompt_version: PROMPT_VERSION, dictionary_version: v.version, status: 'claimed' })
@@ -187,7 +193,7 @@ export async function classifyCandidate(supabase: SupabaseClient, personId: stri
       }
       // REJECT-then-REPAIR: strict on attempt 0 (retry lets the model fix either axis);
       // on the FINAL attempt strip parent-mismatched specialties instead of failing.
-      const valid = validateClassification(call.output, expectedIds, v, { repairParentMismatch: attempt === MAX_VALIDATION_RETRIES, repairUnknownSkills: attempt === MAX_VALIDATION_RETRIES, repairUnknownSpecialties: attempt === MAX_VALIDATION_RETRIES });
+      const valid = validateClassification(call.output, expectedIds, v, { repairParentMismatch: attempt === MAX_VALIDATION_RETRIES, repairUnknownSkills: attempt === MAX_VALIDATION_RETRIES, repairUnknownSpecialties: attempt === MAX_VALIDATION_RETRIES, repairContradictions: attempt === MAX_VALIDATION_RETRIES, repairEmptyTitle: attempt === MAX_VALIDATION_RETRIES });
       if (valid.ok) {
         // DETERMINISTIC robotics carve-out guard (code, not LLM): reroute employer-name
         // leaks BEFORE inheritance so the corrected software role can inherit properly.
@@ -222,7 +228,8 @@ export async function classifyCandidate(supabase: SupabaseClient, personId: stri
         const res = await supabase.rpc('commit_classification', { p_person_id: personId, p_lease_token: token, p_run_id: runId, p_classifier_version: classifierVersion, p_assignments: assignments });
         if (res.error) { await releaseToPending(supabase, personId, token); await closeRun(supabase, runId, 'discarded', `commit_rpc_error:${res.error.message}`, tokensUsed, callCount * EST_CENTS_PER_CALL); return out(personId, 'discarded', { runId, reason: res.error.message, tokens: tokensUsed }); }
         if (res.data === 'committed') {
-          await supabase.from('candidate_classification_runs').update({ tokens: tokensUsed, cost_cents: callCount * EST_CENTS_PER_CALL }).eq('run_id', runId);
+          const { error: costErr } = await supabase.from('candidate_classification_runs').update({ tokens: tokensUsed, cost_cents: callCount * EST_CENTS_PER_CALL }).eq('run_id', runId);
+          if (costErr) console.error(`[classifier] post-commit token/cost update failed for run ${runId} (result already committed): ${costErr.message}`);
           return out(personId, 'committed', { runId, tokens: tokensUsed, reason: valid.repairs.length ? `repaired_specialties:${valid.repairs.length}` : undefined });
         }
         await releaseToPending(supabase, personId, token); await closeRun(supabase, runId, 'discarded', `commit:${res.data}`, tokensUsed, callCount * EST_CENTS_PER_CALL);

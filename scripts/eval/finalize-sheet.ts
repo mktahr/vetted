@@ -18,7 +18,8 @@ async function main() {
   const ids = [...new Set(rows.map((r:any)=>r.person_id))]
   const urlBy: Record<string,string> = {}
   for (let i=0;i<ids.length;i+=200) {
-    const { data } = await prod.from('people').select('person_id, linkedin_url').in('person_id', ids.slice(i,i+200))
+    const { data, error } = await prod.from('people').select('person_id, linkedin_url').in('person_id', ids.slice(i,i+200))
+    if (error) throw new Error(`linkedin_url batch query failed (rows ${i}-${i+200}): ${error.message}`) // hardening 2026-07-08: no silent blank URLs
     for (const p of (data??[])) urlBy[p.person_id] = p.linkedin_url ?? ''
   }
   for (const r of rows) r.linkedin_url = urlBy[r.person_id] ?? ''
