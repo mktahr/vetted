@@ -335,6 +335,11 @@ PR 1 (the pipeline) shipped 2026-06-24 via PR [#10](https://github.com/mktahr/ve
 
 ## Five-Axis Classification
 
+### LinkedIn skills-section capture + deterministic person-level skill matching
+- **What:** two-part track surfaced 2026-07-07/08 (Pavlo/Aadhya/Guy skills investigations). (1) **Extension fix:** the Chrome extension scrapes `skills_tags: []` for profiles whose LinkedIn skills section is populated (Pavlo's backend/distributed list, Aadhya's Python/PyTorch/React Native list, Guy's CMake never entered the DB) — fix/verify the skills scrape in `vetted-extension` (`src/content.ts`). (2) **Deterministic matcher:** alias-match captured `skills_tags` against `skills_dictionary` (canonical_name + aliases) into a person-level skills view. Zero LLM cost, pure code. Do NOT feed candidate-level skills into the per-role classifier (role-attribution would be guessing — Codex-concurred 2026-07-07).
+- **Why it matters:** per-role skills only come from role descriptions today; many strong candidates have empty descriptions but rich LinkedIn skill sections. This is the biggest cheap win for the skills axis.
+- **Trigger:** after sub-PR 3 merges (person-level skills view slots into sub-PR 4's aggregated columns).
+
 ### DB-level atomic job claim for classify-pending (upgrade from app-layer lease)
 - **What:** upgrade the `classify-pending` job claim from the app-layer expiring lease to a **database-level claim** — a Postgres function using row-level locking (`SELECT … FOR UPDATE SKIP LOCKED`) for fully atomic job handout (claim + complete inside the DB).
 - **Why deferred:** single-admin app; only two possible concurrent workers (the daily cron + a manual on-demand run), so realistic max contention is **one overlap**. The shipped app-layer design — expiring lease + reclaim, conditional mark-done, and commit-time input-hash recheck (discard + re-queue if the input changed) — is **already correct at this load**. A DB-level claim adds permanent maintenance surface (an in-database function living separately from the app code, harder to change and debug) for robustness only needed under **high** concurrency.
