@@ -17,12 +17,11 @@ export interface DrawerExperience {
   is_current: boolean
   is_primary_current?: boolean | null
   employment_type: string | null
-  function_inferred_preview?: string[] | null
-  specialty_inferred_preview?: string[] | null
-  specialty_inherited_preview?: string[] | null
-  skills_inferred_preview?: string[] | null
-  title_normalized_inferred_preview?: string | null
-  classification_preview_version?: string | null
+  function_inferred?: string[] | null
+  specialty_inferred?: string[] | null
+  specialty_inherited?: string[] | null
+  skills_inferred?: string[] | null
+  title_normalized_inferred?: string | null
 }
 
 export interface DrawerEducation {
@@ -237,7 +236,7 @@ export default function ProfileDrawer({ person, experiences, education, signals,
             )}
 
             {/* Classification metadata — quiet label-value pairs. Function/Specialty come from the
-                NEW five-axis preview on the person's CURRENT role (shared helper — same derivation
+                five-axis INFERRED classification on the person's CURRENT role (shared helper — same derivation
                 as the list). Legacy person-level "fullstack" fields removed. */}
             {(() => { const cls = currentRoleClassification(experiences); return (cls.fn || cls.specs.length > 0 || cls.inheritedSpecs.length > 0 || currentSeniority || person.highest_seniority_reached) && (
               <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 12px', fontSize: 'var(--fs-13)', fontFamily: 'var(--font-sans)' }}>
@@ -420,19 +419,20 @@ export default function ProfileDrawer({ person, experiences, education, signals,
                         <div style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)', marginTop: 2, fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
                           {dateRange}{duration ? ` · ${duration}` : ''}
                         </div>
-                        {/* NEW five-axis classification (preview) for this role */}
+                        {/* Five-axis inferred classification for this role (LIVE columns post
+                            merge-arc flip; provenance = people.classifier_version). */}
                         {(() => {
-                          const fn = exp.function_inferred_preview
-                          const sp = exp.specialty_inferred_preview
-                          const inh = exp.specialty_inherited_preview
-                          const sk = exp.skills_inferred_preview
-                          const tn = exp.title_normalized_inferred_preview
-                          const ver = exp.classification_preview_version
+                          const fn = exp.function_inferred
+                          const sp = exp.specialty_inferred
+                          const inh = exp.specialty_inherited
+                          const sk = exp.skills_inferred
+                          const tn = exp.title_normalized_inferred
+                          const ver = (person as any).classifier_version as string | null
                           if ((!fn || fn.length === 0) && (!sp || sp.length === 0) && (!inh || inh.length === 0) && !tn) return null
                           const clean = formatAxisLabel
                           return (
                             <div style={{ marginTop: 6, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-muted, rgba(255,255,255,0.03))', padding: '6px 8px', fontSize: 'var(--fs-12)', display: 'grid', gap: 1 }}>
-                              <div style={{ fontSize: '10px', letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: 600, color: 'var(--accent-strong)' }}>AI Classification (preview{ver ? ` · ${ver}` : ''})</div>
+                              <div style={{ fontSize: '10px', letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: 600, color: 'var(--accent-strong)' }}>AI Classification{ver ? ` · ${ver}` : ''}</div>
                               {fn && fn.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>function: </span><span style={{ color: 'var(--fg-primary)' }}>{fn.map(clean).join(', ')}</span></div>}
                               {sp && sp.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>specialty: </span><span style={{ color: 'var(--fg-primary)' }}>{sp.map(clean).join(', ')}</span></div>}
                               {inh && inh.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>inherited: </span><span style={{ color: 'var(--fg-tertiary)', fontStyle: 'italic' }} title="Deterministic career fallback — inferred from prior roles (lower confidence)">{inh.map(clean).join(', ')} ⓘ</span></div>}

@@ -47,7 +47,9 @@ interface ExperienceLite {
   // V1 (post-migration 031): two independent dimensions per company
   company_category: 'hardware' | 'non_hardware' | null
   company_review_status: 'vetted' | 'unreviewed' | 'excluded' | null
-  specialty: string | null
+  /** Per-role effective specialty set for filtering: specialty_inferred ∪ specialty_inherited
+   *  (FLIPPED from legacy specialty_normalized in the merge arc, 2026-07-08). */
+  specialties: string[]
   seniority: string | null
   start_date: string | null
   end_date: string | null
@@ -56,12 +58,11 @@ interface ExperienceLite {
   employment_type: string | null
   title_raw: string | null
   description_raw: string | null
-  function_inferred_preview: string[] | null
-  specialty_inferred_preview: string[] | null
-  specialty_inherited_preview: string[] | null
-  skills_inferred_preview: string[] | null
-  title_normalized_inferred_preview: string | null
-  classification_preview_version: string | null
+  function_inferred: string[] | null
+  specialty_inferred: string[] | null
+  specialty_inherited: string[] | null
+  skills_inferred: string[] | null
+  title_normalized_inferred: string | null
 }
 
 interface EducationLite {
@@ -81,7 +82,12 @@ interface PersonWithFilters extends Person {
   school_ids_all: Set<string>
   experiences_lite: ExperienceLite[]
   education_lite: EducationLite[]
+  /** Ever-scope specialty set: union of specialty_inferred ∪ specialty_inherited across all roles. */
   all_specialties: Set<string>
+  /** Currently-scope specialty set: the current-role classification (evidenced ∪ inherited),
+   *  derived via the shared currentRoleClassification helper — replaces legacy primary_specialty
+   *  in the filter predicates (merge-arc flip, 2026-07-08). */
+  current_specs: string[]
   tenure: TenureSummary
 }
 
@@ -443,7 +449,7 @@ export default function ProfileTable() {
           { data: fieldOfStudyData },
         ] = await Promise.all([
           supabase.from('candidate_bucket_assignments').select('person_id, candidate_bucket, flagged_reasons, assignment_reason, effective_at').order('effective_at', { ascending: false }),
-          supabase.from('person_experiences').select('person_id, company_id, specialty_normalized, seniority_normalized, start_date, end_date, is_current, is_primary_current, employment_type_normalized, title_raw, description_raw, function_inferred_preview, specialty_inferred_preview, specialty_inherited_preview, skills_inferred_preview, title_normalized_inferred_preview, classification_preview_version'),
+          supabase.from('person_experiences').select('person_id, company_id, seniority_normalized, start_date, end_date, is_current, is_primary_current, employment_type_normalized, title_raw, description_raw, function_inferred, specialty_inferred, specialty_inherited, skills_inferred, title_normalized_inferred'),
           supabase.from('person_education').select('person_id, school_id, school_name_raw, degree_raw, degree_level, field_of_study_raw, field_of_study_normalized, start_year, end_year'),
           supabase.from('seniority_dictionary').select('seniority_normalized, rank_order').eq('active', true).order('rank_order'),
           fetchAllRows<any>('companies', 'company_id, company_name, primary_industry, industries, category, review_status, legacy_primary_industry_tag, company_groups', 'company_name').then(data => ({ data })),
@@ -485,24 +491,30 @@ export default function ProfileTable() {
           const pid = r.person_id
           if (r.company_id) { if (!companyIds[pid]) companyIds[pid] = new Set(); companyIds[pid].add(r.company_id) }
           if (!expLite[pid]) expLite[pid] = []
+          // Per-role effective specialty set = evidenced (LLM) ∪ inherited (deterministic
+          // career fallback), 'unknown' dropped. This is what all specialty filters match
+          // against post-flip (legacy specialty_normalized is no longer read here).
+          const roleSpecs = Array.from(new Set([
+            ...(((r as any).specialty_inferred as string[] | null) ?? []),
+            ...(((r as any).specialty_inherited as string[] | null) ?? []),
+          ])).filter(s => s && s !== 'unknown')
           expLite[pid].push({
             company_id: r.company_id,
             company_category: r.company_id ? (companyCategory[r.company_id] ?? null) : null,
             company_review_status: r.company_id ? (companyReviewStatus[r.company_id] ?? null) : null,
-            specialty: (r as any).specialty_normalized ?? null, seniority: (r as any).seniority_normalized ?? null,
+            specialties: roleSpecs, seniority: (r as any).seniority_normalized ?? null,
             start_date: (r as any).start_date ?? null,
             end_date: (r as any).end_date ?? null, is_current: (r as any).is_current ?? false,
             is_primary_current: (r as any).is_primary_current ?? false,
             employment_type: (r as any).employment_type_normalized ?? null,
             title_raw: (r as any).title_raw ?? null, description_raw: (r as any).description_raw ?? null,
-            function_inferred_preview: (r as any).function_inferred_preview ?? null,
-            specialty_inferred_preview: (r as any).specialty_inferred_preview ?? null,
-            specialty_inherited_preview: (r as any).specialty_inherited_preview ?? null,
-            skills_inferred_preview: (r as any).skills_inferred_preview ?? null,
-            title_normalized_inferred_preview: (r as any).title_normalized_inferred_preview ?? null,
-            classification_preview_version: (r as any).classification_preview_version ?? null,
+            function_inferred: (r as any).function_inferred ?? null,
+            specialty_inferred: (r as any).specialty_inferred ?? null,
+            specialty_inherited: (r as any).specialty_inherited ?? null,
+            skills_inferred: (r as any).skills_inferred ?? null,
+            title_normalized_inferred: (r as any).title_normalized_inferred ?? null,
           })
-          if ((r as any).specialty_normalized) { if (!allSpecs[pid]) allSpecs[pid] = new Set(); allSpecs[pid].add((r as any).specialty_normalized) }
+          for (const s of roleSpecs) { if (!allSpecs[pid]) allSpecs[pid] = new Set(); allSpecs[pid].add(s) }
         }
         const schoolIds: Record<string, Set<string>> = {}
         const eduLite: Record<string, EducationLite[]> = {}
@@ -538,6 +550,15 @@ export default function ProfileTable() {
           company_ids_all: companyIds[r.person_id] || new Set(), school_ids_all: schoolIds[r.person_id] || new Set(),
           experiences_lite: expLite[r.person_id] || [], education_lite: eduLite[r.person_id] || [],
           all_specialties: allSpecs[r.person_id] || new Set(),
+          // Currently-scope specialty set from the shared current-role derivation
+          // (evidenced ∪ inherited) — replaces legacy primary_specialty in filters.
+          // STRICT mode: filters must read the ACTUAL current role only (no display
+          // fallback to an older classified role — Codex round-2: the fallback made
+          // "currently X" match past roles and wrongly excluded "previously X").
+          // Sparse current roles still match via specialty_inherited. The rendered
+          // Function/Specialty columns keep the default (fallback) mode — display
+          // may show a career summary where the filter is strictly current.
+          current_specs: (() => { const c = currentRoleClassification(expLite[r.person_id] || [], { strictCurrent: true }); return [...c.specs, ...c.inheritedSpecs] })(),
           tenure: computeTenureSummary(
             (expLite[r.person_id] || []).map((e: ExperienceLite) => ({ company_id: e.company_id, company_name: e.company_id ? cMap[e.company_id] || null : null, title_raw: e.title_raw, start_date: e.start_date, end_date: e.end_date, is_current: e.is_current, employment_type: e.employment_type, seniority: e.seniority } as FtExperience)),
             (eduLite[r.person_id] || []).map((e: EducationLite) => ({ start_year: e.start_year, end_year: e.end_year, degree_raw: e.degree_raw, degree_level: e.degree_level } as FtEducation)),
@@ -815,28 +836,32 @@ export default function ProfileTable() {
       rows = rows.filter(p => { if (!p.location_name) return false; return locationSel.some(sel => p.location_name!.toLowerCase().includes(sel.toLowerCase())) })
     }
 
-    // Role filter with per-pill scope (OR across pills)
+    // Role filter with per-pill scope (OR across pills).
+    // FLIPPED (merge arc 2026-07-08): matches the INFERRED axes — currently = the
+    // current-role classification (evidenced ∪ inherited); previously/ever = the
+    // per-role / all-role inferred∪inherited sets. Legacy primary_specialty /
+    // specialty_normalized are no longer read here.
     if (rolePills.length > 0) {
       rows = rows.filter(p => rolePills.some(pill => {
         const specs = new Set(roleSpecialtyMap[pill.value] || [])
         if (specs.size === 0) return false
-        if (pill.scope === 'currently') return p.primary_specialty && specs.has(p.primary_specialty)
+        if (pill.scope === 'currently') return p.current_specs.some(s => specs.has(s))
         if (pill.scope === 'previously') {
-          const hasPast = p.experiences_lite.some(e => !e.is_current && e.specialty && specs.has(e.specialty))
-          const hasCurrent = p.primary_specialty && specs.has(p.primary_specialty)
+          const hasPast = p.experiences_lite.some(e => !e.is_current && e.specialties.some(s => specs.has(s)))
+          const hasCurrent = p.current_specs.some(s => specs.has(s))
           return hasPast && !hasCurrent
         }
         return Array.from(p.all_specialties).some(s => specs.has(s))
       }))
     }
 
-    // Specialty filter with per-pill scope (OR across pills)
+    // Specialty filter with per-pill scope (OR across pills) — same inferred-axis flip.
     if (specialtyPills.length > 0) {
       rows = rows.filter(p => specialtyPills.some(pill => {
-        if (pill.scope === 'currently') return p.primary_specialty === pill.value
+        if (pill.scope === 'currently') return p.current_specs.includes(pill.value)
         if (pill.scope === 'previously') {
-          const hasPast = p.experiences_lite.some(e => !e.is_current && e.specialty === pill.value)
-          const hasCurrent = p.primary_specialty === pill.value
+          const hasPast = p.experiences_lite.some(e => !e.is_current && e.specialties.includes(pill.value))
+          const hasCurrent = p.current_specs.includes(pill.value)
           return hasPast && !hasCurrent
         }
         return p.all_specialties && (p.all_specialties as Set<string>).has(pill.value)
@@ -919,7 +944,7 @@ export default function ProfileTable() {
       rows = rows.filter(p => compoundCompanyPills.some(pill => {
         const matchesExp = (e: typeof rows[0]['experiences_lite'][0]) => {
           if (e.company_id !== pill.value) return false
-          if (needSpecs && !(e.specialty && needSpecs.has(e.specialty))) return false
+          if (needSpecs && !e.specialties.some(s => needSpecs.has(s))) return false
           if (pill.scope === 'currently' && !e.is_current) return false
           if (pill.scope === 'previously' && e.is_current) return false
           if (rStart || rEnd) {
@@ -978,7 +1003,7 @@ export default function ProfileTable() {
           if (!e.company_id || !targetIds.has(e.company_id)) return false
           if (row.scope === 'currently' && !e.is_current) return false
           if (row.scope === 'previously' && e.is_current) return false
-          if (row.specialty && e.specialty !== row.specialty) return false
+          if (row.specialty && !e.specialties.includes(row.specialty)) return false
           if (row.seniority && e.seniority !== row.seniority) return false
           if (row.yearFrom || row.yearTo) {
             const eS = e.start_date ? new Date(e.start_date).getTime() : null
@@ -1361,9 +1386,10 @@ export default function ProfileTable() {
                       <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-primary)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {(person.current_title_normalized || person.current_title_raw || '—').split(/\s*[|–—]\s*/)[0].split(/,\s*/)[0]}
                       </td>
-                      {/* Function + Specialty (current role's NEW five-axis preview), separate columns.
-                          Evidenced specialties render normal; career-INHERITED (deterministic code
-                          fallback) render muted+italic — lower confidence, inferred from prior roles. */}
+                      {/* Function + Specialty (current role's five-axis inferred classification —
+                          LIVE columns post merge-arc flip), separate columns. Evidenced specialties
+                          render normal; career-INHERITED (deterministic code fallback) render
+                          muted+italic — lower confidence, inferred from prior roles. */}
                       {(() => {
                         const { fn, specs, inheritedSpecs } = currentRoleClassification(person.experiences_lite)
                         const specFull = [...specs.map(formatAxisLabel), ...inheritedSpecs.map((s) => `${formatAxisLabel(s)} (inherited)`)].join(', ')
@@ -1454,12 +1480,11 @@ export default function ProfileTable() {
             is_current: e.is_current,
             is_primary_current: e.is_primary_current,
             employment_type: e.employment_type,
-            function_inferred_preview: e.function_inferred_preview,
-            specialty_inferred_preview: e.specialty_inferred_preview,
-            specialty_inherited_preview: e.specialty_inherited_preview,
-            skills_inferred_preview: e.skills_inferred_preview,
-            title_normalized_inferred_preview: e.title_normalized_inferred_preview,
-            classification_preview_version: e.classification_preview_version,
+            function_inferred: e.function_inferred,
+            specialty_inferred: e.specialty_inferred,
+            specialty_inherited: e.specialty_inherited,
+            skills_inferred: e.skills_inferred,
+            title_normalized_inferred: e.title_normalized_inferred,
           } satisfies DrawerExperience))
         })()}
         onClose={() => { setIsDrawerOpen(false); setSelectedPerson(null) }}

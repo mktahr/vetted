@@ -26,6 +26,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import type { CandidateBucket, FlaggedReason } from '../../app/types';
+import { currentRoleClassification } from '../classification/current-role';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -263,7 +264,14 @@ interface ExperienceRow {
   start_date: string | null;
   end_date: string | null;
   is_current: boolean;
+  is_primary_current: boolean | null;
   duration_months: number | null;
+  // Five-axis inferred classification (merge-arc flip, 2026-07-08) — feeds the
+  // current-role function derivation that drives degree relevance + the
+  // recruiting/company-function branches.
+  function_inferred: string[] | null;
+  specialty_inferred: string[] | null;
+  specialty_inherited: string[] | null;
 }
 
 interface EducationRow {
@@ -453,15 +461,29 @@ export async function scoreCandidate(
 
   const years = person.years_experience_estimate;
   const stage = determineStage(years);
-  const functionName = person.current_function_normalized;
 
   // Experiences
   const { data: expRaw } = await supabase
     .from('person_experiences')
-    .select('person_experience_id, company_id, title_raw, employment_type_normalized, start_date, end_date, is_current, duration_months')
+    .select('person_experience_id, company_id, title_raw, employment_type_normalized, start_date, end_date, is_current, is_primary_current, duration_months, function_inferred, specialty_inferred, specialty_inherited')
     .eq('person_id', personId)
     .order('start_date', { ascending: false });
   const experiences: ExperienceRow[] = expRaw || [];
+
+  // ── Function for degree-relevance / recruiting / company-function branches.
+  // FLIPPED (merge arc 2026-07-08): derive the current-role INFERRED function via
+  // the shared helper (current-role.ts) in STRICT mode — primary-current role ONLY,
+  // no most-recent-classified display fallback (Codex round-2 catch: the fallback
+  // would let an old classified engineering role override the legacy 'recruiting'
+  // function of a current recruiter and defeat the recruiting weight override).
+  // Falls back to legacy people.current_function_normalized when the current role
+  // has no committed classification (unknown/abstained, or classification_status=
+  // pending — freshly ingested, awaiting the daily classify-pending cron), so
+  // scoring degrades to pre-flip behavior rather than to unknown. Matt's call
+  // (2026-07-08): derive in code; do NOT backfill a people-level inferred column
+  // (that aggregate is sub-PR 4's job).
+  const inferredFn = currentRoleClassification(experiences, { strictCurrent: true }).fn;
+  const functionName = inferredFn ?? person.current_function_normalized;
 
   // Education
   const { data: eduRaw } = await supabase
