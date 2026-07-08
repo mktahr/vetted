@@ -86,6 +86,15 @@ export function currentRoleClassification(
   exps: RoleForClassification[],
   opts?: { strictCurrent?: boolean },
 ): { fn: string | null; specs: string[]; inheritedSpecs: string[] } {
+  // STRICT also disables pickPrimaryCurrentRole's no-is_current fallback (most-recent
+  // role when nothing is current) — Codex final-diff catch: without this, an ended-
+  // only candidate's latest PAST role would match "currently X" filters and drive
+  // scoring's functionName. Strict = genuinely-current roles only; no current role →
+  // empty (scoring then falls back to legacy current_function_normalized, and the
+  // "currently" filter correctly matches nothing).
+  if (opts?.strictCurrent && !exps.some((e) => e.is_current)) {
+    return { fn: null, specs: [], inheritedSpecs: [] };
+  }
   let pick = pickPrimaryCurrentRole(exps);
   if (!opts?.strictCurrent && !hasRealClassification(pick)) {
     const classified = exps
