@@ -104,23 +104,21 @@ export async function classifyCandidate(supabase: SupabaseClient, personId: stri
   const v = vocab ?? await loadActiveVocab(supabase); // throws before any claim on infra fault
   const token = randomUUID();
   const nowIso = new Date().toISOString();
-  const leaseExpires = new Date(Date.now() + LEASE_MINUTES * 60_000).toISOString();
 
   // ── CLAIM: eligible = pending | failed-retryable | expired-in_progress.
-  // .select() with NO column list is deliberate (select=*): PostgREST 14.1 (prod,
-  // 2026-07-08) mis-compiles PATCH + or= + a NAMED returning column list into SQL
-  // that fails 42703 ("column people.classification_status does not exist");
-  // select=* and PostgREST >=14.5 (dev) are both fine. Found on the first prod
-  // classifier run — the engine had only ever exercised this path against dev.
-  const { data: claimedRows, error: claimErr } = await supabase.from('people')
-    .update({ classification_status: 'in_progress', classification_lease_token: token, classification_lease_expires_at: leaseExpires, updated_at: nowIso })
-    .eq('person_id', personId)
-    .or(`classification_status.eq.pending,and(classification_status.eq.failed,classification_failure_count.lt.${MAX_FAILURES}),and(classification_status.eq.in_progress,classification_lease_expires_at.lt.${nowIso})`)
-    .select();
+  // RPC (migration 097), NOT an app-layer conditional UPDATE: prod PostgREST 14.1
+  // mishandles PATCH + or= — 42703 with a named returning list, and with select=*
+  // it EXECUTES the update but returns an empty representation (the first prod run
+  // claimed 50 people while reporting every one not_eligible). Plain SQL inside an
+  // RPC is immune across PostgREST versions; mirrors commit_classification /
+  // reserve_classification_spend / bump_classification_generation.
+  const { data: claimedRows, error: claimErr } = await supabase.rpc('claim_classification', {
+    p_person_id: personId, p_lease_token: token, p_lease_minutes: LEASE_MINUTES, p_max_failures: MAX_FAILURES,
+  });
   if (claimErr) return out(personId, 'skipped', { reason: `claim_error: ${claimErr.message}` });
   if (!claimedRows || claimedRows.length !== 1) return out(personId, 'skipped', { reason: 'not_eligible' });
-  const generation = (claimedRows[0] as any).classification_generation as number;
-  const priorFailures = (claimedRows[0] as any).classification_failure_count as number;
+  const generation = (claimedRows[0] as any).claimed_generation as number;
+  const priorFailures = (claimedRows[0] as any).claimed_failure_count as number;
 
   // Everything after the claim is fenced by try/catch so an unexpected throw releases
   // the lease (rather than leaking it until expiry).
