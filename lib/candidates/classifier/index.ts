@@ -194,6 +194,17 @@ export async function classifyCandidate(supabase: SupabaseClient, personId: stri
         const guarded = enforceRoboticsCarveOutGuard(valid.tuples, experiences);
         valid.tuples = guarded.tuples;
         valid.repairs.push(...guarded.repairs.map((r) => r.note));
+        // Belt-and-braces (Codex 2026-07-07): deterministic repairs must never publish a
+        // tuple the validator would reject. Re-validate STRICT; a failure here is OUR bug,
+        // not the model's — discard (no failure-budget burn) and surface loudly.
+        if (guarded.repairs.length > 0) {
+          const recheck = validateClassification({ assignments: valid.tuples }, expectedIds, v);
+          if (!recheck.ok) {
+            await releaseToPending(supabase, personId, token);
+            await closeRun(supabase, runId, 'discarded', `guard_produced_invalid: ${recheck.errors.slice(0, 3).join('; ')}`, tokensUsed, callCount * EST_CENTS_PER_CALL);
+            return out(personId, 'discarded', { runId, reason: 'guard_produced_invalid', tokens: tokensUsed });
+          }
+        }
         // DETERMINISTIC career-fallback (code, not LLM): attach specialty_inherited to
         // each tuple so it publishes atomically inside the same fenced commit.
         const inherited = computeCareerFallback(

@@ -79,8 +79,15 @@ export function computeCareerFallback(
     if (target.specialty_inferred?.length) continue;         // already evidenced
     if (!target.title_raw || NON_TARGET_TITLE.test(target.title_raw)) continue;
 
-    // Forward-only: source started before-or-during the target's span.
-    const targetEnd = target.end_date ?? '9999-12-31';
+    // Forward-only: source started before-or-during the target's span. The target
+    // must have KNOWN chronology (Codex 2026-07-07): an undated non-current role could
+    // predate every source, and defaulting it to open-ended would manufacture history.
+    // is_current is chronology enough — an ongoing role is "now", after every dated source.
+    let targetEnd: string;
+    if (target.is_current) targetEnd = '9999-12-31';
+    else if (target.end_date) targetEnd = target.end_date;
+    else if (target.start_date) targetEnd = target.start_date; // open span, unknown end: only sources that began before it started
+    else continue; // no dates, not current -> chronology unknown -> never inherit
     const eligible = sources.filter((s) => s.exp_id !== target.exp_id && (s.start_date as string) <= targetEnd);
     if (eligible.length === 0) continue;
 

@@ -124,5 +124,28 @@ const expect = (name: string, got: unknown, want: unknown) => {
   expect('unknown-function target untouched', r['unk'], undefined)
 }
 
+// 10. (Codex regression) Undated non-current target NEVER inherits — chronology unknown;
+//     undated CURRENT target still inherits ("now" is after every dated source).
+{
+  const r = computeCareerFallback([
+    role({ exp_id: 'undated', start_date: null, end_date: null, is_current: false }),
+    role({ exp_id: 'undated-cur', start_date: null, end_date: null, is_current: true }),
+    role({ exp_id: 'a', start_date: '2019-01-01', end_date: '2020-01-01', specialty_inferred: ['backend_engineering'] }),
+    role({ exp_id: 'b', start_date: '2020-02-01', end_date: '2021-12-31', specialty_inferred: ['backend_engineering'] }),
+  ], PARENTS)
+  expect('undated non-current: never inherits', r['undated'], undefined)
+  expect('undated current: inherits', r['undated-cur'], ['backend_engineering'])
+}
+
+// 11. (Codex regression) Start-only target: inherits only from sources that began before it started.
+{
+  const r = computeCareerFallback([
+    role({ exp_id: 'startonly', start_date: '2019-06-01', end_date: null, is_current: false }),
+    role({ exp_id: 'early', start_date: '2017-01-01', end_date: '2019-01-01', specialty_inferred: ['backend_engineering'] }),
+    role({ exp_id: 'late', start_date: '2021-01-01', end_date: '2022-01-01', specialty_inferred: ['devops_engineering'] }),
+  ], PARENTS)
+  expect('start-only target: earlier source only', r['startonly'], ['backend_engineering'])
+}
+
 if (fails) { console.error(`\n${fails} failing case(s).`); process.exit(1) }
 console.log('career-fallback: all cases pass.')

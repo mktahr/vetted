@@ -55,5 +55,16 @@ const tuple = (o: any) => ({ exp_id: o.exp_id, function_inferred: o.fn, specialt
   expect('dedupe: single software fn', tuples[0].function_inferred, ['software_engineering'])
 }
 
+// 6. (Codex regression) Mixed-evidence tuple — robotics_software alongside a sharper
+//    robotics specialty — is NEVER rerouted (would orphan the sibling into parent-inconsistency).
+{
+  const { tuples, repairs } = enforceRoboticsCarveOutGuard(
+    [tuple({ exp_id: 'a', fn: ['robotics_engineering'], sp: ['robotics_software_engineering', 'autonomy_engineering'] })],
+    [{ person_experience_id: 'a', title_raw: 'Software Engineer', description_raw: '' }])
+  expect('mixed evidence: untouched fn', tuples[0].function_inferred, ['robotics_engineering'])
+  expect('mixed evidence: untouched specs', tuples[0].specialty_inferred, ['robotics_software_engineering', 'autonomy_engineering'])
+  expect('mixed evidence: no repairs', repairs.length, 0)
+}
+
 if (fails) { console.error(`\n${fails} failing case(s).`); process.exit(1) }
 console.log('carve-out-guard: all cases pass.')

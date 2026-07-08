@@ -10,6 +10,7 @@ Cadence,tool,,asic_engineering;analog_design_engineering;pcb_design_engineering,
 Cassandra,tool,,distributed_systems_engineering;data_platform_engineering,Wide-column DB,true,true
 CATIA,tool,,mechanical_design_engineering;cad_design_engineering;aerospace_structures_engineering,CAD,true,true
 ClickHouse,tool,,data_platform_engineering;data_pipeline_engineering,OLAP DB,true,true
+CMake,tool,cmake,embedded_engineering;devops_engineering,C/C++ build system,true,true
 COMSOL,tool,comsol multiphysics,fea_analysis_engineering;thermal_engineering,Multiphysics simulation,true,true
 Creo,tool,ptc creo,mechanical_design_engineering;cad_design_engineering,CAD,true,true
 Databricks,tool,,data_platform_engineering;data_pipeline_engineering,Lakehouse platform,true,true

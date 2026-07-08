@@ -35,7 +35,11 @@ export function enforceRoboticsCarveOutGuard(
   const repairs: CarveOutRepair[] = [];
   const out = tuples.map((t) => {
     if (!t.function_inferred.includes('robotics_engineering')) return t;
-    if (!t.specialty_inferred.includes('robotics_software_engineering')) return t;
+    // PURE leak signature only (Codex 2026-07-07): robotics_software_engineering must be
+    // the tuple's ONLY specialty. Any other specialty = mixed evidence — rerouting the
+    // function could orphan a robotics-parented sibling (e.g. autonomy) into a
+    // parent-inconsistent pair. Leave mixed tuples to the validator's parent guard.
+    if (t.specialty_inferred.length !== 1 || t.specialty_inferred[0] !== 'robotics_software_engineering') return t;
     const e = byId.get(t.exp_id);
     if (!e) return t;
     const titleHasRobot = ROBOT_TERM.test(e.title_raw ?? '');
