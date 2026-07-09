@@ -383,6 +383,33 @@ export default function ProfileDrawer({ person, experiences, education, signals,
             )
           })()}
 
+          {/* Profile Skills — person-level scraped skills (migration 098, Piece B).
+              Provenance tier: mentioned-on-profile — weakest of the three tiers
+              (evidenced-in-role / inherited-from-career / mentioned-on-profile).
+              Rendered muted + italic + ⓘ, same honesty pattern as inherited specialties. */}
+          {(person.skills_matched?.length ?? 0) > 0 && (
+            <div style={{ marginTop: 24 }}>
+              <div style={{ fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)', color: 'var(--fg-tertiary)', textTransform: 'uppercase', letterSpacing: 'var(--tr-eyebrow)', marginBottom: 12, fontFamily: 'var(--font-sans)' }}>
+                Profile Skills{' '}
+                <span
+                  style={{ cursor: 'help', textTransform: 'none' }}
+                  title="From the candidate's LinkedIn skills section — not tied to a specific role. Weaker evidence than skills named in a role description."
+                >ⓘ</span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {person.skills_matched!.map((skill, i) => (
+                  <span
+                    key={i}
+                    title="Mentioned on profile (LinkedIn skills section)"
+                    style={{ padding: '1px 6px', fontSize: 'var(--fs-11)', background: 'var(--bg-surface-raised)', color: 'var(--fg-tertiary)', fontStyle: 'italic', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-chip)', fontFamily: 'var(--font-sans)', lineHeight: '1.4' }}
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Work History */}
           {(() => {
             // All experiences in chronological order (most recent first)

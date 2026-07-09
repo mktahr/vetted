@@ -333,6 +333,15 @@ PR 1 (the pipeline) shipped 2026-06-24 via PR [#10](https://github.com/mktahr/ve
 
 ---
 
+## Chrome Extension (vetted-extension repo)
+
+### Chrome extension architecture review + Codex pass
+- **Status:** logged 2026-07-08 during taxonomy sub-PR 4 planning. Explicitly NOT part of sub-PR 4 — the sub-PR 4 extension fix (Piece A) stays surgical: one active `profileSkills` Voyager fetch added, existing extraction code unchanged, manual browser-verification gate.
+- **Trigger:** AFTER taxonomy sub-PR 4 ships. Schedule as its own workstream with its own review.
+- **Scope:** `vetted-extension` hasn't been reviewed or Codex-audited in ~a month. It's working, but it's ingest-critical and operates outside the vetted repo's CLAUDE.md guardrails (no session protocols, no pressure-testing discipline, no docs). Full architecture review + Codex adversarial pass: fetch-interceptor + active-Voyager-fetch design, payload parsing robustness against LinkedIn UI/API drift, error/version reporting back to the ingest route, repo hygiene (docs, build, uncommitted files).
+
+---
+
 ## Five-Axis Classification
 
 ### LinkedIn skills-section capture + deterministic person-level skill matching

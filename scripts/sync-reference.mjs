@@ -28,6 +28,7 @@
 import { readFileSync, readdirSync, statSync } from 'fs'
 import { join, basename } from 'path'
 import { createClient } from '@supabase/supabase-js'
+import { buildSkillLookup } from './skill-match-lib.mjs'
 
 // ─── Env ────────────────────────────────────────────────────────────────
 
@@ -271,6 +272,66 @@ async function validateSkillRows(csvRows, path) {
   }
 }
 
+// ─── Skill token collision gate (global, projected end-state) ──────────
+//
+// The person-level skills matcher (lib/skills/match.ts) does whole-tag exact
+// matching over normalized canonical_names ∪ aliases. Two ACTIVE rows claiming
+// the same normalized token make matching ambiguous — the matcher fail-safes
+// by dropping the token (silent no-match), so catch it HERE, loud, before any
+// write. Validates the PROJECTED POST-SYNC END-STATE (current DB rows with the
+// in-scope CSV diffs applied) across ALL categories — a scoped
+// `--only=skills/tool.csv` run still collides against aliases living in other
+// categories' files. Runs in --dry-run too. (Piece B of taxonomy sub-PR 4,
+// Codex-reviewed design 2026-07-08.)
+
+function skillHandlerInScope(h) {
+  if (h.table !== 'skills_dictionary') return false
+  if (ONLY_FILES && !ONLY_FILES.includes(h.path)) return false
+  if (ONLY_TABLE && h.table !== ONLY_TABLE) return false
+  return true
+}
+
+async function validateSkillTokenCollisions(allHandlers) {
+  const inScope = allHandlers.filter(skillHandlerInScope)
+  if (inScope.length === 0) return
+
+  const { data: dbRows, error } = await supabase.from('skills_dictionary')
+    .select('canonical_name, category, aliases, is_active')
+  if (error) throw new Error(`skill collision gate: failed to fetch skills_dictionary: ${error.message}`)
+
+  // Projected end-state, keyed by canonical_name (the table's conflict key).
+  const projected = new Map()
+  for (const r of dbRows || []) projected.set(r.canonical_name, r)
+
+  for (const h of inScope) {
+    const fullPath = join(REFERENCE_DIR, h.path)
+    if (!statSync(fullPath, { throwIfNoEntry: false })) continue
+    const { rows: rawRows } = parseCsv(readFileSync(fullPath, 'utf-8'))
+    const csvRows = rawRows.map(r => h.parseRow(r))
+    const csvNames = new Set(csvRows.map(r => r.canonical_name))
+    // The per-category diff DELETEs DB rows of this category absent from the CSV.
+    for (const [name, row] of projected) {
+      if (row.category === h.categoryFilter && !csvNames.has(name)) projected.delete(name)
+    }
+    for (const r of csvRows) projected.set(r.canonical_name, r)
+  }
+
+  const activeRows = Array.from(projected.values()).filter(r => r.is_active !== false)
+  const { map, collisions } = buildSkillLookup(activeRows)
+  if (collisions.length > 0) {
+    const detail = collisions.map(token => {
+      const claimants = activeRows
+        .filter(r => [r.canonical_name, ...(r.aliases || [])].map(t => t.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim()).includes(token))
+        .map(r => `${r.canonical_name} (${r.category})`)
+      return `"${token}" claimed by: ${claimants.join(' AND ')}`
+    })
+    throw new Error(
+      `skill token collision gate FAILED — ${collisions.length} normalized token(s) claimed by 2+ ACTIVE rows in the projected post-sync state. The matcher would fail-safe these to silent no-match. Fix the CSVs before syncing:\n  ${detail.join('\n  ')}`
+    )
+  }
+  console.log(`Skill token collision gate: OK (${activeRows.length} active rows, ${map.size} unique tokens, 0 collisions)`)
+}
+
 // ─── Sync engine ────────────────────────────────────────────────────────
 
 async function fetchExisting(table, categoryFilter) {
@@ -403,6 +464,11 @@ async function syncHandler(h) {
 }
 
 async function main() {
+  // Global gate BEFORE any handler runs (and before any write): the projected
+  // post-sync skills token set must be collision-free. Throwing here aborts
+  // the whole run — a collision is a dictionary bug, not a per-CSV nuisance.
+  await validateSkillTokenCollisions(handlers)
+
   const results = []
   for (const h of handlers) {
     try {
