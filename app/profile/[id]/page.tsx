@@ -7,6 +7,7 @@ import { formatAxisLabel } from '@/lib/classification/current-role'
 import { Person, Experience, Education, BucketAssignment, CandidateBucket, FlaggedReason, ClearanceLevel, ScoreComponent } from '../../types'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from '../../components/CompanyLogo'
 import CrossOrgNetwork from '../../components/CrossOrgNetwork'
+import InfoTip from '../../components/InfoTip'
 import { filterEducationForDisplay } from '@/lib/education/display-filter'
 import { formatSeniorityLabel } from '@/lib/normalize/seniority'
 
@@ -679,7 +680,7 @@ export default function ProfilePage() {
                         </div>
                         {fn && fn.length > 0 && <div><span className="text-tertiary">function: </span><span className="text-foreground">{fn.map(clean).join(', ')}</span></div>}
                         {sp && sp.length > 0 && <div><span className="text-tertiary">specialty: </span><span className="text-foreground">{sp.map(clean).join(', ')}</span></div>}
-                        {inh && inh.length > 0 && <div><span className="text-tertiary">inherited: </span><span className="text-tertiary italic" title="Deterministic career fallback — inferred from prior roles (lower confidence)">{inh.map(clean).join(', ')} ⓘ</span></div>}
+                        {inh && inh.length > 0 && <div><span className="text-tertiary">inherited: </span><span className="text-tertiary italic">{inh.map(clean).join(', ')} <InfoTip text="Inferred from prior roles — no specialty evidence in this role." /></span></div>}
                         {sk && sk.length > 0 && <div><span className="text-tertiary">skills: </span><span className="text-foreground">{sk.map(clean).join(', ')}</span></div>}
                         {tn && <div><span className="text-tertiary">title: </span><span className="text-foreground">{tn}</span></div>}
                         {founding && <div style={{ color: 'var(--accent-strong)' }}>★ founding / early engineer</div>}
@@ -705,10 +706,7 @@ export default function ProfilePage() {
               <span className="inline-block w-3 text-sm">{skillsOpen ? '▾' : '▸'}</span>
               Profile Skills
               <span className="text-tertiary font-normal text-sm">({person.skills_matched!.length})</span>
-              <span
-                className="text-tertiary font-normal text-sm cursor-help"
-                title="From the candidate's LinkedIn skills section — not tied to a specific role. Weaker evidence than skills named in a role description."
-              >ⓘ</span>
+              <span className="text-tertiary font-normal text-sm" onClick={e => e.stopPropagation()}><InfoTip text="From the candidate's LinkedIn skills section — not tied to a specific role. Weaker evidence than skills named in a role description." /></span>
             </button>
             {skillsOpen && (
               <div className="flex flex-wrap gap-1.5 mt-3">
