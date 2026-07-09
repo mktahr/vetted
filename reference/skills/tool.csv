@@ -24,6 +24,8 @@ Firebase,tool,,backend_engineering;mobile_ios_engineering;mobile_android_enginee
 Fusion 360,tool,fusion360,mechanical_design_engineering;cad_design_engineering,CAD,true,true
 Gazebo,tool,,ros_engineering;autonomy_engineering;simulation_engineering,Robot simulation,true,true
 GCP,tool,google cloud,infrastructure_engineering;devops_engineering;platform_engineering,Cloud platform,true,true
+Git,tool,,devops_engineering,Version control,true,true
+GitHub,tool,,devops_engineering,Code hosting/collaboration,true,true
 GitHub Actions,tool,,devops_engineering;platform_engineering,CI/CD,true,true
 Grafana,tool,,sre_engineering;devops_engineering;platform_engineering,Observability,true,true
 Jenkins,tool,,devops_engineering;platform_engineering,CI/CD,true,true
@@ -31,6 +33,7 @@ Kafka,tool,apache kafka,backend_engineering;data_pipeline_engineering;distribute
 KiCad,tool,,pcb_design_engineering;electrical_engineering,PCB design (open),true,true
 Kubeflow,tool,,ml_platform_engineering,ML on k8s,true,true
 Kubernetes,tool,k8s,devops_engineering;platform_engineering;infrastructure_engineering;distributed_systems_engineering,Orchestration,true,true
+Linux,tool,debian;ubuntu;debian/ubuntu,infrastructure_engineering;embedded_engineering;kernel_engineering,Linux systems,true,true
 MLflow,tool,,ml_platform_engineering;applied_ml_engineering,ML lifecycle,true,true
 MongoDB,tool,mongo,backend_engineering;data_platform_engineering,Document DB,true,true
 MySQL,tool,,backend_engineering;data_platform_engineering,Relational DB,true,true

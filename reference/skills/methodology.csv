@@ -1,7 +1,7 @@
 canonical_name,category,aliases,primary_specialty,description,is_active,is_searchable
 Bare-metal,methodology,baremetal,firmware_engineering;embedded_engineering;low_level_systems_engineering,No-OS programming,true,true
 CAD,methodology,computer aided design;2d cad;3d cad,cad_design_engineering;mechanical_design_engineering,Computer-aided design (generic — concrete tools: SolidWorks/CATIA/Creo/etc.),true,true
-CI/CD,methodology,ci/cd;continuous integration;continuous delivery;continuous deployment,devops_engineering;platform_engineering,Continuous Integration / Continuous Delivery practices. DevOps foundational.,true,true
+CI/CD,methodology,ci/cd;cicd;continuous integration;continuous delivery;continuous deployment,devops_engineering;platform_engineering,Continuous Integration / Continuous Delivery practices. DevOps foundational.,true,true
 DFM,methodology,design for manufacturing,dfm_engineering;manufacturing_engineering,Manufacturability,true,true
 DO-178C,methodology,do178,avionics_engineering;flight_dynamics_engineering,Airborne software cert,true,true
 ETL,methodology,elt,data_pipeline_engineering,Extract-transform-load,true,true

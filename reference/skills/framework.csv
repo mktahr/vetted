@@ -6,7 +6,7 @@ Apache Spark,framework,spark,data_pipeline_engineering;data_platform_engineering
 CSS,framework,css3;sass;scss,frontend_engineering,Styling,true,true
 D3.js,framework,d3,frontend_engineering,Data visualization,true,true
 Django,framework,,backend_engineering;fullstack_engineering,Python web,true,true
-Express,framework,expressjs,backend_engineering,Node web framework,true,true
+Express,framework,expressjs;express.js,backend_engineering,Node web framework,true,true
 FastAPI,framework,,backend_engineering;ml_platform_engineering,Python async API,true,true
 Flask,framework,,backend_engineering,Python micro-framework,true,true
 Flutter,framework,,mobile_ios_engineering;mobile_android_engineering,Cross-platform mobile,true,true
@@ -27,7 +27,7 @@ OpenCV,framework,cv2,computer_vision_engineering,Computer vision library,true,tr
 Pandas,framework,,data_pipeline_engineering;applied_ml_engineering,Data manipulation,true,true
 PyTorch,framework,,applied_ml_engineering;ml_research_engineering;computer_vision_engineering;nlp_engineering;llm_engineering,DL framework,true,true
 Ray,framework,,ml_platform_engineering;distributed_systems_engineering,Distributed compute,true,true
-React,framework,reactjs,frontend_engineering;fullstack_engineering,UI library,true,true
+React,framework,reactjs;react.js,frontend_engineering;fullstack_engineering,UI library,true,true
 React Native,framework,,mobile_ios_engineering;mobile_android_engineering,Cross-platform mobile,true,true
 Redux,framework,,frontend_engineering,State management,true,true
 ROS,framework,ros2;robot operating system,ros_engineering;autonomy_engineering,Robotics middleware,true,true
@@ -40,4 +40,4 @@ SwiftUI,framework,,mobile_ios_engineering,iOS UI,true,true
 Tailwind CSS,framework,tailwind,frontend_engineering,Utility CSS,true,true
 TensorFlow,framework,tf,applied_ml_engineering;ml_research_engineering;computer_vision_engineering;nlp_engineering,DL framework,true,true
 Three.js,framework,threejs,frontend_engineering;simulation_engineering,WebGL 3D,true,true
-Vue,framework,vuejs,frontend_engineering;fullstack_engineering,UI framework,true,true
+Vue,framework,vuejs;vue.js,frontend_engineering;fullstack_engineering,UI framework,true,true
