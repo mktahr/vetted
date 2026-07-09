@@ -1,32 +1,30 @@
 # Session Handoff — for the next Claude Code session
 
-_Last session: 2026-07-08 — Five-axis sub-PR 3: deterministic career-fallback architecture + robotics carve-out; holdout (82.1%, ACCEPTED) + POOL (85.9%) on frozen cls-2026-07-08a; hardening-before-merge done. Eval + hardening phases COMPLETE._
+_Last session: 2026-07-08 (later session) — the five-axis sub-PR 3 MERGE ARC, executed gated end-to-end: prod migrations 085–097, skills sync, full classifier run, THE FLIP merged (PR [#16](https://github.com/mktahr/vetted/pull/16) → `4c93378`), post-merge full re-score._
 
 ## Where we left off
-The classifier is **done tuning**: prompt FROZEN at `cls-2026-07-08a`, dev vocab frozen at **150 specialties / 192 skills**. The architecture pivot shipped: the LLM classifies only role-evidenced axes; **CODE does inheritance** (`lib/classification/career-fallback.ts` → new `specialty_inherited` columns, migration 092 dev+prod, atomic in `commit_classification`) and the robotics carve-out anti-leak (`carve-out-guard.ts`). Eval on the frozen config: tuning 89 → holdout one-shot **82.1% ACCEPTED** (audit: ~96% conformance to our own rules; misses are logged, not re-rolled) → POOL **85.9%** — error=0 and 0 val-fails everywhere. Preview verified per-candidate: Joanne (robotics/robotics_software), Michael (inherited [fullstack, backend]), Pavlo (inherited [backend, distributed]), Aadhya (conservative-empty), SeJun (powertrain, migration 093). Hardening-before-merge (BUGS.md entry) closed. Branch pushed through `f617ca9`; **no PR yet** (intentional — PR comes at the end of the merge arc).
+**Sub-PR 3 is MERGED, LIVE on prod, and re-scored.** The arc: cascade plan + 2 Codex review rounds BEFORE any prod write → snapshots (`_mergearc_20260708` schema, still on prod as rollback insurance) → prod migrations 085/086/087/090/091/093 + NEW 094 (role_specialty_map remap) / 095 (founder→unknown cascade incl. title_dictionary) / 096 (dev-parity: a pre-run simulation caught 4 prod-only drift specialties that would have broken the frozen vocab hash, incl. a `robotics_engineering` function-name collision) / 097 (claim RPC — prod PostgREST 14.1 mis-executes `PATCH+or=`: 42703 with named returning, silent execute-with-empty-representation with `select=*`) → scoped skills sync (prod 18→192) → **prod vocab byte-identical to frozen dev** (150/17/192, hash `33c400c8`) → full classifier run (**129/129 done, 996/996 experiences, 0 val-fails, ~$1.6**, five spot-checks matching accepted eval behavior) → flip PR #16 (Codex adversarial: 1 blocker fixed — strict-current mode now also ignores ended-only candidates' past roles) → Matt browser-verified the preview → squash-merged → **full re-score: 73/56 → 82 vetted / 47 needs_review** (9 promotions, all upward, incl. Michael Olson 32.5→47.5 vetted; distribution judged trustworthy).
 
 ## What's in flight
-- Branch **`five-axis-subpr3-classify`** — all session work committed + pushed, working tree clean. (`scripts/seed-gated-promotion-demo.mjs` is now COMMITTED — kept as a reusable gated-promotion test fixture per Matt's 2026-07-08 call.)
-- **Dev-only migrations awaiting prod at merge: 085/086/087/090/091/093** (taxonomy). **092 is already on prod** (additive, inert). Prod skills dictionary still has the old 14 rows.
-- Next-prompt rules queued in `lib/candidates/classifier/next-prompt-queue.md` — do NOT touch the frozen prompt.
+- **Nothing.** On `main`, working tree clean (after the end-session docs commit), no open PRs, no feature branches. Prod deploy `4c93378` serving the flip.
+- The daily classify-pending cron is LIVE (13:00 UTC, `CRON_SECRET`, RPC claim) — new candidates classify with ~24h latency by accepted design.
 
-## Next thing to do — the MERGE ARC (all prod-touching, every step gated on Matt)
-1. **Prod taxonomy application**: migrations 085/086/087/090/091/093 in order (dev-first workflow already done — these are prod applies) + prod skills sync (`sync-reference.mjs`, default prod target) — expect 150 specialties / 192 skills on prod.
-2. **Person-data cascade**: reclassify `person_experiences.function_normalized`/`specialty_normalized` + `people.current_*` mirroring migration 073's pattern (the 085–087 deprecations/renames need their data cascade).
-3. **Full prod re-score** via `/api/admin/rescore-all` (NOT scripts/score-all.mjs — stale mirror, see BUGS).
-4. **Flip search/scoring to read `_inferred` + `specialty_inherited`** (union) — this is the user-visible switch.
-5. **PR + Vercel-preview-before-merge** (hard backstop — never merge unseen). Consider `/codex:adversarial-review` on the final diff.
-6. Post-merge: run the real classifier (`classifyPending`) to populate the real `_inferred` columns.
+## Next thing to do
+Matt's pick (both roadmap-sequenced):
+1. **Taxonomy sub-PR 4** — aggregated candidate-level columns (`current_title_normalized`, `ever_titles`, person-level skills view) + the extension skills-scrape fix + deterministic alias matcher (BACKLOG item, trigger met).
+2. **Network list-building + CSV export** — the GTM unlock (lists from connections + any-list→Google-Sheets-ready CSV).
+Fast-follows from the arc, whenever convenient (all small, in BUGS.md): inherited-ⓘ tooltip (Matt's copy specified), PostgREST 14.1→14.5 parity upgrade, ingest-time classify hook.
 
 ## Open questions
-- Bucket-B pool-boundary calls (sysadmin / IT-infra / GTM Engineer / Prompt Engineer): currently fail-safe abstentions; explicit routing = Matt's call, next prompt version.
-- Next-prompt-queue items (Solutions/FDE/Architect evidence-gating, frontier-lab research-title clarifier, embedded-vs-carve-out precedence, COBOL clarifier): applied at the next PROMPT_VERSION bump — before or after merge is Matt's call (recommend after: don't reopen the freeze mid-merge-arc).
+- When to bump PROMPT_VERSION for `next-prompt-queue.md` rules (recommend: own tuning cycle, regenerate the aging Opus reference FIRST).
+- Bucket-B pool-boundary calls (sysadmin / IT-infra / GTM Engineer / Prompt Engineer) — carried.
+- When to run the companies-scoring coverage pass (SeJun-class: candidates whose employers have zero `company_year_scores` are structurally pinned at senior-career — now the scoring bottleneck; pairs with the companies-CSV/two-lists deferred architecture).
 
 ## Watch-outs
-- **FREEZE IS ON**: no prompt or vocab changes until the merge arc completes. Changes go to `next-prompt-queue.md`.
-- The Opus eval reference is AGING (predates new vocab/rules — it drove most holdout/POOL "disagreements"). Regenerate `_draft-rows.json` before trusting agreement %s in the next tuning cycle.
-- Migration order at merge matters: code deploy → prod migrations in sequence → cascade → re-score (code-then-DB lockstep, see Development Rules).
-- Scores/buckets are STALE until the merge-arc re-score. `classification_status` remains the live queue key — previews only ever write `_preview` columns.
-- `reference/eval/*` is PII, gitignored — never commit. Every LLM run: cost estimate FIRST, no auto-reruns.
-- Aadhya's duplicated experience rows (dup-ingest race) are still in prod — BUGS.md, ships separately; career-fallback already defends via source dedupe.
-- Preview URL (still live for spot-checks): https://vetted-git-five-axis-subpr3-classify-matt-tahrtechs-projects.vercel.app
+- **Prod PostgREST is 14.1** (dev 14.5): supabase-js `.update().or()` conditional mutations are UNSAFE on prod — silent execute-but-report-nothing. Conditional writes go through SQL RPCs (see 097). After psql DDL, `NOTIFY pgrst, 'reload schema'` before REST sees new functions.
+- **Prod vocab == dev vocab is now a live invariant** (the classifier hash depends on it). Any vocab change must land on BOTH DBs dev-first, or the hash forks against the frozen prompt.
+- `_preview` columns + `populate-preview.ts`/`populate-inferred-prod.ts` are VESTIGIAL post-flip — cleanup pass later; never reuse for live data.
+- `_mergearc_20260708` snapshot schema on prod: drop after a few days of stability (`DROP SCHEMA _mergearc_20260708 CASCADE;`).
+- Classifier batch sizing: ~20/call is comfortable; 50 real candidates can blow Vercel's 300s ceiling (fencing self-heals, but avoid).
+- Manual `people/[id]` PATCH edits re-queue classification but the edited legacy values do NOT flow into inferred axes (documented gap, BUGS).
+- Carried: dup-ingest race (Aadhya's duplicated rows still visible); Opus eval reference aging; `reference/eval/*` is PII, gitignored; scores now FRESH as of the 2026-07-08 re-score.

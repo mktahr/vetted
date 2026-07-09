@@ -6,6 +6,40 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 
 ---
 
+## 2026-07-08 — Five-axis sub-PR 3 MERGE ARC: prod taxonomy 085–097 + full classifier run + THE FLIP merged (PR [#16](https://github.com/mktahr/vetted/pull/16)) + full re-score — later session
+
+**Shipped** (everything gated step-by-step on Matt; squash-merged to main as `4c93378`)
+- **Cascade plan + two Codex review rounds BEFORE any prod write** (Matt's mandate). Round 1 (plan): adopt-with-changes — killed the "phased, Phase-1-alone" framing (dictionary renames make filter options match zero candidates while person data lags → ONE gated arc), surfaced the `role_specialty_map` no-FK staleness, scoped the skills sync, added `people/[id]` PATCH to the flip. Round 2 (concrete artifacts): 3 findings verified + fixed (net-new-specialty map inserts; strict-vs-display current-role split; classifier-run endpoint was branch-only).
+- **Pre-run vocab-parity simulation caught real drift**: prod would have landed at 154 active specialties, not the frozen 150 — 4 prod-only rows (`robotics`→`robotics_engineering` FUNCTION-NAME COLLISION, blockchain, qa_testing, game_engineering) that would have silently broken the frozen `cls-2026-07-08a` hash contract. → migration 096.
+- **Prod migrations applied + verified in order**: 085/086/087/090/091/093 (taxonomy) + NEW **094** (`role_specialty_map` remap: 12 explicit renames + generic `_engineering` suffix rule + inserts for the 8 net-new specialties + delete-inactive; invariant "all rows reference active specialties") + NEW **095** (founder→`unknown` across title_dictionary 8 / person_experiences 12 / people recompute — title_dictionary was a 4th-surface catch: without it ingest re-creates founder rows) + NEW **096** (dev-parity deactivation of the 4 drift rows). End state **150 specs / 17 fns / 0 founder refs / 0 bad map rows**, and **byte-identical prod-vs-dev parity proven** (specialty names+parents, functions, full role map).
+- **Scoped skills sync** (`--table=skills_dictionary`): prod 18 → **192**, 0 invalid hints (SQL-verified), skills set byte-identical to dev.
+- **NEW migration 097 + engine fix — prod PostgREST 14.1 bug found in anger**: `PATCH + or=` mis-compiles with named returning columns (42703) and with `select=*` EXECUTES but returns an empty representation (first run leased 50 people while reporting all not_eligible; orphan leases reset, $0 spent). Claim moved into the `claim_classification` RPC (mirrors the engine's other lifecycle RPCs), dev-verified across all five eligibility paths. Lease/generation fencing also self-healed a Vercel-300s-timeout orphan mid-run — the paranoia paid off twice.
+- **Real classifier run on prod**: **129/129 done, 996/996 experiences, 0 val-fails**, uniform `cls-2026-07-08a/claude-haiku-4-5/33c400c8` (the frozen hash), ~$1.6 (est. $1.30–2.40). Five spot-checks match accepted eval behavior (Joanne robotics carve-out; Michael inherited [fullstack, backend]; Pavlo forward-only inheritance incl. empty 2012 role; Aadhya conservative-empty; SeJun inherited powertrain).
+- **THE FLIP merged (PR #16)**: search predicates (role/specialty/compound), scoring `functionName`, and all display read the LIVE `_inferred` ∪ `specialty_inherited` columns; `current-role.ts` gains **strict mode** (scoring + currently/previously filters read the genuinely-current role only — Codex final-diff blocker: the display fallback let an ended-only candidate's past role match "currently X"; fixed pre-merge); `people/[id]` PATCH re-queues classification. Matt browser-verified the preview (evidenced-vs-inherited rendering confirmed) before merge.
+- **Post-merge full re-score**: 129/129, **73/56 → 82 vetted / 47 needs_review** — 9 promotions (all needs_review→vetted; driver = real-discipline degree relevance via the inferred-function path + the July-1 seniority/title-level backfills finally pricing in), 16 same-bucket shifts >15 pts (all upward). **Michael Olson 32.5→47.5 VETTED** (the suspected stale-input casualty). **SeJun 1.37→8.77 flagged as data-coverage, not scoring**: all 8 employers (Honda R&D, Faraday Future, Canoo, Icarus…) have zero `company_year_scores` rows — senior-career core is 90% company quality → structurally pinned. Distribution judged trustworthy (7% moved, no demotions, no mass shift).
+
+**Decisions**
+- ONE tightly-gated arc (Codex round-1): dictionary migrations + person-data + classifier + flip ship together; the classifier IS the cascade — no deterministic remap of legacy `specialty_normalized` (fragile in-place-rename reconstruction rejected).
+- Founder function rows → `unknown` (matches 087 intent; no stale window).
+- Scoring derives the inferred current function IN CODE (strict `currentRoleClassification`) with legacy fallback — no people-level inferred column (that's sub-PR 4's aggregate, not scope creep).
+- Accept ~24h cron latency for new-candidate classification (fails safe); ingest hook = fast-follow.
+- Display keeps the career-summary fallback while filters/scoring are strictly-current — a deliberate, accepted divergence (display summarizes, filters are semantic).
+
+**Where we left off**
+- Sub-PR 3 is MERGED, live on prod, and re-scored. Working tree clean, no open PRs. Next build is Matt's pick: taxonomy sub-PR 4 (aggregated candidate-level columns) or network list-building + CSV export (per ROADMAP).
+
+**Open questions**
+- When to bump PROMPT_VERSION for the queued next-prompt rules (recommend: as its own tuning cycle, with a regenerated Opus reference first).
+- Bucket-B pool-boundary calls (carried).
+
+**Watch-outs**
+- **Prod PostgREST is 14.1** — conditional mutations via supabase-js `or=` are UNSAFE on prod (silent execute-but-report-nothing). Use RPCs for conditional writes; parity upgrade queued in BUGS.
+- SeJun-class distortion: candidates whose employers are unscored are pinned low regardless of quality — companies-scoring coverage workstream is now the scoring bottleneck.
+- `_preview` columns + populate scripts are vestigial post-flip — drop in a cleanup pass, don't reuse.
+- The daily classify-pending cron is now LIVE on prod (13:00 UTC, RPC claim). New candidates classify with ~24h latency.
+- The `_mergearc_20260708` snapshot schema stays on prod for rollback insurance — drop after a few days of stability.
+- Carried: Opus eval reference aging; dup-ingest race (Aadhya's duplicate rows visible in prod); reference/eval PII gitignored.
+
 ## 2026-07-08 — Five-axis sub-PR 3: deterministic career-fallback architecture; robotics carve-out; holdout + POOL accepted; hardening-before-merge done
 
 **Shipped** (branch `five-axis-subpr3-classify` — 4 commits `1397cbd`→`f617ca9`, pushed, NO PR yet; migrations 091/093 dev-only, 092 dev+prod)
