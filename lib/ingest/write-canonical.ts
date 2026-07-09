@@ -445,6 +445,19 @@ export async function writeCanonicalProfile(
     personId = person.person_id;
   }
 
+  // ── Classification invalidation (BEFORE the experience rewrite) ──────────
+  // Bump generation + mark pending + clear any in-flight classify lease. Closes the
+  // stale-done window: a crash mid-rewrite leaves the candidate 'pending' (it will be
+  // reclassified), never stale 'done'. Paired with an AFTER bump (post-insert) that
+  // invalidates a worker which claimed a partial mid-rewrite snapshot. NOT best-effort
+  // (Codex): if the pre-bump fails we ABORT before the destructive rewrite, so a
+  // 'done' candidate can't be left current against soon-deleted data. (Sub-PR 3.)
+  const { error: preBumpError } = await supabase.rpc('bump_classification_generation', { p_person_id: personId });
+  if (preBumpError) {
+    console.error('[ingest] classification pre-bump failed — aborting before experience rewrite:', preBumpError);
+    return { ok: false, reason: 'person_upsert_failed' };
+  }
+
   // ── Step 5: Clear old experiences + education before re-inserting ────────
   const { error: delExpError } = await supabase
     .from('person_experiences')
@@ -572,6 +585,18 @@ export async function writeCanonicalProfile(
       currentSeniority = seniority;
       currentTitleNormalized = expTitleData?.title_normalized || null;
     }
+  }
+
+  // ── Classification invalidation (AFTER the complete experience rewrite) ──
+  // Second bump: invalidates any classify worker that claimed a partial mid-rewrite
+  // snapshot (its captured generation no longer matches → its commit discards). The
+  // candidate is left 'pending' on the fresh, complete experience set. NOT best-effort
+  // (Codex): the experiences are already rewritten, so a failed post-bump must surface
+  // (throw → ingest marked failed/retried) rather than silently leave the invalidation
+  // half-applied. (Sub-PR 3.)
+  const { error: postBumpError } = await supabase.rpc('bump_classification_generation', { p_person_id: personId });
+  if (postBumpError) {
+    throw new Error(`classification post-bump failed after experience rewrite (ingest must retry): ${postBumpError.message}`);
   }
 
   // If no explicit is_current was found, fall back to the first experience

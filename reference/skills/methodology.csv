@@ -1,3 +1,18 @@
 canonical_name,category,aliases,primary_specialty,description,is_active,is_searchable
-HIL (hardware-in-the-loop),methodology,hardware-in-the-loop;hardware in the loop;hil testing,electrical_engineering;embedded;controls_engineering;hardware_in_loop,"Test methodology where hardware-under-test is interfaced with simulated/real plant components. Cross-disciplinary — EE, embedded, and controls all use HIL.",true,true
-CI/CD,methodology,ci/cd;continuous integration;continuous delivery;continuous deployment,devops;infrastructure,Continuous Integration / Continuous Delivery practices. DevOps foundational.,true,true
+Bare-metal,methodology,baremetal,firmware_engineering;embedded_engineering;low_level_systems_engineering,No-OS programming,true,true
+CAD,methodology,computer aided design;2d cad;3d cad,cad_design_engineering;mechanical_design_engineering,Computer-aided design (generic — concrete tools: SolidWorks/CATIA/Creo/etc.),true,true
+CI/CD,methodology,ci/cd;continuous integration;continuous delivery;continuous deployment,devops_engineering;platform_engineering,Continuous Integration / Continuous Delivery practices. DevOps foundational.,true,true
+DFM,methodology,design for manufacturing,dfm_engineering;manufacturing_engineering,Manufacturability,true,true
+DO-178C,methodology,do178,avionics_engineering;flight_dynamics_engineering,Airborne software cert,true,true
+ETL,methodology,elt,data_pipeline_engineering,Extract-transform-load,true,true
+Fine-tuning,methodology,finetuning,llm_engineering;ml_research_engineering,Model adaptation,true,true
+GD&T,methodology,geometric dimensioning,mechanical_design_engineering;dfm_engineering,Tolerancing,true,true
+Hardware-in-the-Loop,methodology,hil,hardware_in_loop_engineering;test_engineering,HIL testing,true,true
+machining,methodology,milling;turning,manufacturing_engineering;fabrication_engineering,Machining (dev-only legacy row),true,true
+MBSE,methodology,model based systems engineering,model_based_systems_engineering;systems_engineering,Systems modeling,true,true
+MLOps,methodology,ml ops,ml_platform_engineering;devops_engineering,ML operations,true,true
+Model Training,methodology,training,ml_research_engineering;applied_ml_engineering,Training models,true,true
+prototyping,methodology,rapid prototyping,mechanical_design_engineering;hardware_engineering,Prototyping (dev-only legacy row),true,true
+Simulation,methodology,simulations;modeling and simulation,simulation_engineering;fea_analysis_engineering;controls_engineering,Engineering simulation (generic — concrete tools: ANSYS/Simulink/COMSOL/Gazebo/etc.),true,true
+Six Sigma,methodology,,manufacturing_engineering;process_engineering;quality_engineering,Process improvement,true,true
+UVM,methodology,,chip_verification_engineering,Verification methodology,true,true

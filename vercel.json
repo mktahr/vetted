@@ -3,6 +3,10 @@
     {
       "path": "/api/admin/companies/tag-pending",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/admin/candidates/classify-pending",
+      "schedule": "0 13 * * *"
     }
   ]
 }

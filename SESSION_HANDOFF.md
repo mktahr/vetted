@@ -1,35 +1,32 @@
-# Session Handoff — 2026-06-29 (end of session — gated promotion)
+# Session Handoff — for the next Claude Code session
+
+_Last session: 2026-07-08 — Five-axis sub-PR 3: deterministic career-fallback architecture + robotics carve-out; holdout (82.1%, ACCEPTED) + POOL (85.9%) on frozen cls-2026-07-08a; hardening-before-merge done. Eval + hardening phases COMPLETE._
 
 ## Where we left off
-
-**Network Connections PR 2 (gated promotion + admin cross-org view) is MERGED + live on prod.**
-- **PR [#15](https://github.com/mktahr/vetted/pull/15)** squash-merged to `main`; branch `network-connections-gated-promotion` deleted. Prod deploy of `main`.
-- **Migration 082** (`connections.pool_override` + `people.promoted_from_connection`) applied dev + prod.
-- Delivers: promotion = flag flip `record_kind` network_connection→both + `person_id` link (no re-pay/re-enrich/re-score); vetted-company auto-rule (`review_status='vetted'`) + manual `pool_override` (final say); **demote-safety guard** (a native candidate is NEVER removed from the pool); admin cross-org view on the profile page + candidates drawer + a subtle list chain icon; connection-drawer rich-enrichment display fix; persistent org→connections navigation.
-- **Proven end-to-end on REAL data:** uploaded 17 real LinkedIn profiles to "Test Organization One", enriched 10 (Notion + Robinhood), promoted **Annie Cheng** into the candidate pool with a full profile.
-- **`codex loop`** (new command this session) ran a pre-merge adversarial review: DO-NOT-SHIP → 3 real fixes folded in (candidate-ingest provenance clear, fail-closed sibling read, row-count-verified guards). 4th finding (no auth) consciously deferred.
+The classifier is **done tuning**: prompt FROZEN at `cls-2026-07-08a`, dev vocab frozen at **150 specialties / 192 skills**. The architecture pivot shipped: the LLM classifies only role-evidenced axes; **CODE does inheritance** (`lib/classification/career-fallback.ts` → new `specialty_inherited` columns, migration 092 dev+prod, atomic in `commit_classification`) and the robotics carve-out anti-leak (`carve-out-guard.ts`). Eval on the frozen config: tuning 89 → holdout one-shot **82.1% ACCEPTED** (audit: ~96% conformance to our own rules; misses are logged, not re-rolled) → POOL **85.9%** — error=0 and 0 val-fails everywhere. Preview verified per-candidate: Joanne (robotics/robotics_software), Michael (inherited [fullstack, backend]), Pavlo (inherited [backend, distributed]), Aadhya (conservative-empty), SeJun (powertrain, migration 093). Hardening-before-merge (BUGS.md entry) closed. Branch pushed through `f617ca9`; **no PR yet** (intentional — PR comes at the end of the merge arc).
 
 ## What's in flight
+- Branch **`five-axis-subpr3-classify`** — all session work committed + pushed, working tree clean. (`scripts/seed-gated-promotion-demo.mjs` is now COMMITTED — kept as a reusable gated-promotion test fixture per Matt's 2026-07-08 call.)
+- **Dev-only migrations awaiting prod at merge: 085/086/087/090/091/093** (taxonomy). **092 is already on prod** (additive, inert). Prod skills dictionary still has the old 14 rows.
+- Next-prompt rules queued in `lib/candidates/classifier/next-prompt-queue.md` — do NOT touch the frozen prompt.
 
-**Nothing open.** No open PRs. `main` clean + synced. The PR 2 arc is complete.
-
-## Next thing to do
-
-Matt's pick between two threads (both teed up):
-1. **Companies CSV-curation + two-lists rework** (newly backlogged + saved to memory `companies-csv-two-lists`). Build `export-companies.mjs` → committed `reference/companies/company_roster.csv` + a diff-only sync-back for `review_status`/scores; split List 1 (all 1517 auto-created companies) from List 2 (the searchable scored+vetted set, ~767/99); make searchable views default to List 2. **This also resolves the gated-promotion eligibility-rule question** (vetted flag is noisy — 0 of 9 score-5 companies are vetted). Matt was reviewing `/Users/matt/Downloads/vetted-companies-ALL.csv` to decide.
-2. **Five-axis sub-PR 3 — LLM ingest inference** (the next taxonomy build). Reads full work history/skills/descriptions to infer function/specialty/title. Today's classification is title-dictionary only; the rich enriched data is now stored and ready to feed it.
+## Next thing to do — the MERGE ARC (all prod-touching, every step gated on Matt)
+1. **Prod taxonomy application**: migrations 085/086/087/090/091/093 in order (dev-first workflow already done — these are prod applies) + prod skills sync (`sync-reference.mjs`, default prod target) — expect 150 specialties / 192 skills on prod.
+2. **Person-data cascade**: reclassify `person_experiences.function_normalized`/`specialty_normalized` + `people.current_*` mirroring migration 073's pattern (the 085–087 deprecations/renames need their data cascade).
+3. **Full prod re-score** via `/api/admin/rescore-all` (NOT scripts/score-all.mjs — stale mirror, see BUGS).
+4. **Flip search/scoring to read `_inferred` + `specialty_inherited`** (union) — this is the user-visible switch.
+5. **PR + Vercel-preview-before-merge** (hard backstop — never merge unseen). Consider `/codex:adversarial-review` on the final diff.
+6. Post-merge: run the real classifier (`classifyPending`) to populate the real `_inferred` columns.
 
 ## Open questions
-
-- **Gated-promotion eligibility rule:** keep `review_status='vetted'` (current, narrow/noisy) vs switch to score-based vs threshold. Isolated in `desiredInPool()` (one-line change). Tied to the companies-curation decision above.
-- **App-wide auth/admin workstream** (ROADMAP item 4): Matt agreed to do auth properly app-wide (not bolt onto the two new network routes). All service-role routes are currently open (pre-launch, single-admin) — the deferred Codex finding.
+- Bucket-B pool-boundary calls (sysadmin / IT-infra / GTM Engineer / Prompt Engineer): currently fail-safe abstentions; explicit routing = Matt's call, next prompt version.
+- Next-prompt-queue items (Solutions/FDE/Architect evidence-gating, frontier-lab research-title clarifier, embedded-vs-carve-out precedence, COBOL clarifier): applied at the next PROMPT_VERSION bump — before or after merge is Matt's call (recommend after: don't reopen the freeze mid-merge-arc).
 
 ## Watch-outs
-
-- **Test data in prod:** "Test Organization One" (`org_id=76f902eb-1bb8-45ff-9568-d04c9db84443`) + 17 real connections; **Annie Cheng + any other promoted connections are in the REAL candidate pool** as `record_kind='both'`. To remove: delete org `76f902eb…` (cascades connections/owners) + the promoted `people` rows. (`seed-gated-promotion-demo.mjs --cleanup` only handles the earlier MOCK fixture, already cleaned — it does NOT touch the real uploaded data.)
-- **Athletics extractor false-positive** (BUGS.md): "olympian"/"olympic" matches context-free (hit Annie's Airbnb role description "Online Olympian & Paralympian festivals"). Her bad signal was deleted manually but **re-fires on any re-extract/rescore** until the extractor is fixed.
-- **Deferred (logged) gated-promotion edge:** candidate-ingest→`both` symmetric promote — a `network_connection` person who is later candidate-ingested stays `network_connection` (not auto-promoted to the pool). The DEMOTE side of this edge is now fixed (Codex critical); the PROMOTE side is still deferred (BACKLOG).
-- **`scripts/seed-gated-promotion-demo.mjs`** left untracked (throwaway; not merged).
-- **Free-tier dev Supabase idle-pause (~7 days)** — restore from dashboard on NXDOMAIN.
-- **`migrate:prod` is a deliberate `ask` guard** — prompts on every prod migration by design.
-- Use `POST /api/admin/rescore-all` for rescores (`scripts/score-all.mjs` is a stale mirror).
+- **FREEZE IS ON**: no prompt or vocab changes until the merge arc completes. Changes go to `next-prompt-queue.md`.
+- The Opus eval reference is AGING (predates new vocab/rules — it drove most holdout/POOL "disagreements"). Regenerate `_draft-rows.json` before trusting agreement %s in the next tuning cycle.
+- Migration order at merge matters: code deploy → prod migrations in sequence → cascade → re-score (code-then-DB lockstep, see Development Rules).
+- Scores/buckets are STALE until the merge-arc re-score. `classification_status` remains the live queue key — previews only ever write `_preview` columns.
+- `reference/eval/*` is PII, gitignored — never commit. Every LLM run: cost estimate FIRST, no auto-reruns.
+- Aadhya's duplicated experience rows (dup-ingest race) are still in prod — BUGS.md, ships separately; career-fallback already defends via source dedupe.
+- Preview URL (still live for spot-checks): https://vetted-git-five-axis-subpr3-classify-matt-tahrtechs-projects.vercel.app

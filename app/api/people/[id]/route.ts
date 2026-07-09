@@ -168,6 +168,18 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
     }
   }
 
+  // ── Re-queue classification ──────────────────────────────────────────
+  // Post merge-arc flip, search + scoring read the INFERRED axes; a manual edit of
+  // the legacy function/specialty columns no longer reaches them directly. Bump the
+  // classification generation so the daily classify-pending cron re-classifies this
+  // person (fresh evidence read; also fences out any in-flight stale run). Known
+  // gap (BUGS.md, ships with the ingest-hook fast-follow): the admin's edited
+  // legacy VALUES do not flow into the inferred axes — the classifier re-derives
+  // from title/description. A true manual-override design for the inferred axes
+  // is future work.
+  const { error: bumpErr } = await supabase.rpc('bump_classification_generation', { p_person_id: personId })
+  if (bumpErr) console.error('[people PATCH] bump_classification_generation failed (classification stale until next bump):', bumpErr.message)
+
   // ── Re-score: derived fields → score → bucket ────────────────────────
   let bucket: string | null = null
   let totalScore: number | null = null

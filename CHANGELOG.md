@@ -6,6 +6,108 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 
 ---
 
+## 2026-07-08 — Five-axis sub-PR 3: deterministic career-fallback architecture; robotics carve-out; holdout + POOL accepted; hardening-before-merge done
+
+**Shipped** (branch `five-axis-subpr3-classify` — 4 commits `1397cbd`→`f617ca9`, pushed, NO PR yet; migrations 091/093 dev-only, 092 dev+prod)
+- **Deterministic career-fallback ARCHITECTURE** (Matt's call after Michael/Pavlo failed twice across sessions on the prompt-side rule; Claude+Codex 2-round joint review converged): the LLM classifies ONLY role-evidenced axes; `computeCareerFallback()` ([lib/classification/career-fallback.ts](lib/classification/career-fallback.ts)) inherits the dominant career specialty onto sparse roles IN CODE — forward-only in time (a role never inherits from later roles; `is_current` counts as "now"; undated non-current roles never inherit), parent-consistency-guarded, evidenced-sources-only (no chains; internships/advisory/contract excluded), dup-ingest-safe (source dedupe), dominance = count → primary-position → recency, cap 2, conservative leadership path (recent-primary only). Output goes to NEW `specialty_inherited` (+`_preview`) columns — `specialty_inferred` stays pristine evidenced LLM output; search reads the union; UI renders inherited muted/italic + ⓘ (table/drawer/profile). Rides `commit_classification` atomically (migration 092, dev+prod).
+- **Prompt `cls-2026-07-08a`** (FROZEN post-holdout): Rule 7 career-fallback + Rule 6 recent-roles inheritance REMOVED (code's job now); Joanne resolution — robotics carve-out (modifier = the thing they BUILD → that function; industry/context modifiers still → software; employer name NEVER triggers it) + reactivated-guarded `robotics_software_engineering` (migration 091; sharper specialties always win); fluff-is-not-evidence hardening (Michael's "Programmer | Engineer | Entrepreneur" summary).
+- **`enforceRoboticsCarveOutGuard`** ([lib/candidates/classifier/carve-out-guard.ts](lib/candidates/classifier/carve-out-guard.ts)): Haiku leaked the carve-out on "Software Engineer @ Rapid Robotics" (employer name); prompt iteration didn't reliably fix → deterministic reroute on the PURE leak signature (robotics fn + robotics_software as ONLY specialty + no robot term in title + empty description).
+- **Per-candidate verification** (the discipline the 07-07 session skipped): Joanne = robotics/robotics_software ✓; Michael = evidenced-empty + inherited [fullstack, backend] ✓ (needed the fluff hardening + $0.03 targeted re-run); Pavlo = recent sparse roles inherit [backend, distributed], 2012 role stays empty (forward-only) ✓; Aadhya conservative-empty ✓; SeJun = NEW `powertrain_engineering` (migration 093, [mechanical, electrical]) evidenced on 5 roles + inherited onto current ✓. Full preview re-populate: 996 roles / 129 cands, **0 val-fails** (unknown-specialty repair fixed Jessica/Thomas), $1.83.
+- **Eval phase COMPLETE on the frozen config**: tuning 89.0–89.7% → **HOLDOUT one-shot 82.1%** (n=134, error=0; disagreement audit: ~96% conformance to our OWN rules — stale-Opus-reference artifacts + correct conservative abstentions dominate; Matt ACCEPTED) → **POOL full-corpus 85.9%** (n=383, error=0, $1.09). Solutions-role abstentions verified CORRECT fail-safe from fixture data (Lucas U.: empty descriptions, no prior SWE career — Codex-verified).
+- **Matt's Solutions/FDE/Architect routing rules** logged in [lib/candidates/classifier/next-prompt-queue.md](lib/candidates/classifier/next-prompt-queue.md) for the NEXT prompt version (bimodal evidence-gating: engineering evidence → software[solutions_engineering]; AFFIRMATIVE sales signals → unknown; absence → ABSTAIN — Codex caught the absence-as-counter-evidence ambiguity) + POOL findings (frontier-lab research-title abstention class ×6 — Research Engineer @ Anthropic etc.; robotics carve-out AV/lidar boundary + embedded-precedence).
+- **Hardening-before-merge DONE** (BUGS.md entry → Resolved): validator rejects empty title + contradictory tuples (unknown-mix, specialties-on-unknown) with final-attempt repairs; engine's swallowed DB errors logged; gen-draft-labels halts on Sonnet API error + validates Sonnet output (invalid → contested, never silent ground truth); finalize-sheet/bounded-diag throw on query errors. New fixture suites: test-validate (15), test-career-fallback (11 groups), test-carve-out-guard (6 groups).
+- **Codex looped 3×**: architecture pre-build (converged round 1), adversarial diff review pre-freeze (2 HIGH: undated-target inheritance — 0 live rows affected; guard parent-inconsistency — both fixed + commit-boundary re-validation), rules/POOL-plan check (3 doc fixes).
+- **Skills**: CAD, Simulation, COMSOL, CMake rows added (ANSYS/CATIA/Simulink/SolidWorks/spark-alias already existed); `populate-preview --ids` targeted mode (cheap per-candidate re-runs).
+- **`scripts/seed-gated-promotion-demo.mjs` COMMITTED** (corrects the 2026-06-29 "left untracked / throwaway" status): documented, idempotent, self-cleaning gated-promotion test fixture — kept because the network-module roadmap work (list-building/CSV export) sits on promotion mechanics and this re-tests them credit-free.
+
+**Decisions**
+- Deterministic > AI extended to INHERITANCE: prompt rules that "fire sometimes" are not acceptable for inheritance; evidence classification stays LLM, career fallback is code. Same lesson applied twice more mid-session (carve-out guard; evidence-gating stays prompt-side because free-text judgment IS LLM-shaped).
+- Separate `specialty_inherited` columns over per-value source flags (audit trail structural); never inherit skills.
+- Joanne call: robotics carve-out is the ONLY title-modifier exception (build-target vs context test); `robotics_software_engineering` reactivated with guardrails.
+- Holdout PASS accepted at 82.1% raw / ~96% rule-conformance; misses = findings for the next version, not re-rolls.
+- Solutions/FDE/Architect: bimodal evidence-gating next prompt version; blanket code rule REJECTED (title-trap).
+
+**Where we left off**
+- Eval + hardening phases COMPLETE. Everything pushed. **No PR yet.** Next is the MERGE ARC (all prod-touching, gated): prod taxonomy migrations 085/086/087/090/091/093 + person-data cascade + full re-score → flip search/scoring to `_inferred`+`_inherited` → PR + Vercel-preview-before-merge.
+
+**Open questions**
+- Bucket-B pool-boundary calls (sysadmin / IT-infra / GTM Engineer / Prompt Engineer → currently fail-safe abstentions) — Matt decides, next prompt version.
+- Frontier-lab research-title clarifier + embedded-vs-carve-out precedence — queued in next-prompt-queue.md.
+
+**Watch-outs**
+- PROMPT + VOCAB FROZEN (cls-2026-07-08a; dev = 150 active specialties / 192 active skills). Changes go to next-prompt-queue.md, not the prompt.
+- Migration 092 is on PROD (additive, inert — commit RPC now writes specialty_inherited when provided). 091/093 remain dev-only → join 085–090 at merge.
+- The 07-06/07-07 populate (128 of 129 candidates) ran WITHOUT the final fluff-hardening sentence; Michael alone was re-run with it. Fine for preview; the real post-merge run uses the frozen prompt uniformly.
+- Validator hardening (empty-title/contradiction rejection) changes retry behavior for FUTURE runs only; the frozen eval numbers stand.
+- Aadhya's experiences are DUPLICATED in prod (concurrent double-ingest race — BUGS.md, ships separately; career-fallback already defends via source dedupe).
+- All prior watch-outs stand: reference/eval PII gitignored; cost-estimate-first / no auto-reruns; `classification_status` untouchable by previews; scores/buckets stale until ship-time re-score.
+
+## 2026-07-07 — Five-axis sub-PR 3: tuning batch cls-2026-07-02a + validator guards; skills dictionary 14→188; specialty gap-fill (migration 090)
+
+**Shipped** (branch `five-axis-subpr3-classify` — pushed, NOT merged, no PR yet; migration 090 DEV-only)
+- **Tuning batch `cls-2026-07-02a`** (4 prompt fixes): Pavlo (concrete About/summary IS evidence for sparse roles), Michael (career fallback — sparse engineering role inherits the career's stable specialty), Joanne (evidence bar — never guess a niche specialty; empty is correct), Aadhya (title-keyword trap — "<X> Software Engineer" is a software engineer; defense employer / "Mission" buzzword doesn't pull to aerospace).
+- **Validator guards (reject-then-repair, `validate.ts`)**: (1) parent-function guard — a specialty whose `parent_function` excludes every assigned function is rejected on attempt 0 (retry feedback lets the model fix either axis) and STRIPPED on the final attempt (recorded in `result.repairs`); (2) unknown-skill guard — same pattern for out-of-vocab skills (big vocab made the model invent near-misses like "JavaFx"). Wired via `loadActiveVocab` (now loads `parent_function` map; parents in the vocab hash) into the live engine + both eval scripts. Tuning report gets GUARD-REPAIRED lines + an out-of-vocab-skills aggregate (attempt-0 rejections + final strips, per candidate).
+- **Read-only vocab gap analysis** over the 129-candidate preview cohort (`reference/eval/vocab-gap-report.md`): found the PROMPT-VOCAB DRIFT (prompt Rule 5 instructed sre/devops/platform_engineering which didn't exist — evidenced misfile: SRE→reliability_engineering) + CV/NLP both-levels holes.
+- **Migration 090 (DEV-only, joins 085–087 at merge)**: +5 specialties — computer_vision_engineering + nlp_engineering (ml_engineering), sre_engineering + devops_engineering + platform_engineering (software_engineering). Dev vocab now 148 active specialties. Fixes the prompt drift with zero prompt change.
+- **Skills dictionary rebuilt 14→188** via `/reference/skills/*.csv` (Matt-designed content, diff-first reconciliation before install): +176 added / ~10 re-tagged / renames (ROS2→ROS alias, CAN Bus, Hardware-in-the-Loop) verified intentional; 5 cleanups applied (CI/CD restored, machining→methodology.csv fixing an alphabetical sync-ordering collision, CAN Bus aliases restored, alias collisions resolved, ROS hint deduped); Vector Databases row added; the 4 dev-only 086 rows preserved. Synced to dev.
+- **sync-reference.mjs hardening**: `--dev` flag (script was prod-only; classifier reads DEV vocab) + hard validation that every skills `primary_specialty` hint is an ACTIVE specialty on the TARGET DB (fails loud, runs in --dry-run too).
+- **Tuning trend**: 89.7% (02a, 4-skill vocab) → 90.2% w/ 35 errors (187-skill vocab exposed skill hallucination) → **91.2% (n=136), error=0** after the unknown-skill guard. Cost ~$0.29–0.35/run.
+- **Preview re-populated** against complete vocab (980 roles / 129 candidates, $1.82 actual vs $1.45 estimate — retry volume underestimated; treat populate estimates as ±30%). Preview URL: `vetted-git-five-axis-subpr3-classify-matt-tahrtechs-projects.vercel.app`.
+- **Docs/infra**: CLAUDE.md "ALWAYS provide the URL" rule (+ memory); BACKLOG pgvector "similar candidates" entry; stale CLAUDE.md claims corrected (sync-reference does NOT validate specialty parent_function; taxonomy is migrations-only).
+
+**Decisions**
+- REJECT-then-REPAIR hybrid for both guards (reverses "off-hint is a metric, not a gate"): strict first so the model can fix whichever axis is wrong; strip-and-commit on the final attempt so one stray value never burns a candidate's failure budget.
+- `mission_systems_engineering` open question RESOLVED: route by work + the guard; the specialty stays (aerospace-parented) but can't ride under software.
+- Skills dictionary is FLAT; `primary_specialty` is a soft multi-domain HINT (never ownership); crossover = multiple tags.
+- llm_engineering stays single-parented to ml_engineering (software-side LLM work = ai_engineering per build-vs-use).
+- No PROMPT_VERSION bump for vocab-only changes (vocab hash carries provenance); guards shipped without prompt edits.
+
+**Where we left off**
+- Preview is LIVE with complete vocab (148 specialties + 188 skills, frozen prompt cls-2026-07-02a). **Matt still needs to verify the fixes in-app** — checklist + deep links in SESSION_HANDOFF.
+
+**Open questions**
+- Parent-widening: thermal_engineering (+aerospace), reliability_engineering (+electrical) from the gap report, plus the strip-review cases (Guy Bitton autonomy, SeJun motor_drives, Nick integration_test, Makai robotics-under-software) pending Matt's in-app judgment.
+- Add CAD + Simulation skill rows? (both hit multiple candidates in populate strips.)
+- Loosen the evidence bar so Aadhya's "aspiring full-stack" About earns `fullstack`? (Currently correctly-conservative empty.)
+- Keep tuning vs freeze + holdout one-shot after Matt's review.
+
+**Watch-outs**
+- **2 candidates show STALE 01d preview data** (Jessica Henson, Thomas A.) — val-failed on out-of-vocab SPECIALTY names ("ml_engineering", "mechanism_design"); the repair guard covers skills + parent-mismatch but NOT unknown specialties. Fix (extend strip-on-final to unknown specialties) + ~$0.04 targeted re-run queued on Matt's go.
+- Migration 090 is DEV-only — prod gets it at merge with 085–087 + cascade + full re-score.
+- tuning-trend.log: last three lines share PROMPT_VERSION cls-2026-07-02a but ran against DIFFERENT vocab sizes (4 → 187 → 188 skills) — compare within, not across.
+- Populate cost estimates need a ±30% band until two data points at this vocab size.
+- All prior watch-outs stand: reference/eval PII, cost-estimate-first/no auto-reruns, `classification_status` untouchable by previews, stale scores until ship-time re-score.
+
+## 2026-07-01 — Five-axis sub-PR 3: classifier tuned + validated in-app; integrity hardening; legacy seniority/title-level fixes
+
+**Shipped** (branch `five-axis-subpr3-classify` — pushed, NOT merged; prod migrations 083/084/088/089 applied, 085/086/087 dev-only)
+- **Classifier engine tuned + frozen at `cls-2026-07-01d`** (stable **88.2–89.0%** comparable agreement over 3 runs, error=0). Prompt rules: IS-IT-vs-TOUCHED-IT governing principle; function-list-only + skills-axis constraints; don't-abstain on clear titles; AI/ML build-vs-use (explicit ML title→`ml_engineering`, vague AI→`software[ai_engineering]`); machinist/trades→unknown; embedded→firmware; propulsion→aerospace; `systems_engineering` is its own function; Rule 6 leadership (current-org primary, no old-discipline bleed); Rule 7 headline/summary scoped context; founding-engineer regex (26 fixture tests).
+- **Integrity fixes (Codex review, after a credit-outage silent-failure incident)**: `classifyPending` halts on sustained infra/API outage; `reserve_classification_spend` surfaces RPC errors instead of masquerading as spend_cap; `classify-report` honest buckets (never counts unknown==unknown or errors as agreement); populate scripts stripped of lifecycle writes + error-checked; tuning-run mirrors production validation-retry. Hardening-before-merge logged in BUGS.md.
+- **Eval methodology**: candidate-split (never by experience) — TUNING 23 / HOLDOUT 23 (locked) / POOL 67, stratified; `build-eval-sets.ts`, `tuning-run.ts` (trend log). Frozen fixture 129 cands / 996 exp.
+- **Safe in-app preview** (migration 089): SEPARATE `*_inferred_preview` columns + provenance (never touches lifecycle / real `_inferred`). `populate-preview.ts` wrote 985 roles/129 cands ($1.18). Profile page + drawer work-history render per-role "AI Classification (preview)" cards (Matt confirmed these are keepers); list has **Function** + **Specialty** columns; drawer header shows current-role function/specialty + a LinkedIn icon; shared `lib/classification/current-role.ts` derives the person-level summary (career fallback for novelty/sparse titles) + `formatAxisLabel` (Title Case + acronyms).
+- **Legacy (pre-classifier) bug fixes + prod backfills**: SENIORITY — compound leadership titles ("Robotics Software Engineering Manager", "Director of X") fell to IC because title-matching was exact-only and the manager/director signals only scanned descriptions; fixed BOTH resolvers to scan the title; backfilled 257 experience values + highest_seniority. TITLE_LEVEL/PROGRESSION — same compound-title bug (manager titles → title_level NULL → dropped from slope → "declining" for people promoted into management); added a leadership fallback to `extractTitleLevel`; re-leveled 88 experiences + recomputed derived slopes (Makai: declining→rising).
+
+**Decisions**
+- Founder is an attribute (`is_current/former_founder`), NOT a function — 087 keeps founder off the function axis; founding engineers route to their real discipline.
+- Retire the write-to-real-`_inferred`/lifecycle preview approach (Codex caught `classification_status` is the live queue key) → separate `_inferred_preview` columns; real classifier populates prod POST-MERGE.
+- Tune off frozen artifacts, not live prod; in-app review via preview columns + a Vercel preview link.
+- Freeze bar = STABLE across runs, not one lucky run. Holdout stays LOCKED until the prompt is frozen + run ONCE.
+- Legacy drawer fields (seniority/progression/score/full-time) are a SEPARATE cleanup from the classifier — batch, don't whack-a-mole.
+
+**Where we left off**
+- Classifier frozen + validated in-app; Matt reviewing real profiles on the preview. Next real classifier work is the **tuning batch**: Pavlo (use About → `backend`+`data_pipeline` on sparse role), Michael (career → `fullstack`), Joanne (stop inventing niche specialties without evidence). Queued on Matt's go: prompt change → ~$0.22 tuning re-run → re-populate ($1.18).
+
+**Open questions**
+- `mission_systems_engineering` (aerospace parent under a software function): keep, or collapse to `systems_engineering`? (Matt's taxonomy call.)
+- Holdout generalization run (one-shot) + full-corpus POOL run — after the tuning batch + freeze.
+
+**Watch-outs**
+- Seniority/title-level backfills changed LIVE prod data but SCORES/BUCKETS were NOT re-run → drawer score numbers are STALE until the ship-time full re-score.
+- 085/086/087 (taxonomy) are DEV-ONLY. Prod taxonomy + `person_experiences.specialty_normalized/function_normalized` cascade happen AT MERGE, followed by a full prod re-score.
+- `reference/eval/*` is PII (real candidate text) and gitignored (added `*.md` this session) — never commit it.
+- `employment_type`/`is_full_time_role` not captured on some ingests (e.g. all of Makai's roles flagged non-full-time) → affects tenure + scoring; separate legacy cleanup.
+- Preview writes used DEV vocab into prod `_inferred_preview` columns; fine for review, but the real classifier (with prod vocab post-merge) is the source of truth.
+
 ## 2026-06-29 — Network Connections PR 2: gated promotion + admin cross-org view (PR #15) — later session
 
 **Shipped** (branch `network-connections-gated-promotion`, PR [#15](https://github.com/mktahr/vetted/pull/15) — MERGED to main; migration 082 dev+prod)

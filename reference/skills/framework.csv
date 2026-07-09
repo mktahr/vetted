@@ -1,4 +1,43 @@
 canonical_name,category,aliases,primary_specialty,description,is_active,is_searchable
-React,framework,reactjs;react.js,frontend;fullstack,Frontend JavaScript library for building user interfaces. Multi-tagged for frontend + fullstack contexts.,true,true
-PyTorch,framework,,ml_engineering;applied_ml,Deep-learning framework; the dominant tool for ML research and increasingly for production.,true,true
-ROS2,framework,ros 2;ros_2;ros2 humble,robotics;robotics_software;autonomy_software,Robot Operating System v2 — middleware and framework for distributed robotics software.,true,true
+.NET,framework,dotnet;aspnet,backend_engineering,Microsoft framework,true,true
+Angular,framework,,frontend_engineering;fullstack_engineering,UI framework,true,true
+Apache Flink,framework,flink,data_pipeline_engineering;distributed_systems_engineering,Stream processing,true,true
+Apache Spark,framework,spark,data_pipeline_engineering;data_platform_engineering,Distributed processing,true,true
+CSS,framework,css3;sass;scss,frontend_engineering,Styling,true,true
+D3.js,framework,d3,frontend_engineering,Data visualization,true,true
+Django,framework,,backend_engineering;fullstack_engineering,Python web,true,true
+Express,framework,expressjs,backend_engineering,Node web framework,true,true
+FastAPI,framework,,backend_engineering;ml_platform_engineering,Python async API,true,true
+Flask,framework,,backend_engineering,Python micro-framework,true,true
+Flutter,framework,,mobile_ios_engineering;mobile_android_engineering,Cross-platform mobile,true,true
+Hadoop,framework,,data_pipeline_engineering;data_platform_engineering,Big data (legacy),true,true
+HTML,framework,html5,frontend_engineering,Markup,true,true
+Hugging Face,framework,transformers;huggingface,nlp_engineering;llm_engineering;applied_ml_engineering,Model hub/transformers,true,true
+JAX,framework,,ml_research_engineering;llm_engineering,DL research framework,true,true
+Jetpack Compose,framework,,mobile_android_engineering,Android UI,true,true
+Keras,framework,,applied_ml_engineering;computer_vision_engineering,DL high-level API,true,true
+LangChain,framework,,ai_engineering;llm_engineering,LLM app framework,true,true
+LlamaIndex,framework,,ai_engineering;llm_engineering,LLM data framework,true,true
+NestJS,framework,nest,backend_engineering,Node framework,true,true
+Next.js,framework,nextjs,frontend_engineering;fullstack_engineering,React meta-framework,true,true
+NLTK,framework,,nlp_engineering,NLP toolkit,true,true
+Node.js,framework,nodejs;node,backend_engineering;fullstack_engineering,JS runtime,true,true
+NumPy,framework,,applied_ml_engineering;ml_research_engineering;data_pipeline_engineering,Numerical computing,true,true
+OpenCV,framework,cv2,computer_vision_engineering,Computer vision library,true,true
+Pandas,framework,,data_pipeline_engineering;applied_ml_engineering,Data manipulation,true,true
+PyTorch,framework,,applied_ml_engineering;ml_research_engineering;computer_vision_engineering;nlp_engineering;llm_engineering,DL framework,true,true
+Ray,framework,,ml_platform_engineering;distributed_systems_engineering,Distributed compute,true,true
+React,framework,reactjs,frontend_engineering;fullstack_engineering,UI library,true,true
+React Native,framework,,mobile_ios_engineering;mobile_android_engineering,Cross-platform mobile,true,true
+Redux,framework,,frontend_engineering,State management,true,true
+ROS,framework,ros2;robot operating system,ros_engineering;autonomy_engineering,Robotics middleware,true,true
+Ruby on Rails,framework,rails,backend_engineering;fullstack_engineering,Ruby web,true,true
+scikit-learn,framework,sklearn,applied_ml_engineering;data_pipeline_engineering,Classical ML,true,true
+spaCy,framework,,nlp_engineering,NLP library,true,true
+Spring Boot,framework,spring,backend_engineering,Java framework,true,true
+Svelte,framework,sveltekit,frontend_engineering;fullstack_engineering,Compiled UI framework,true,true
+SwiftUI,framework,,mobile_ios_engineering,iOS UI,true,true
+Tailwind CSS,framework,tailwind,frontend_engineering,Utility CSS,true,true
+TensorFlow,framework,tf,applied_ml_engineering;ml_research_engineering;computer_vision_engineering;nlp_engineering,DL framework,true,true
+Three.js,framework,threejs,frontend_engineering;simulation_engineering,WebGL 3D,true,true
+Vue,framework,vuejs,frontend_engineering;fullstack_engineering,UI framework,true,true

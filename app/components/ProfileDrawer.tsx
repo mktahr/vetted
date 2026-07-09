@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { Person, CandidateBucket } from '../types'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from './CompanyLogo'
 import { formatSeniorityLabel } from '@/lib/normalize/seniority'
+import { currentRoleClassification, formatAxisLabel } from '@/lib/classification/current-role'
 
 export interface DrawerExperience {
   company_id: string | null
@@ -14,7 +15,13 @@ export interface DrawerExperience {
   start_date: string | null
   end_date: string | null
   is_current: boolean
+  is_primary_current?: boolean | null
   employment_type: string | null
+  function_inferred?: string[] | null
+  specialty_inferred?: string[] | null
+  specialty_inherited?: string[] | null
+  skills_inferred?: string[] | null
+  title_normalized_inferred?: string | null
 }
 
 export interface DrawerEducation {
@@ -167,6 +174,15 @@ export default function ProfileDrawer({ person, experiences, education, signals,
               >
                 <h2 style={{ fontSize: 'inherit', fontWeight: 'inherit', color: 'inherit', letterSpacing: 'inherit', margin: 0 }}>{person.full_name}</h2>
               </Link>
+              {/* Social links (LinkedIn now; GitHub / X / personal site / etc. later) */}
+              {person.linkedin_url && (
+                <a href={person.linkedin_url} target="_blank" rel="noopener noreferrer" title="LinkedIn profile" onClick={e => e.stopPropagation()}
+                  style={{ marginLeft: 8, display: 'inline-flex', verticalAlign: 'middle', color: 'var(--fg-tertiary)' }}
+                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--fg-primary)' }}
+                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--fg-tertiary)' }}>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                </a>
+              )}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 8 }}>
                 {person.latest_bucket && (() => {
                   const s = BUCKET_TAG[person.latest_bucket]
@@ -219,17 +235,23 @@ export default function ProfileDrawer({ person, experiences, education, signals,
               </Field>
             )}
 
-            {/* Classification metadata — quiet label-value pairs */}
-            {(person.primary_specialty || person.current_function_normalized || currentSeniority || person.highest_seniority_reached) && (
+            {/* Classification metadata — quiet label-value pairs. Function/Specialty come from the
+                five-axis INFERRED classification on the person's CURRENT role (shared helper — same derivation
+                as the list). Legacy person-level "fullstack" fields removed. */}
+            {(() => { const cls = currentRoleClassification(experiences); return (cls.fn || cls.specs.length > 0 || cls.inheritedSpecs.length > 0 || currentSeniority || person.highest_seniority_reached) && (
               <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 12px', fontSize: 'var(--fs-13)', fontFamily: 'var(--font-sans)' }}>
-                {person.primary_specialty && (
-                  <><span style={{ color: 'var(--fg-tertiary)' }}>Specialty</span><span style={{ color: 'var(--fg-primary)' }}>{person.primary_specialty.replace(/_/g, ' ')}</span></>
+                {cls.fn && (
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Function</span><span style={{ color: 'var(--fg-primary)' }}>{formatAxisLabel(cls.fn)}</span></>
                 )}
-                {person.secondary_specialty && (
-                  <><span style={{ color: 'var(--fg-tertiary)' }}>Secondary</span><span style={{ color: 'var(--fg-primary)' }}>{person.secondary_specialty.replace(/_/g, ' ')}</span></>
-                )}
-                {person.current_function_normalized && (
-                  <><span style={{ color: 'var(--fg-tertiary)' }}>Function</span><span style={{ color: 'var(--fg-primary)' }}>{person.current_function_normalized.replace(/_/g, ' ')}</span></>
+                {(cls.specs.length > 0 || cls.inheritedSpecs.length > 0) && (
+                  <><span style={{ color: 'var(--fg-tertiary)' }}>Specialty</span><span style={{ color: 'var(--fg-primary)' }}>
+                    {cls.specs.map(formatAxisLabel).join(', ')}
+                    {cls.inheritedSpecs.length > 0 && (
+                      <span style={{ color: 'var(--fg-tertiary)', fontStyle: 'italic' }} title="Deterministic career fallback — inferred from prior roles (lower confidence)">
+                        {cls.specs.length > 0 ? ', ' : ''}{cls.inheritedSpecs.map(formatAxisLabel).join(', ')} ⓘ
+                      </span>
+                    )}
+                  </span></>
                 )}
                 {currentSeniority && (
                   <><span style={{ color: 'var(--fg-tertiary)' }}>Seniority</span><span style={{ color: 'var(--fg-primary)' }}>{formatSeniorityLabel(currentSeniority)}</span></>
@@ -244,7 +266,7 @@ export default function ProfileDrawer({ person, experiences, education, signals,
                   <><span style={{ color: 'var(--fg-tertiary)' }}>Slope</span><span style={{ color: 'var(--fg-primary)' }}>{person.slope_score}</span></>
                 )}
               </div>
-            )}
+            )})()}
 
             {person.location_name && <Field label="Location"><span style={{ color: 'var(--fg-primary)' }}>{person.location_name}</span></Field>}
 
@@ -289,16 +311,7 @@ export default function ProfileDrawer({ person, experiences, education, signals,
               <Field label="Headline"><span style={{ color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)' }}>{person.headline_raw}</span></Field>
             )}
 
-            {person.linkedin_url && (
-              <div>
-                <a href={person.linkedin_url} target="_blank" rel="noopener noreferrer"
-                  style={{ color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)', textDecoration: 'none' }}
-                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--fg-primary)'; e.currentTarget.style.textDecoration = 'underline' }}
-                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--fg-secondary)'; e.currentTarget.style.textDecoration = 'none' }}>
-                  View LinkedIn Profile
-                </a>
-              </div>
-            )}
+            {/* LinkedIn link moved to the drawer header (icon next to the name). */}
           </div>
 
           {/* Network — who can warm-intro this candidate (renders nothing if none) */}
@@ -406,6 +419,28 @@ export default function ProfileDrawer({ person, experiences, education, signals,
                         <div style={{ color: 'var(--fg-tertiary)', fontSize: 'var(--fs-12)', marginTop: 2, fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
                           {dateRange}{duration ? ` · ${duration}` : ''}
                         </div>
+                        {/* Five-axis inferred classification for this role (LIVE columns post
+                            merge-arc flip; provenance = people.classifier_version). */}
+                        {(() => {
+                          const fn = exp.function_inferred
+                          const sp = exp.specialty_inferred
+                          const inh = exp.specialty_inherited
+                          const sk = exp.skills_inferred
+                          const tn = exp.title_normalized_inferred
+                          const ver = (person as any).classifier_version as string | null
+                          if ((!fn || fn.length === 0) && (!sp || sp.length === 0) && (!inh || inh.length === 0) && !tn) return null
+                          const clean = formatAxisLabel
+                          return (
+                            <div style={{ marginTop: 6, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-muted, rgba(255,255,255,0.03))', padding: '6px 8px', fontSize: 'var(--fs-12)', display: 'grid', gap: 1 }}>
+                              <div style={{ fontSize: '10px', letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: 600, color: 'var(--accent-strong)' }}>AI Classification{ver ? ` · ${ver}` : ''}</div>
+                              {fn && fn.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>function: </span><span style={{ color: 'var(--fg-primary)' }}>{fn.map(clean).join(', ')}</span></div>}
+                              {sp && sp.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>specialty: </span><span style={{ color: 'var(--fg-primary)' }}>{sp.map(clean).join(', ')}</span></div>}
+                              {inh && inh.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>inherited: </span><span style={{ color: 'var(--fg-tertiary)', fontStyle: 'italic' }} title="Deterministic career fallback — inferred from prior roles (lower confidence)">{inh.map(clean).join(', ')} ⓘ</span></div>}
+                              {sk && sk.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>skills: </span><span style={{ color: 'var(--fg-primary)' }}>{sk.map(clean).join(', ')}</span></div>}
+                              {tn && <div><span style={{ color: 'var(--fg-tertiary)' }}>title: </span><span style={{ color: 'var(--fg-primary)' }}>{tn}</span></div>}
+                            </div>
+                          )
+                        })()}
                       </div>
                     )
                   })}

@@ -6,7 +6,8 @@
 //
 // Usage:
 //   node scripts/sync-reference.mjs --dry-run          # diff only, no writes
-//   node scripts/sync-reference.mjs                    # sync everything
+//   node scripts/sync-reference.mjs                    # sync everything (PROD)
+//   node scripts/sync-reference.mjs --dev              # target the DEV Supabase project instead
 //   node scripts/sync-reference.mjs --only=signals/athletics.csv
 //   node scripts/sync-reference.mjs --only=signals/athletics.csv,investors/investor_tiers.csv
 //   node scripts/sync-reference.mjs --table=signal_dictionary
@@ -38,9 +39,15 @@ const env = Object.fromEntries(
   })
 )
 
-const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY)
-
 const argv = process.argv.slice(2)
+const USE_DEV = argv.includes('--dev')
+// --dev targets the dev Supabase project (where the classifier reads its vocab);
+// default remains prod. The two projects' dictionaries differ until taxonomy
+// migrations are promoted at merge — validation below always checks the TARGET DB.
+const supabase = USE_DEV
+  ? createClient(env.NEXT_PUBLIC_SUPABASE_URL_DEV, env.SUPABASE_SERVICE_ROLE_KEY_DEV)
+  : createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY)
+
 const DRY_RUN = argv.includes('--dry-run')
 const ONLY_ARG = argv.find(a => a.startsWith('--only='))
 const ONLY_FILES = ONLY_ARG ? ONLY_ARG.slice('--only='.length).split(',').map(s => s.trim()) : null
@@ -230,6 +237,40 @@ handlers.push({
   postSyncSql: `UPDATE investor_tiers SET kind = CASE WHEN investor_type = 'angel' THEN 'angel' ELSE 'firm' END WHERE kind IS DISTINCT FROM CASE WHEN investor_type = 'angel' THEN 'angel' ELSE 'firm' END;`,
 })
 
+// ─── Validation ─────────────────────────────────────────────────────────
+//
+// skills_dictionary.primary_specialty is a soft DOMAIN HINT (informs sparse-profile
+// inference + context-aware skill decay), never ownership. A hint naming a specialty
+// that doesn't exist in the TARGET DB silently never fires — so fail loud instead.
+// (Added 2026-07-05 after the gap analysis found every existing tag pointed at
+// pre-rebuild specialty names.)
+
+let _activeSpecialties = null
+async function activeSpecialtyNames() {
+  if (_activeSpecialties) return _activeSpecialties
+  const { data, error } = await supabase.from('specialty_dictionary')
+    .select('specialty_normalized').eq('active', true)
+  if (error) throw new Error(`Failed to fetch specialty_dictionary for primary_specialty validation: ${error.message}`)
+  _activeSpecialties = new Set((data || []).map(r => r.specialty_normalized))
+  if (_activeSpecialties.size === 0) throw new Error('primary_specialty validation: specialty_dictionary has no active rows on the target DB (wrong target? vocab not seeded?)')
+  return _activeSpecialties
+}
+
+async function validateSkillRows(csvRows, path) {
+  const valid = await activeSpecialtyNames()
+  const bad = []
+  for (const r of csvRows) {
+    for (const s of r.primary_specialty) {
+      if (!valid.has(s)) bad.push(`${r.canonical_name} → "${s}"`)
+    }
+  }
+  if (bad.length > 0) {
+    throw new Error(
+      `${path}: ${bad.length} primary_specialty value(s) are not ACTIVE specialty_dictionary names on the target DB (stale/invalid hints would silently never fire):\n      ${bad.join('\n      ')}`
+    )
+  }
+}
+
 // ─── Sync engine ────────────────────────────────────────────────────────
 
 async function fetchExisting(table, categoryFilter) {
@@ -289,6 +330,10 @@ async function syncHandler(h) {
   const text = readFileSync(fullPath, 'utf-8')
   const { rows: rawRows } = parseCsv(text)
   const csvRows = rawRows.map(r => h.parseRow(r))
+
+  // Hard gate: skills hints must name real, active specialties on the target DB.
+  // Runs in --dry-run too, so bad tags are caught before anyone attempts a write.
+  if (h.table === 'skills_dictionary') await validateSkillRows(csvRows, h.path)
 
   const dbRows = await fetchExisting(h.table, h.categoryFilter)
 

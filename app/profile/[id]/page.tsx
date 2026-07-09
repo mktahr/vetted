@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { formatAxisLabel } from '@/lib/classification/current-role'
 import { Person, Experience, Education, BucketAssignment, CandidateBucket, FlaggedReason, ClearanceLevel, ScoreComponent } from '../../types'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from '../../components/CompanyLogo'
 import CrossOrgNetwork from '../../components/CrossOrgNetwork'
@@ -528,17 +529,11 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Classification metadata — quiet label-value grid */}
+        {/* Classification metadata — quiet label-value grid.
+            PREVIEW: the OLD person-level Specialty / Secondary / Function rows (driven by the
+            legacy deterministic classifier — e.g. the bogus "fullstack") are hidden here so the
+            ONLY classification shown is the per-role "AI Classification" panel below (live inferred columns). */}
         <div className="grid gap-x-4 gap-y-0.5 mb-6 text-sm" style={{ gridTemplateColumns: 'auto 1fr', maxWidth: 400 }}>
-          {person.primary_specialty && (
-            <><span className="text-muted-foreground">Specialty</span><span>{person.primary_specialty.replace(/_/g, ' ')}</span></>
-          )}
-          {person.secondary_specialty && (
-            <><span className="text-muted-foreground">Secondary</span><span>{person.secondary_specialty.replace(/_/g, ' ')}</span></>
-          )}
-          {person.current_function_normalized && (
-            <><span className="text-muted-foreground">Function</span><span>{person.current_function_normalized.replace(/_/g, ' ')}</span></>
-          )}
           {(() => {
             const currentExp = experiences.find(e => e.is_current && e.seniority_normalized && e.seniority_normalized !== 'unknown')
             const currentSen = currentExp?.seniority_normalized ?? null
@@ -676,6 +671,32 @@ export default function ProfilePage() {
                   {exp.description_raw && (
                     <p className="text-muted-foreground text-sm mt-1">{exp.description_raw}</p>
                   )}
+                  {/* Five-axis inferred classification (LIVE columns post merge-arc flip;
+                      provenance = people.classifier_version) */}
+                  {(() => {
+                    const fn = (exp as any).function_inferred as string[] | null
+                    const sp = (exp as any).specialty_inferred as string[] | null
+                    const inh = (exp as any).specialty_inherited as string[] | null
+                    const sk = (exp as any).skills_inferred as string[] | null
+                    const tn = (exp as any).title_normalized_inferred as string | null
+                    const founding = (exp as any).is_founding_engineer_role as boolean
+                    const ver = (person as any)?.classifier_version as string | null
+                    if ((!fn || fn.length === 0) && (!sp || sp.length === 0) && (!inh || inh.length === 0) && !tn) return null
+                    const clean = formatAxisLabel
+                    return (
+                      <div className="mt-2 rounded border border-border bg-muted px-2.5 py-1.5 text-xs space-y-0.5">
+                        <div className="font-semibold uppercase" style={{ fontSize: '10px', letterSpacing: '0.05em', color: 'var(--accent-strong)' }}>
+                          AI Classification{ver ? ` · ${ver}` : ''}
+                        </div>
+                        {fn && fn.length > 0 && <div><span className="text-tertiary">function: </span><span className="text-foreground">{fn.map(clean).join(', ')}</span></div>}
+                        {sp && sp.length > 0 && <div><span className="text-tertiary">specialty: </span><span className="text-foreground">{sp.map(clean).join(', ')}</span></div>}
+                        {inh && inh.length > 0 && <div><span className="text-tertiary">inherited: </span><span className="text-tertiary italic" title="Deterministic career fallback — inferred from prior roles (lower confidence)">{inh.map(clean).join(', ')} ⓘ</span></div>}
+                        {sk && sk.length > 0 && <div><span className="text-tertiary">skills: </span><span className="text-foreground">{sk.map(clean).join(', ')}</span></div>}
+                        {tn && <div><span className="text-tertiary">title: </span><span className="text-foreground">{tn}</span></div>}
+                        {founding && <div style={{ color: 'var(--accent-strong)' }}>★ founding / early engineer</div>}
+                      </div>
+                    )
+                  })()}
                 </div>
               ))}
             </div>

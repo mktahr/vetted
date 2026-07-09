@@ -150,6 +150,15 @@ export function resolveSeniorityFromRules(
     }
   }
 
+  // 3c. Compound leadership/level titles NOT in the exact map (e.g. "Robotics Software
+  //     Engineering Manager", "Director of Autonomy", "Senior Staff Software Engineer –
+  //     Foo") — scan the TITLE with the same leadership/level signals used for descriptions.
+  //     Exact match ran first, so titles with explicit rules (e.g. "product manager") are
+  //     unaffected. Signals are ordered highest-rank-first, so the first match is the top level.
+  for (const sig of DESCRIPTION_SENIORITY_SIGNALS) {
+    if (sig.pattern.test(normalized)) return sig.level
+  }
+
   // 4. Fallback: we have a title but nothing matched → IC
   return 'individual_contributor'
 }
@@ -274,6 +283,16 @@ export function resolveSeniorityWithDescription(
   // If title gave a specific (non-IC) answer, trust it — title wins
   if (titleLevel && TITLE_IS_AUTHORITATIVE.has(titleLevel)) {
     return { level: titleLevel, source: 'title' }
+  }
+
+  // 3b. Compound leadership/level title NOT in the exact map (e.g. "Robotics Software
+  //     Engineering Manager", "Director of Autonomy") — scan the TITLE itself with the
+  //     leadership/level signals. Title beats description for seniority, so do this BEFORE
+  //     the description scan. Ordered highest-rank-first → first match is the top level.
+  for (const sig of DESCRIPTION_SENIORITY_SIGNALS) {
+    if (sig.pattern.test(normalized)) {
+      return { level: sig.level, source: 'title' }
+    }
   }
 
   // 4. Title was IC or no match — try description scan

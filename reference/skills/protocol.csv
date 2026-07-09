@@ -1,3 +1,10 @@
 canonical_name,category,aliases,primary_specialty,description,is_active,is_searchable
-gRPC,protocol,,backend,"High-performance RPC framework over HTTP/2 using Protocol Buffers; common in microservice + ML-serving architectures.",true,true
-CAN bus,protocol,can bus;controller area network;canfd;can-fd,embedded;embedded_software;firmware,Controller Area Network — standard automotive / industrial vehicle bus for embedded systems communication.,true,true
+CAN Bus,protocol,can;controller area network;canfd;can-fd,embedded_engineering;firmware_engineering;controls_engineering,Vehicle bus,true,true
+GraphQL,protocol,,backend_engineering;api_engineering;frontend_engineering,Query API,true,true
+gRPC,protocol,,backend_engineering;api_engineering;distributed_systems_engineering,RPC framework,true,true
+I2C,protocol,,embedded_engineering;firmware_engineering,Serial bus,true,true
+OAuth,protocol,oauth2,security_engineering;backend_engineering,Authorization,true,true
+REST,protocol,restful,backend_engineering;api_engineering,HTTP API style,true,true
+SPI,protocol,,embedded_engineering;firmware_engineering,Serial bus,true,true
+UART,protocol,,embedded_engineering;firmware_engineering,Serial comms,true,true
+WebSockets,protocol,,backend_engineering;frontend_engineering,Realtime,true,true

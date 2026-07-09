@@ -6,7 +6,7 @@ Active work tracking. For deferred features see [BACKLOG.md](BACKLOG.md). For sm
 
 ## Current Build
 
-**Nothing actively in flight.** Network Connections PR 2 (gated promotion + cross-org) merged 2026-06-29 (PR #15) — the PR 2 arc is complete. Next sequenced item from "Next Up": five-axis sub-PR 3 (LLM ingest inference) or the companies CSV-curation rework (newly backlogged) — Matt's pick next session.
+**Five-axis sub-PR 3 (LLM ingest inference) — IN PROGRESS on branch `five-axis-subpr3-classify` (not merged; no PR yet).** 2026-07-08: **eval + hardening phases COMPLETE.** Deterministic career-fallback architecture shipped (LLM classifies role-evidenced axes only; `computeCareerFallback` inherits in CODE → new `specialty_inherited` columns, migration 092 dev+prod) + robotics carve-out (Joanne resolution, `robotics_software_engineering` reactivated-guarded, migration 091) + `powertrain_engineering` (SeJun, migration 093) + deterministic carve-out guard + validator hardening. Prompt FROZEN at `cls-2026-07-08a`, dev vocab frozen at 150 specialties / 192 skills. Eval on frozen config: tuning 89 → **holdout one-shot 82.1% ACCEPTED** (~96% rule-conformance) → **POOL 85.9%**, error=0 + 0 val-fails everywhere; preview verified per-candidate (Joanne/Michael/Pavlo/Aadhya/SeJun). Next-version rules queued in `lib/candidates/classifier/next-prompt-queue.md` (Solutions/FDE/Architect bimodal evidence-gating + POOL findings). Codex looped 3× (architecture, adversarial diff, rules). **Next session — the MERGE ARC (all prod-touching, gated):** prod taxonomy migrations 085/086/087/090/091/093 + person-data cascade + prod skills sync + full re-score → flip search/scoring to `_inferred`+`_inherited` → PR + Vercel-preview-before-merge. See CLAUDE.md "Five-Axis Classifier (sub-PR 3)" + SESSION_HANDOFF.md.
 
 > **Note (2026-06-29):** an earlier "Current Build" line here pointed at **Sourcing pipeline — phase 1** on branch `sourcing-pipeline-phase1`. That branch no longer exists (not local, not on origin, never merged); its migrations 056/057 were renumbered to 065/066 (already on main). It was stale and removed. The sourcing pipeline as a *feature* still lives in "Next Up" below.
 
@@ -18,6 +18,13 @@ Active work tracking. For deferred features see [BACKLOG.md](BACKLOG.md). For sm
 1. **Gated promotion** — ✅ built on `network-connections-gated-promotion` (migration 082; vetted-company auto-rule + manual override; safe demote guard). In PR / preview verification.
 2. **Admin cross-org view** — ✅ built in the same branch (`/api/network/cross-org` + `CrossOrgNetwork` on the profile page; no migration).
 Deferred (logged in BACKLOG "Network Connections"): any additional candidate "bar" beyond the vetted-company check; candidate-ingest→`both` symmetric promote edge.
+
+**Next for the network module → list-building + CSV export (cross-app).** The mechanism that turns the whole network-connections investment into deliverable value: give portfolio companies **actionable lists back**. Two parts:
+- **Build lists from network connections** — once an org's uploaded CSV is parsed → sourced → enriched → classified, let admin build a curated list directly from those connections (possibly its own page/module, TBD). Today lists are candidate/company only; connections need a first-class list path.
+- **CSV export from ANY list** — export network-connection lists AND regular candidate sourcing lists to a clean, **Google-Sheets-ready CSV** so a portfolio company can action them. This complements the existing CSV *upload* — the module ingests CSVs; it must also emit them. Should work app-wide (any list → download CSV), not just for connections.
+- **Stretch:** an in-app actioning module so portfolio companies work the list inside Vetted instead of a spreadsheet (feasibility TBD — CSV export is the floor).
+
+High-leverage GTM unlock; the export half is relatively low-effort and can slot in early. Pairs with BACKLOG "Custom ranking within lists" (ranked list → ranked CSV).
 
 1. **Sourcing pipeline phases 2+** — wire up roster scrapers, LinkedIn URL discovery, profile enrichment, admin review UI. Phase 2+ scope TBD after phase 1 lands.
 2. **Five-axis candidate taxonomy rebuild**
