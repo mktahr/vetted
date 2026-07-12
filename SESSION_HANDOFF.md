@@ -1,30 +1,30 @@
 # Session Handoff — for the next Claude Code session
 
-_Last session: 2026-07-08 (later session) — the five-axis sub-PR 3 MERGE ARC, executed gated end-to-end: prod migrations 085–097, skills sync, full classifier run, THE FLIP merged (PR [#16](https://github.com/mktahr/vetted/pull/16) → `4c93378`), post-merge full re-score._
+_Last session: 2026-07-12 — docs-only. Investigated the hardcoded-locations concern and queued a near-term ROADMAP item (Global location filter via geocode-on-ingest). No code, no migrations, no build started._
 
 ## Where we left off
-**Sub-PR 3 is MERGED, LIVE on prod, and re-scored.** The arc: cascade plan + 2 Codex review rounds BEFORE any prod write → snapshots (`_mergearc_20260708` schema, still on prod as rollback insurance) → prod migrations 085/086/087/090/091/093 + NEW 094 (role_specialty_map remap) / 095 (founder→unknown cascade incl. title_dictionary) / 096 (dev-parity: a pre-run simulation caught 4 prod-only drift specialties that would have broken the frozen vocab hash, incl. a `robotics_engineering` function-name collision) / 097 (claim RPC — prod PostgREST 14.1 mis-executes `PATCH+or=`: 42703 with named returning, silent execute-with-empty-representation with `select=*`) → scoped skills sync (prod 18→192) → **prod vocab byte-identical to frozen dev** (150/17/192, hash `33c400c8`) → full classifier run (**129/129 done, 996/996 experiences, 0 val-fails, ~$1.6**, five spot-checks matching accepted eval behavior) → flip PR #16 (Codex adversarial: 1 blocker fixed — strict-current mode now also ignores ended-only candidates' past roles) → Matt browser-verified the preview → squash-merged → **full re-score: 73/56 → 82 vetted / 47 needs_review** (9 promotions, all upward, incl. Michael Olson 32.5→47.5 vetted; distribution judged trustworthy).
+Light docs-only session. Traced the "hardcoded locations" problem to its real root (unnormalized free-text matching, not just the short hardcoded list) and queued a **near-term ROADMAP item**: Global location filter via geocode-on-ingest. No code touched, no build started.
+
+Prior arc unchanged: five-axis sub-PR 3 is MERGED + live + re-scored (PR #16, 2026-07-08). Prod healthy.
 
 ## What's in flight
-- **Nothing.** On `main`, working tree clean (after the end-session docs commit), no open PRs, no feature branches. Prod deploy `4c93378` serving the flip.
-- The daily classify-pending cron is LIVE (13:00 UTC, `CRON_SECRET`, RPC claim) — new candidates classify with ~24h latency by accepted design.
+- Branch: `subpr4-person-skills` (docs commit `6db4236` pushed). **No open PR** — pre-PR, direct-to-branch.
+- No build in flight. Next build is Matt's pick.
 
 ## Next thing to do
-Matt's pick (both roadmap-sequenced):
-1. **Taxonomy sub-PR 4** — aggregated candidate-level columns (`current_title_normalized`, `ever_titles`, person-level skills view) + the extension skills-scrape fix + deterministic alias matcher (BACKLOG item, trigger met).
-2. **Network list-building + CSV export** — the GTM unlock (lists from connections + any-list→Google-Sheets-ready CSV).
-Fast-follows from the arc, whenever convenient (all small, in BUGS.md): inherited-ⓘ tooltip (Matt's copy specified), PostgREST 14.1→14.5 parity upgrade, ingest-time classify hook.
+Matt picks the next build. Leading candidates:
+1. **Global location filter via geocoding** (newly queued, near-term) — see ROADMAP "Next Up". Needs Matt's 3 decisions before build (scope / provider / US-only vs international).
+2. **Taxonomy sub-PR 4** — per-experience `title_normalized` aggregation → `people.current_title_normalized` + `ever_titles` + person-level skills view (the extension skills-scrape + alias-matcher BACKLOG item slots in here). This is the current branch's namesake.
+3. **Network list-building + CSV export** — the GTM unlock.
 
 ## Open questions
-- When to bump PROMPT_VERSION for `next-prompt-queue.md` rules (recommend: own tuning cycle, regenerate the aging Opus reference FIRST).
-- Bucket-B pool-boundary calls (sysadmin / IT-infra / GTM Engineer / Prompt Engineer) — carried.
-- When to run the companies-scoring coverage pass (SeJun-class: candidates whose employers have zero `company_year_scores` are structurally pinned at senior-career — now the scoring bottleneck; pairs with the companies-CSV/two-lists deferred architecture).
+Location filter (answer before building):
+- Scope: search-time normalization only, or also add radius search to the candidate table (mirroring the import side)?
+- Provider: Mapbox / Google Places (best on messy LinkedIn metro strings; paid, cheap at once-per-candidate volume) vs Nominatim/OSM (free, weaker on vague metros). One new env var either way.
+- US-only or international.
 
 ## Watch-outs
-- **Prod PostgREST is 14.1** (dev 14.5): supabase-js `.update().or()` conditional mutations are UNSAFE on prod — silent execute-but-report-nothing. Conditional writes go through SQL RPCs (see 097). After psql DDL, `NOTIFY pgrst, 'reload schema'` before REST sees new functions.
-- **Prod vocab == dev vocab is now a live invariant** (the classifier hash depends on it). Any vocab change must land on BOTH DBs dev-first, or the hash forks against the frozen prompt.
-- `_preview` columns + `populate-preview.ts`/`populate-inferred-prod.ts` are VESTIGIAL post-flip — cleanup pass later; never reuse for live data.
-- `_mergearc_20260708` snapshot schema on prod: drop after a few days of stability (`DROP SCHEMA _mergearc_20260708 CASCADE;`).
-- Classifier batch sizing: ~20/call is comfortable; 50 real candidates can blow Vercel's 300s ceiling (fencing self-heals, but avoid).
-- Manual `people/[id]` PATCH edits re-queue classification but the edited legacy values do NOT flow into inferred axes (documented gap, BUGS).
-- Carried: dup-ingest race (Aadhya's duplicated rows still visible); Opus eval reference aging; `reference/eval/*` is PII, gitignored; scores now FRESH as of the 2026-07-08 re-score.
+- The location fix's root cause is **unnormalized text**, not list length — do NOT "fix" it by adding more cities to `lib/locations/us-locations.ts`. The substring match against `people.location_name` (Crust's raw location string) is the actual defect. Crust's *structured* location fields are unreliable (documented), so geocoding must run on our side at ingest.
+- Branch name is `subpr4-person-skills` but its recent commits were unrelated (InfoTip tooltips, then this docs session). If sub-PR 4 proper gets built, confirm the branch state is what you expect first.
+- `BACKLOG.md` axis-4 "Company-derived environment / regulatory context attribution" entry was a pre-existing uncommitted change folded into this session's commit — it's now saved, not lost.
+- Fast-follows still queued in BUGS from the July-8 merge arc: PostgREST 14.1→14.5 parity, ingest-time classify hook. Plus the companies-scoring coverage gap (SeJun-class candidates pinned by unscored employers) — the current scoring bottleneck.
