@@ -26,6 +26,15 @@ Deferred (logged in BACKLOG "Network Connections"): any additional candidate "ba
 
 High-leverage GTM unlock; the export half is relatively low-effort and can slot in early. Pairs with BACKLOG "Custom ranking within lists" (ranked list → ranked CSV).
 
+**Near-term → Global location filter via geocoding (do sooner than later).** Today's search-time location filter is broken beyond the hardcoded-list problem it looks like. Two surfaces exist: the **import side** (`/admin/import`) already has real geo (country/region/radius) via Crust's geocoding — fine, leave it. The **search side** (candidate table at `/`) uses a static ~50-state + ~50-city list ([lib/locations/us-locations.ts](lib/locations/us-locations.ts)) matched by naive substring against the raw free-text `people.location_name` ([ProfileTable.tsx:836-837](app/components/ProfileTable.tsx#L836)). `location_name` = Crust's `basic_profile.location.raw` (we use `.raw` on purpose — Crust's *structured* location fields are unreliable, e.g. "Emilia-Romagna, Italy" for a Seattle candidate). Result: the substring match fails even on listed places — `"Greater Seattle Area"` doesn't match city `"Seattle, WA"`, and `"San Francisco Bay Area"` never contains `"California"` so the state filter misses it. **Root cause is unnormalized text, not list length — adding cities won't fix it.**
+
+Fix = **geocode-on-ingest** (fits the existing "normalize once, store, filter fast" architecture):
+- Geocode `location_name` once at ingest + backfill existing rows → structured columns on `people` (`location_city`, `location_state` 2-letter, `location_metro`, `location_country`, `location_lat`/`location_lng`).
+- Rewrite the search filter to hit structured columns (exact state/metro match) + optionally true radius search (lat/lng, mirroring the import side's UX).
+- `us-locations.ts` shrinks to a typeahead helper or is dropped for the geocoder's own place autocomplete.
+
+Scope: migration (new columns) + ingest hook + backfill script + filter UI rewrite ≈ 0.5–1 day → feature branch + Vercel preview before merge. **Open decisions for Matt before build:** (1) scope — search-time normalization only, or also add radius search to the candidate table? (2) provider — Mapbox / Google Places (best on messy LinkedIn metro strings, paid but cheap at our once-per-candidate volume) vs Nominatim/OSM (free, weaker on vague metros); adds one env var. (3) US-only or international.
+
 1. **Sourcing pipeline phases 2+** — wire up roster scrapers, LinkedIn URL discovery, profile enrichment, admin review UI. Phase 2+ scope TBD after phase 1 lands.
 2. **Five-axis candidate taxonomy rebuild**
 

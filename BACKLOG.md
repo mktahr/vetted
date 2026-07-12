@@ -32,6 +32,20 @@ These were intentionally cut from PR A scope. All have hooks in the already-ship
 
 ---
 
+## Search Axes & Enrichment
+
+### Company-derived environment / regulatory context attribution (five-axis "industry context" / axis 4 extension)
+- **What:** Attach company-derived ENVIRONMENT and REGULATORY context to candidates on the five-axis "industry context" axis (axis 4), derived per-experience with a candidate-level rollup ("ever worked in fintech" / "currently in a defense environment"). Two flavors: (1) environment/domain — fintech, blockchain/web3, defense, climate — partially exists today via `companies.domain_tags[]` / `industries[]`; (2) regulatory context — "OCC-regulated," "FDIC-insured," "federally chartered," FINRA/SEC/ITAR/HIPAA-subject — has NO home today. Powerful, novel filter ("find people who worked in an OCC-regulated environment") that no sourcing platform offers.
+- **Status:** deferred; V2. Explicitly SEPARATE from `skills_dictionary` — environment/regulatory context is NOT a person competency. A software engineer at an OCC-regulated bank did no compliance work; tagging them "OCC" as a *skill* asserts a false competency. Governing line: **skills = DID-IT** (competency the person has), **context = WAS-THERE** (true of their employer). The same term can live on both axes with different meaning (e.g. "HIPAA compliance" competency vs "HIPAA-regulated environment"). Merging them corrupts search correctness.
+- **Trigger:** after the skills-dictionary expansion + non-eng taxonomy expansion land; when network-connection / CSV enrichment needs environment-based search across non-eng functions.
+- **Scope outline:**
+  - **Company side:** extend the company taxonomy with a regulatory attribute (`companies.regulated_by[]` / charter type, or a `company_regulatory_tags` table) alongside the existing `domain_tags[]` / `industries[]`.
+  - **Association side:** flow company attributes to candidates per-experience on axis 4 with a `company_derived` provenance tier + a confidence qualifier ("regulated environment — not guaranteed direct regulator contact"). Mirrors the existing provenance pattern (inferred / matched / inherited).
+  - **Unknowns:** optional LLM + web-search enrichment for companies whose regulatory/environment attributes aren't known (batch or real-time during a sourcing session).
+  - A fenced "environment/regulatory vocabulary" staging file may be pre-drafted by the skills session as a zero-cost byproduct (never touches the skills CSVs).
+
+---
+
 ## Data Quality
 
 ### Comprehensive `specialty_normalized` dictionary

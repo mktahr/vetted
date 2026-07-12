@@ -6,6 +6,31 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 
 ---
 
+## 2026-07-12 — Location filter investigation → geocode-on-ingest queued to ROADMAP (near-term)
+
+**Shipped**
+- Docs-only session. Investigated the "hardcoded locations" concern and traced the real problem, then added a **Near-term** item to ROADMAP "Next Up": **Global location filter via geocoding**.
+- Finding: two location surfaces exist. **Import side** (`/admin/import`) already has real geo (country/region/radius) via Crust's geocoding — fine. **Search side** (candidate table `/`) uses a static ~50-state + ~50-city list ([lib/locations/us-locations.ts](lib/locations/us-locations.ts)) matched by naive substring against the raw free-text `people.location_name` ([ProfileTable.tsx:836-837](app/components/ProfileTable.tsx#L836)). `location_name` = Crust's `basic_profile.location.raw` (used on purpose — Crust structured location is unreliable).
+- **Root cause = unnormalized text, not list length.** Substring match fails even on listed places: `"Greater Seattle Area"` ≠ city `"Seattle, WA"`; `"San Francisco Bay Area"` never contains `"California"` so the state filter misses it. Adding cities won't fix it.
+- Recommended fix = **geocode-on-ingest** into structured columns on `people` (`location_city`/`location_state`/`location_metro`/`location_country`/`location_lat`/`location_lng`) + backfill + filter rewrite to structured match (+ optional radius). Fits the existing "normalize once, store, filter fast" pattern. ~0.5–1 day → feature branch + preview.
+
+**Decisions**
+- Location work goes to ROADMAP "Next Up" as **near-term** (Matt's call — "sooner than later"), NOT backlog.
+- No build started — provider/scope are genuine product decisions left open for Matt.
+
+**Where we left off**
+- ROADMAP updated. No code touched. Branch `subpr4-person-skills`, no open PR. Still no build in flight — next build remains Matt's pick (sub-PR 4, network list-building/CSV export, or now the location filter).
+
+**Open questions** (must answer before geocoding build starts)
+- Scope: search-time normalization only, or also add radius search to the candidate table like the import side has?
+- Provider: Mapbox / Google Places (best on messy LinkedIn metro strings, paid but cheap at once-per-candidate volume) vs Nominatim/OSM (free, weaker on vague metros). Adds one env var either way.
+- US-only or international.
+
+**Watch-outs**
+- `BACKLOG.md` carried a pre-existing uncommitted entry (axis-4 "Company-derived environment / regulatory context attribution") from an earlier session — folded into this session's docs commit so it isn't lost. Not this session's work; noted for provenance.
+
+---
+
 ## 2026-07-08 — Five-axis sub-PR 3 MERGE ARC: prod taxonomy 085–097 + full classifier run + THE FLIP merged (PR [#16](https://github.com/mktahr/vetted/pull/16)) + full re-score — later session
 
 **Shipped** (everything gated step-by-step on Matt; squash-merged to main as `4c93378`)
