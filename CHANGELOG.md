@@ -6,6 +6,28 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 
 ---
 
+## 2026-07-13 — Sequencing + Step-0 verification session (research-only; ended early — Matt's machine hit memory issues)
+
+**Shipped**
+- Research/verification only — NO code, DB writes, reclassify, or PR. Session ended abruptly mid-arc (Matt's computer application-memory problems); state safely captured in SESSION_HANDOFF.md.
+- **Three-workstream sequence verified + Codex-converged (2 loop rounds, gpt-5.5 high):** Step 0 fork-reconcile + Piece B PR → Step 1 Piece A (gated on no-wipe ingest design) → Step 2 refactor Phase 1 plumbing (zero-diff + hash-identity gates) → Step 3 dictionary expansion (own gated re-classify arc, cron paused).
+- **Hash linchpin verified exactly** (`lib/candidates/classifier/index.ts:28-63`): inputs = sorted active function/specialty/skill names + specialty parent arrays in stored order. role_specialty_map is NOT a hash input (CLAUDE.md claim is wrong — fix queued in Step 0), nor are skill aliases/hints. Recomputed live: both DBs at `83e9c32a` (196 skills); removing the 4 tactical-pass skills reproduces `33c400c8` (algorithm validated). All 129 prod people still carry `33c400c8` provenance.
+- **Step-0 pre-execution verifications done:** classify-queue boundary INTENDED-AND-CONFIRMED (raw connection upload never touches `people`; classification only via enrich-gated projection/promote); composition of the 129 = 128 `candidate` + 1 `both` (promoted) — "reclassify all 129" correct as written; migration 098 + partial skills backfill (9 people) + 4-skill sync ALREADY live on prod (DB ahead of branch code — benign, code-only merge arc).
+
+**Decisions**
+- Matt: accept + document the 4-skill fork, reclassify to uniform `83e9c32a`, don't revert.
+- Codex execution tweaks adopted: snapshot baseline BEFORE generation bump; run reclassify as LOCAL `classifyPending(supabase, 20)` loop (not Vercel route); re-score via `rescore-all` API (not score-all.mjs); docs split — factual fixes first, "reconciled" claim only after verification.
+
+**Where we left off**
+- **Step-0 execution order (6 steps, in SESSION_HANDOFF) was presented for approval; Matt had NOT yet approved when the session ended.** Next session: re-present, get the go, execute.
+
+**Open questions**
+- Step-0 execution-order approval. Archive-mining backfill timing (ride Step 0 or later).
+
+**Watch-outs**
+- Daily cron stamps any new pending person with `83e9c32a` until Step 0 runs (currently zero pending).
+- CLAUDE.md/ROADMAP still say 192/`33c400c8` + the role-map hash error — stale until Step 0 docs pass.
+
 ## 2026-07-12 — Location filter investigation → geocode-on-ingest queued to ROADMAP (near-term)
 
 **Shipped**
