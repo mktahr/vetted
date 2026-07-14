@@ -6,6 +6,33 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 
 ---
 
+## 2026-07-14 — Step 0 executed: vocab-fork reconcile (33c400c8 → 83e9c32a) + full reclassify + re-score
+
+**Shipped**
+- **Reconciled the classifier vocab fork.** The 07-09 tactical pass (4 skills: Git, GitHub, Linux, Distributed Systems) had moved the live vocab hash `33c400c8` → `83e9c32a` on both DBs while all 129 candidates still carried `33c400c8` provenance. Step 0 unified them: bumped all 129 → pending, drove the REAL `classifyPending(supabase, 20)` locally (service role, service-side; avoids Vercel's 300s ceiling), re-scored via `POST /api/admin/rescore-all`. **Result: 129/129 uniform `cls-2026-07-08a/claude-haiku-4-5/83e9c32a`, 0 pending / 0 failed.**
+- **Scoring fully stable — 0 bucket moves.** Distribution unchanged at 82 vetted / 47 needs_review (baseline snapshot → `reference/eval/step0-baseline-2026-07-13.json`, gitignored PII). Classification churn (sampling variance, same prompt+model) measured against the snapshot: function 33/996 (3.3%), title 33 (3.3%), specialty 126 (12.7%), skills 134 (13.5%), specialty_inherited 27 (2.7%) — mostly secondary-value add/drop, not reversals. The 4 new skills earned their place: Linux assigned to 13 experiences, Distributed Systems to 9 (Git/GitHub 0 — evidence bar treats them as too generic). Matt spot-checked the largest single flip (Alen Rakipovic Meta "Tech Lead" software_engineering → ml_engineering) — defensible given the role's ML content; bucket unmoved.
+- **Docs pass 1** (commit `2bf1dca`): CLAUDE.md vocab-state section corrected (196 skills, hash `83e9c32a`, and fixed the false "role_specialty_map is a hash input" claim — the exact hash inputs are now documented: active function/specialty/skill names + specialty parent arrays in stored order).
+
+**Decisions**
+- Accept + document the 4-skill fork and reclassify to uniform provenance (not revert) — the skills are legitimate. Reclassify is consistent with the "freeze-don't-recompute" principle (below): triggered by a genuine hash fork.
+- Execution per Codex-converged plan: snapshot-before-bump, local batch loop (not Vercel route), re-score via the real `rescore-all` API engine (not the stale `score-all.mjs` mirror), docs split (factual fixes before reclassify, reconciled-provenance record after).
+
+**Backlog recorded (record-only, post-Step-0):**
+- **Freeze-don't-recompute** adopted as a standing principle + deferred audit of every `bump_classification_generation` / `classification_status='pending'` path.
+- **Connection lifecycle / projection-budget** investigation scheduled for Step 1 (boundary verified: raw upload never classifies; projection/promote of enriched connections does).
+- **`is_current_founder` exclusion too blunt** (Alen Rakipovic removed from default view by a side/advisory founder gig) — fix direction logged.
+- **"Founder" seniority option** verify-and-reconcile (still in the filter, returns 13; report findings before any change).
+
+**Where we left off**
+- Step 0 steps 1–5 done. **Step 6 (Piece B PR) in progress** — PR open, Vercel preview pending Matt's browser check before merge.
+
+**Open questions**
+- None blocking. Post-Step-0 sequence resumes at Step 1 (Piece A + connection-lifecycle investigation + archive-mining backfill).
+
+**Watch-outs**
+- Reclassify run hit 3 transient local `fetch failed` network blips (halt-after-3-infra-discards fired each time); all recovered on retry, 0 failure budget burned, final state clean. Not a code issue — local network.
+- `score-all.mjs` remains a stale scoring mirror — the re-score correctly used the `rescore-all` API path (imports real `@/lib/scoring`).
+
 ## 2026-07-13 — Sequencing + Step-0 verification session (research-only; ended early — Matt's machine hit memory issues)
 
 **Shipped**
