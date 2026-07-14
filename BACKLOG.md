@@ -199,6 +199,11 @@ Known tagger limitations from the round-3/round-4 eval. Not severe enough to blo
 
 PR 1 (the pipeline) shipped 2026-06-24 via PR [#10](https://github.com/mktahr/vetted/pull/10). These are the deferred follow-ups.
 
+### Connection lifecycle / classification-budget investigation (scheduled: Step 1 of the 2026-07-13 sequence)
+- **Status:** investigation scheduled — do NOT act before Step 1. Boundary facts verified 2026-07-13 (Claude + Codex, code-level trace): raw CSV upload NEVER touches `people` ([lib/network/ingest.ts](lib/network/ingest.ts) writes connections-side tables only); connections enter `people` ONLY via explicit admin projection (`POST /api/network/project`, enriched-gated — `projectConnection` refuses new persons without a fresh Crust blob) or promote (projects first); every `writeCanonicalProfile` ends with `bump_classification_generation` → `classification_status='pending'` → daily cron classifies; `classifyPending` has NO `record_kind` filter ([lib/candidates/classifier/index.ts](lib/candidates/classifier/index.ts) ~L256).
+- **The open question:** projected-but-NOT-promoted connections (`record_kind='network_connection'`) get classified by the cron. Matt's intended design: connections are admin-gated — a connection should NOT consume classifier budget before the explicit commit-to-candidate action. Whether projection counts as that commit (it makes them searchable in connections scope) or is premature spend is UNRESOLVED. (As of 2026-07-13 zero `network_connection` rows exist in `people`, so nothing leaks today.)
+- **Step 1 scope:** map the full connection lifecycle — every state a connection can occupy, what each admin action (upload / review-titles / enrich / project / promote) actually does, and the exact point classification fires — laid against the intended "admin hand-picks searchable candidates" design. Flag any path where classification fires before the explicit commit as a budget-leak candidate.
+
 ### Per-connection review actions on the connections table
 - **Status:** PR 1 puts web-check / Keep-Drop only in the MAYBE review queue; the connections table shows buckets read-only.
 - **Trigger:** when curating real org connection sets (esp. as volume grows) makes queue-only actions painful.
@@ -357,6 +362,11 @@ PR 1 (the pipeline) shipped 2026-06-24 via PR [#10](https://github.com/mktahr/ve
 ---
 
 ## Five-Axis Classification
+
+### Freeze-don't-recompute — standing principle (DECIDED 2026-07-13) + reclassify-trigger audit
+- **Principle (adopted, not up for re-decision):** a person's classification is only re-run when the vocab hash genuinely forks or their underlying data materially changes — NEVER as a casual side effect of routine re-ingest/re-enrich. Classification output is frozen work product; recomputation is an explicit, justified event. (Step 0's 2026-07-13 reclassify is consistent — triggered by a genuine hash fork, `33c400c8` → `83e9c32a`.)
+- **Deferred audit task:** enumerate every code path that sets `classification_status='pending'` or calls `bump_classification_generation` (known today: ingest experience-rewrite in `writeCanonicalProfile`, manual PATCH on [app/api/people/[id]/route.ts](app/api/people/[id]/route.ts), connection projection/promote via `writeCanonicalProfile`) and confirm none fire incidentally — i.e. each corresponds to a genuine data change or an explicit admin action. Flag any that don't.
+- **Trigger:** before Phase 2 (taxonomy expansion) at the latest — the expansion arc's full re-classify must be the LAST mass recompute, not one of an unnoticed series.
 
 ### LinkedIn skills-section capture + deterministic person-level skill matching
 - **What:** two-part track surfaced 2026-07-07/08 (Pavlo/Aadhya/Guy skills investigations). (1) **Extension fix:** the Chrome extension scrapes `skills_tags: []` for profiles whose LinkedIn skills section is populated (Pavlo's backend/distributed list, Aadhya's Python/PyTorch/React Native list, Guy's CMake never entered the DB) — fix/verify the skills scrape in `vetted-extension` (`src/content.ts`). (2) **Deterministic matcher:** alias-match captured `skills_tags` against `skills_dictionary` (canonical_name + aliases) into a person-level skills view. Zero LLM cost, pure code. Do NOT feed candidate-level skills into the per-role classifier (role-attribution would be guessing — Codex-concurred 2026-07-07).
