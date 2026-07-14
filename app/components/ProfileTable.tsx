@@ -10,6 +10,7 @@ import { Person, SortField, SortDirection, CandidateBucket } from '../types'
 import ProfileDrawer, { DrawerExperience, DrawerEducation, DrawerSignal } from './ProfileDrawer'
 import { currentRoleClassification, formatAxisLabel } from '@/lib/classification/current-role'
 import AddToListMenu from './AddToListMenu'
+import InfoTip from './InfoTip'
 import TopNav from './TopNav'
 import { MultiSelectOption } from './MultiSelect'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from './CompanyLogo'
@@ -1399,11 +1400,11 @@ export default function ProfileTable() {
                             <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)' }}>
                               {fn ? formatAxisLabel(fn) : <span style={{ opacity: 0.4 }}>—</span>}
                             </td>
-                            <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }} title={total > 1 ? specFull : (inheritedSpecs.length ? 'Inherited from prior roles (lower confidence)' : undefined)}>
+                            <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--fg-secondary)', fontSize: 'var(--fs-13)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }} title={total > 1 ? specFull : undefined}>
                               {specs.length > 0
                                 ? <>{formatAxisLabel(specs[0])}{total > 1 ? <span style={{ color: 'var(--fg-tertiary)' }}>{` +${total - 1}`}</span> : null}</>
                                 : inheritedSpecs.length > 0
-                                  ? <><span style={{ color: 'var(--fg-tertiary)', fontStyle: 'italic' }}>{formatAxisLabel(inheritedSpecs[0])}<span style={{ opacity: 0.7 }}> ⓘ</span></span>{total > 1 ? <span style={{ color: 'var(--fg-tertiary)' }}>{` +${total - 1}`}</span> : null}</>
+                                  ? <><span style={{ color: 'var(--fg-tertiary)', fontStyle: 'italic' }}>{formatAxisLabel(inheritedSpecs[0])} <InfoTip text="Inferred from prior roles — no specialty evidence in the current role." /></span>{total > 1 ? <span style={{ color: 'var(--fg-tertiary)' }}>{` +${total - 1}`}</span> : null}</>
                                   : <span style={{ opacity: 0.4 }}>—</span>}
                             </td>
                           </>

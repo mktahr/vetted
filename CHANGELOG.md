@@ -6,6 +6,80 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 
 ---
 
+## 2026-07-14 — Step 0 executed: vocab-fork reconcile (33c400c8 → 83e9c32a) + full reclassify + re-score
+
+**Shipped**
+- **Reconciled the classifier vocab fork.** The 07-09 tactical pass (4 skills: Git, GitHub, Linux, Distributed Systems) had moved the live vocab hash `33c400c8` → `83e9c32a` on both DBs while all 129 candidates still carried `33c400c8` provenance. Step 0 unified them: bumped all 129 → pending, drove the REAL `classifyPending(supabase, 20)` locally (service role, service-side; avoids Vercel's 300s ceiling), re-scored via `POST /api/admin/rescore-all`. **Result: 129/129 uniform `cls-2026-07-08a/claude-haiku-4-5/83e9c32a`, 0 pending / 0 failed.**
+- **Scoring fully stable — 0 bucket moves.** Distribution unchanged at 82 vetted / 47 needs_review (baseline snapshot → `reference/eval/step0-baseline-2026-07-13.json`, gitignored PII). Classification churn (sampling variance, same prompt+model) measured against the snapshot: function 33/996 (3.3%), title 33 (3.3%), specialty 126 (12.7%), skills 134 (13.5%), specialty_inherited 27 (2.7%) — mostly secondary-value add/drop, not reversals. The 4 new skills earned their place: Linux assigned to 13 experiences, Distributed Systems to 9 (Git/GitHub 0 — evidence bar treats them as too generic). Matt spot-checked the largest single flip (Alen Rakipovic Meta "Tech Lead" software_engineering → ml_engineering) — defensible given the role's ML content; bucket unmoved.
+- **Docs pass 1** (commit `2bf1dca`): CLAUDE.md vocab-state section corrected (196 skills, hash `83e9c32a`, and fixed the false "role_specialty_map is a hash input" claim — the exact hash inputs are now documented: active function/specialty/skill names + specialty parent arrays in stored order).
+
+**Decisions**
+- Accept + document the 4-skill fork and reclassify to uniform provenance (not revert) — the skills are legitimate. Reclassify is consistent with the "freeze-don't-recompute" principle (below): triggered by a genuine hash fork.
+- Execution per Codex-converged plan: snapshot-before-bump, local batch loop (not Vercel route), re-score via the real `rescore-all` API engine (not the stale `score-all.mjs` mirror), docs split (factual fixes before reclassify, reconciled-provenance record after).
+
+**Backlog recorded (record-only, post-Step-0):**
+- **Freeze-don't-recompute** adopted as a standing principle + deferred audit of every `bump_classification_generation` / `classification_status='pending'` path.
+- **Connection lifecycle / projection-budget** investigation scheduled for Step 1 (boundary verified: raw upload never classifies; projection/promote of enriched connections does).
+- **`is_current_founder` exclusion too blunt** (Alen Rakipovic removed from default view by a side/advisory founder gig) — fix direction logged.
+- **"Founder" seniority option** verify-and-reconcile (still in the filter, returns 13; report findings before any change).
+
+**Where we left off**
+- Step 0 steps 1–5 done. **Step 6 (Piece B PR) in progress** — PR open, Vercel preview pending Matt's browser check before merge.
+
+**Open questions**
+- None blocking. Post-Step-0 sequence resumes at Step 1 (Piece A + connection-lifecycle investigation + archive-mining backfill).
+
+**Watch-outs**
+- Reclassify run hit 3 transient local `fetch failed` network blips (halt-after-3-infra-discards fired each time); all recovered on retry, 0 failure budget burned, final state clean. Not a code issue — local network.
+- `score-all.mjs` remains a stale scoring mirror — the re-score correctly used the `rescore-all` API path (imports real `@/lib/scoring`).
+
+## 2026-07-13 — Sequencing + Step-0 verification session (research-only; ended early — Matt's machine hit memory issues)
+
+**Shipped**
+- Research/verification only — NO code, DB writes, reclassify, or PR. Session ended abruptly mid-arc (Matt's computer application-memory problems); state safely captured in SESSION_HANDOFF.md.
+- **Three-workstream sequence verified + Codex-converged (2 loop rounds, gpt-5.5 high):** Step 0 fork-reconcile + Piece B PR → Step 1 Piece A (gated on no-wipe ingest design) → Step 2 refactor Phase 1 plumbing (zero-diff + hash-identity gates) → Step 3 dictionary expansion (own gated re-classify arc, cron paused).
+- **Hash linchpin verified exactly** (`lib/candidates/classifier/index.ts:28-63`): inputs = sorted active function/specialty/skill names + specialty parent arrays in stored order. role_specialty_map is NOT a hash input (CLAUDE.md claim is wrong — fix queued in Step 0), nor are skill aliases/hints. Recomputed live: both DBs at `83e9c32a` (196 skills); removing the 4 tactical-pass skills reproduces `33c400c8` (algorithm validated). All 129 prod people still carry `33c400c8` provenance.
+- **Step-0 pre-execution verifications done:** classify-queue boundary INTENDED-AND-CONFIRMED (raw connection upload never touches `people`; classification only via enrich-gated projection/promote); composition of the 129 = 128 `candidate` + 1 `both` (promoted) — "reclassify all 129" correct as written; migration 098 + partial skills backfill (9 people) + 4-skill sync ALREADY live on prod (DB ahead of branch code — benign, code-only merge arc).
+
+**Decisions**
+- Matt: accept + document the 4-skill fork, reclassify to uniform `83e9c32a`, don't revert.
+- Codex execution tweaks adopted: snapshot baseline BEFORE generation bump; run reclassify as LOCAL `classifyPending(supabase, 20)` loop (not Vercel route); re-score via `rescore-all` API (not score-all.mjs); docs split — factual fixes first, "reconciled" claim only after verification.
+
+**Where we left off**
+- **Step-0 execution order (6 steps, in SESSION_HANDOFF) was presented for approval; Matt had NOT yet approved when the session ended.** Next session: re-present, get the go, execute.
+
+**Open questions**
+- Step-0 execution-order approval. Archive-mining backfill timing (ride Step 0 or later).
+
+**Watch-outs**
+- Daily cron stamps any new pending person with `83e9c32a` until Step 0 runs (currently zero pending).
+- CLAUDE.md/ROADMAP still say 192/`33c400c8` + the role-map hash error — stale until Step 0 docs pass.
+
+## 2026-07-12 — Location filter investigation → geocode-on-ingest queued to ROADMAP (near-term)
+
+**Shipped**
+- Docs-only session. Investigated the "hardcoded locations" concern and traced the real problem, then added a **Near-term** item to ROADMAP "Next Up": **Global location filter via geocoding**.
+- Finding: two location surfaces exist. **Import side** (`/admin/import`) already has real geo (country/region/radius) via Crust's geocoding — fine. **Search side** (candidate table `/`) uses a static ~50-state + ~50-city list ([lib/locations/us-locations.ts](lib/locations/us-locations.ts)) matched by naive substring against the raw free-text `people.location_name` ([ProfileTable.tsx:836-837](app/components/ProfileTable.tsx#L836)). `location_name` = Crust's `basic_profile.location.raw` (used on purpose — Crust structured location is unreliable).
+- **Root cause = unnormalized text, not list length.** Substring match fails even on listed places: `"Greater Seattle Area"` ≠ city `"Seattle, WA"`; `"San Francisco Bay Area"` never contains `"California"` so the state filter misses it. Adding cities won't fix it.
+- Recommended fix = **geocode-on-ingest** into structured columns on `people` (`location_city`/`location_state`/`location_metro`/`location_country`/`location_lat`/`location_lng`) + backfill + filter rewrite to structured match (+ optional radius). Fits the existing "normalize once, store, filter fast" pattern. ~0.5–1 day → feature branch + preview.
+
+**Decisions**
+- Location work goes to ROADMAP "Next Up" as **near-term** (Matt's call — "sooner than later"), NOT backlog.
+- No build started — provider/scope are genuine product decisions left open for Matt.
+
+**Where we left off**
+- ROADMAP updated. No code touched. Branch `subpr4-person-skills`, no open PR. Still no build in flight — next build remains Matt's pick (sub-PR 4, network list-building/CSV export, or now the location filter).
+
+**Open questions** (must answer before geocoding build starts)
+- Scope: search-time normalization only, or also add radius search to the candidate table like the import side has?
+- Provider: Mapbox / Google Places (best on messy LinkedIn metro strings, paid but cheap at once-per-candidate volume) vs Nominatim/OSM (free, weaker on vague metros). Adds one env var either way.
+- US-only or international.
+
+**Watch-outs**
+- `BACKLOG.md` carried a pre-existing uncommitted entry (axis-4 "Company-derived environment / regulatory context attribution") from an earlier session — folded into this session's docs commit so it isn't lost. Not this session's work; noted for provenance.
+
+---
+
 ## 2026-07-08 — Five-axis sub-PR 3 MERGE ARC: prod taxonomy 085–097 + full classifier run + THE FLIP merged (PR [#16](https://github.com/mktahr/vetted/pull/16)) + full re-score — later session
 
 **Shipped** (everything gated step-by-step on Matt; squash-merged to main as `4c93378`)

@@ -7,6 +7,7 @@ import { formatAxisLabel } from '@/lib/classification/current-role'
 import { Person, Experience, Education, BucketAssignment, CandidateBucket, FlaggedReason, ClearanceLevel, ScoreComponent } from '../../types'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from '../../components/CompanyLogo'
 import CrossOrgNetwork from '../../components/CrossOrgNetwork'
+import InfoTip from '../../components/InfoTip'
 import { filterEducationForDisplay } from '@/lib/education/display-filter'
 import { formatSeniorityLabel } from '@/lib/normalize/seniority'
 
@@ -52,7 +53,6 @@ export default function ProfilePage() {
   const [narrativeAt, setNarrativeAt] = useState<string | null>(null)
   const [narrativeLoading, setNarrativeLoading] = useState(false)
   const [narrativeError, setNarrativeError] = useState<string | null>(null)
-  const [skillsTags, setSkillsTags] = useState<string[]>([])
   const [skillsOpen, setSkillsOpen] = useState(false)
   const [profileSignals, setProfileSignals] = useState<Array<{ canonical_name: string; category: string; evidence_url: string | null; canonical_url: string | null }>>([])
   const [currentCompanyReviewStatus, setCurrentCompanyReviewStatus] = useState<'vetted' | 'unreviewed' | 'excluded' | null>(null)
@@ -138,18 +138,8 @@ export default function ProfilePage() {
           .maybeSingle()
         setBucket(bucketData as BucketAssignment | null)
 
-        // Fetch skills from the latest profile snapshot's canonical_json
-        const { data: snapData } = await supabase
-          .from('profile_snapshots')
-          .select('canonical_json')
-          .eq('linkedin_url', p.linkedin_url)
-          .order('scraped_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-        const skills = (snapData?.canonical_json as Record<string, unknown>)?.skills_tags
-        if (Array.isArray(skills) && skills.length > 0) {
-          setSkillsTags(skills as string[])
-        }
+        // Person-level skills now come from people.skills_matched (migration 098,
+        // Piece B) — the old profile_snapshots.canonical_json read is superseded.
       } catch (err) {
         console.error('Error fetching person:', err)
       } finally {
@@ -690,7 +680,7 @@ export default function ProfilePage() {
                         </div>
                         {fn && fn.length > 0 && <div><span className="text-tertiary">function: </span><span className="text-foreground">{fn.map(clean).join(', ')}</span></div>}
                         {sp && sp.length > 0 && <div><span className="text-tertiary">specialty: </span><span className="text-foreground">{sp.map(clean).join(', ')}</span></div>}
-                        {inh && inh.length > 0 && <div><span className="text-tertiary">inherited: </span><span className="text-tertiary italic" title="Deterministic career fallback — inferred from prior roles (lower confidence)">{inh.map(clean).join(', ')} ⓘ</span></div>}
+                        {inh && inh.length > 0 && <div><span className="text-tertiary">inherited: </span><span className="text-tertiary italic">{inh.map(clean).join(', ')} <InfoTip text="Inferred from prior roles — no specialty evidence in this role." /></span></div>}
                         {sk && sk.length > 0 && <div><span className="text-tertiary">skills: </span><span className="text-foreground">{sk.map(clean).join(', ')}</span></div>}
                         {tn && <div><span className="text-tertiary">title: </span><span className="text-foreground">{tn}</span></div>}
                         {founding && <div style={{ color: 'var(--accent-strong)' }}>★ founding / early engineer</div>}
@@ -703,21 +693,25 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* Skills & Technologies */}
-        {skillsTags.length > 0 && (
+        {/* Profile skills — person-level, provenance tier: mentioned-on-profile.
+            Matched canonical skills from the candidate's LinkedIn skills section
+            (people.skills_matched, migration 098). BADGED, never silent — weakest
+            of evidenced-in-role / inherited-from-career / mentioned-on-profile. */}
+        {(person.skills_matched?.length ?? 0) > 0 && (
           <div className="mb-8">
             <button
               onClick={() => setSkillsOpen(o => !o)}
               className="flex items-center gap-2 text-lg font-semibold hover:text-muted-foreground"
             >
               <span className="inline-block w-3 text-sm">{skillsOpen ? '▾' : '▸'}</span>
-              Skills & Technologies
-              <span className="text-tertiary font-normal text-sm">({skillsTags.length})</span>
+              Profile Skills
+              <span className="text-tertiary font-normal text-sm">({person.skills_matched!.length})</span>
+              <span className="text-tertiary font-normal text-sm" onClick={e => e.stopPropagation()}><InfoTip text="From the candidate's LinkedIn skills section — not tied to a specific role. Weaker evidence than skills named in a role description." /></span>
             </button>
             {skillsOpen && (
               <div className="flex flex-wrap gap-1.5 mt-3">
-                {skillsTags.map((skill, i) => (
-                  <span key={i} className="px-2 py-0.5 bg-muted text-muted-foreground rounded text-xs border border-border">
+                {person.skills_matched!.map((skill, i) => (
+                  <span key={i} className="px-2 py-0.5 bg-muted text-tertiary italic rounded text-xs border border-border">
                     {skill}
                   </span>
                 ))}

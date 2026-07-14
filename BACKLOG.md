@@ -32,12 +32,37 @@ These were intentionally cut from PR A scope. All have hooks in the already-ship
 
 ---
 
+## Search Axes & Enrichment
+
+### Company-derived environment / regulatory context attribution (five-axis "industry context" / axis 4 extension)
+- **What:** Attach company-derived ENVIRONMENT and REGULATORY context to candidates on the five-axis "industry context" axis (axis 4), derived per-experience with a candidate-level rollup ("ever worked in fintech" / "currently in a defense environment"). Two flavors: (1) environment/domain — fintech, blockchain/web3, defense, climate — partially exists today via `companies.domain_tags[]` / `industries[]`; (2) regulatory context — "OCC-regulated," "FDIC-insured," "federally chartered," FINRA/SEC/ITAR/HIPAA-subject — has NO home today. Powerful, novel filter ("find people who worked in an OCC-regulated environment") that no sourcing platform offers.
+- **Status:** deferred; V2. Explicitly SEPARATE from `skills_dictionary` — environment/regulatory context is NOT a person competency. A software engineer at an OCC-regulated bank did no compliance work; tagging them "OCC" as a *skill* asserts a false competency. Governing line: **skills = DID-IT** (competency the person has), **context = WAS-THERE** (true of their employer). The same term can live on both axes with different meaning (e.g. "HIPAA compliance" competency vs "HIPAA-regulated environment"). Merging them corrupts search correctness.
+- **Trigger:** after the skills-dictionary expansion + non-eng taxonomy expansion land; when network-connection / CSV enrichment needs environment-based search across non-eng functions.
+- **Scope outline:**
+  - **Company side:** extend the company taxonomy with a regulatory attribute (`companies.regulated_by[]` / charter type, or a `company_regulatory_tags` table) alongside the existing `domain_tags[]` / `industries[]`.
+  - **Association side:** flow company attributes to candidates per-experience on axis 4 with a `company_derived` provenance tier + a confidence qualifier ("regulated environment — not guaranteed direct regulator contact"). Mirrors the existing provenance pattern (inferred / matched / inherited).
+  - **Unknowns:** optional LLM + web-search enrichment for companies whose regulatory/environment attributes aren't known (batch or real-time during a sourcing session).
+  - A fenced "environment/regulatory vocabulary" staging file may be pre-drafted by the skills session as a zero-cost byproduct (never touches the skills CSVs).
+
+---
+
 ## Data Quality
 
 ### Comprehensive `specialty_normalized` dictionary
 - **Status:** current count is 25 patterns; target 80–100 for engineering alone
 - **Trigger:** when normalized-specialty matching becomes the dominant search vector
 - **Scope:** target depth — engineering (backend sub-specialties like payments/auth/data-pipeline, ML sub-specialties like NLP/vision/rec-sys, infra sub-specialties like kubernetes/observability/databases), then equivalent depth for product, design, sales, marketing, operations, recruiting, finance, data/analytics
+
+### `is_current_founder` default-view exclusion is too blunt (bug)
+- **Status:** surfaced 2026-07-14 (Step 0 churn review — Alen Rakipovic). RECORD-ONLY; do not act now (post-Step-0 work).
+- **Problem:** the default candidate view removes anyone with `is_current_founder=true` ([app/components/ProfileTable.tsx](app/components/ProfileTable.tsx) `filteredPeople`, ~L773). But `is_current_founder` fires on ANY concurrent founder-titled role, including low-signal side/advisory gigs. Alen Rakipovic — Principal Engineer, current Software Engineer at Stripe — is removed from search because he holds a part-time/contract "Founder" role at Pala Science & Tech ("finance and tech advisory for early-stage startups," not a real venture). His five-axis classification handled the low-signal roles CORRECTLY (Pala/Rohati/XA → unknown, headline function = software_engineering); the founder-exclusion flag is the SEPARATE mechanism at fault.
+- **Fix direction (later):** make current-founder detection distinguish a genuine full-time startup from a side/advisory gig (e.g. employment_type, company-quality/real-venture gate, FT-vs-non-FT signal) rather than removing the exclusion. The "active founders aren't recruitable" rule is still right for real founders.
+- **Relates to:** the existing include-current-founders toggle (BUGS.md — kebab/recruiter-view), and the connection-lifecycle / `record_kind` investigation. Founder-as-a-side-gig detection likely shares logic with `lib/tenure/helpers.ts` soft-non-FT founder handling.
+
+### "Founder" seniority option — verify and reconcile
+- **Status:** surfaced 2026-07-14. RECORD-ONLY; **report findings before any change — do not remove anything.**
+- **Problem:** Matt believed "Founder" was removed as a seniority level, but it still appears in the seniority filter and returns 13 candidates. Note the seniority enum DOES still contain `founder` (rank 8 post-migration 059) — it was never dropped from the enum; whether it was meant to be removed as a user-facing FILTER OPTION is the open question.
+- **Task (later):** determine whether the removal (a) shipped and regressed, (b) was never implemented, or (c) was never actually decided. Check the seniority filter option list in [app/components/FilterSidebar.tsx](app/components/FilterSidebar.tsx) / ProfileTable, the enum/dictionary state (migrations 059/067), and any prior decision in CHANGELOG/CLAUDE.md. Report before touching anything.
 
 ### Dangling specialty refs in `title_dictionary` (non-engineering)
 - **Status:** surfaced during sub-PR 2b prod verification (2026-06-21). 3 rows reference specialties absent from `specialty_dictionary`: `Data Scientist` + `Senior Data Scientist` → `analytics` (fn=data_science); `Account Executive` → `enterprise_sales` (fn=sales). Pre-existing — unrelated to the five-axis rebuild (none of these were in 072's delete set). Harmless today (title_dictionary specialty hints are advisory; these are non-engineering / out of V1 scope).
@@ -184,6 +209,11 @@ Known tagger limitations from the round-3/round-4 eval. Not severe enough to blo
 ## Network Connections (warm-intro module)
 
 PR 1 (the pipeline) shipped 2026-06-24 via PR [#10](https://github.com/mktahr/vetted/pull/10). These are the deferred follow-ups.
+
+### Connection lifecycle / classification-budget investigation (scheduled: Step 1 of the 2026-07-13 sequence)
+- **Status:** investigation scheduled — do NOT act before Step 1. Boundary facts verified 2026-07-13 (Claude + Codex, code-level trace): raw CSV upload NEVER touches `people` ([lib/network/ingest.ts](lib/network/ingest.ts) writes connections-side tables only); connections enter `people` ONLY via explicit admin projection (`POST /api/network/project`, enriched-gated — `projectConnection` refuses new persons without a fresh Crust blob) or promote (projects first); every `writeCanonicalProfile` ends with `bump_classification_generation` → `classification_status='pending'` → daily cron classifies; `classifyPending` has NO `record_kind` filter ([lib/candidates/classifier/index.ts](lib/candidates/classifier/index.ts) ~L256).
+- **The open question:** projected-but-NOT-promoted connections (`record_kind='network_connection'`) get classified by the cron. Matt's intended design: connections are admin-gated — a connection should NOT consume classifier budget before the explicit commit-to-candidate action. Whether projection counts as that commit (it makes them searchable in connections scope) or is premature spend is UNRESOLVED. (As of 2026-07-13 zero `network_connection` rows exist in `people`, so nothing leaks today.)
+- **Step 1 scope:** map the full connection lifecycle — every state a connection can occupy, what each admin action (upload / review-titles / enrich / project / promote) actually does, and the exact point classification fires — laid against the intended "admin hand-picks searchable candidates" design. Flag any path where classification fires before the explicit commit as a budget-leak candidate.
 
 ### Per-connection review actions on the connections table
 - **Status:** PR 1 puts web-check / Keep-Drop only in the MAYBE review queue; the connections table shows buckets read-only.
@@ -333,7 +363,21 @@ PR 1 (the pipeline) shipped 2026-06-24 via PR [#10](https://github.com/mktahr/ve
 
 ---
 
+## Chrome Extension (vetted-extension repo)
+
+### Chrome extension architecture review + Codex pass
+- **Status:** logged 2026-07-08 during taxonomy sub-PR 4 planning. Explicitly NOT part of sub-PR 4 — the sub-PR 4 extension fix (Piece A) stays surgical: one active `profileSkills` Voyager fetch added, existing extraction code unchanged, manual browser-verification gate.
+- **Trigger:** AFTER taxonomy sub-PR 4 ships. Schedule as its own workstream with its own review.
+- **Scope:** `vetted-extension` hasn't been reviewed or Codex-audited in ~a month. It's working, but it's ingest-critical and operates outside the vetted repo's CLAUDE.md guardrails (no session protocols, no pressure-testing discipline, no docs). Full architecture review + Codex adversarial pass: fetch-interceptor + active-Voyager-fetch design, payload parsing robustness against LinkedIn UI/API drift, error/version reporting back to the ingest route, repo hygiene (docs, build, uncommitted files).
+
+---
+
 ## Five-Axis Classification
+
+### Freeze-don't-recompute — standing principle (DECIDED 2026-07-13) + reclassify-trigger audit
+- **Principle (adopted, not up for re-decision):** a person's classification is only re-run when the vocab hash genuinely forks or their underlying data materially changes — NEVER as a casual side effect of routine re-ingest/re-enrich. Classification output is frozen work product; recomputation is an explicit, justified event. (Step 0's 2026-07-13 reclassify is consistent — triggered by a genuine hash fork, `33c400c8` → `83e9c32a`.)
+- **Deferred audit task:** enumerate every code path that sets `classification_status='pending'` or calls `bump_classification_generation` (known today: ingest experience-rewrite in `writeCanonicalProfile`, manual PATCH on [app/api/people/[id]/route.ts](app/api/people/[id]/route.ts), connection projection/promote via `writeCanonicalProfile`) and confirm none fire incidentally — i.e. each corresponds to a genuine data change or an explicit admin action. Flag any that don't.
+- **Trigger:** before Phase 2 (taxonomy expansion) at the latest — the expansion arc's full re-classify must be the LAST mass recompute, not one of an unnoticed series.
 
 ### LinkedIn skills-section capture + deterministic person-level skill matching
 - **What:** two-part track surfaced 2026-07-07/08 (Pavlo/Aadhya/Guy skills investigations). (1) **Extension fix:** the Chrome extension scrapes `skills_tags: []` for profiles whose LinkedIn skills section is populated (Pavlo's backend/distributed list, Aadhya's Python/PyTorch/React Native list, Guy's CMake never entered the DB) — fix/verify the skills scrape in `vetted-extension` (`src/content.ts`). (2) **Deterministic matcher:** alias-match captured `skills_tags` against `skills_dictionary` (canonical_name + aliases) into a person-level skills view. Zero LLM cost, pure code. Do NOT feed candidate-level skills into the per-role classifier (role-attribution would be guessing — Codex-concurred 2026-07-07).

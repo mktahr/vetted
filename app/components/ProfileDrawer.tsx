@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { Person, CandidateBucket } from '../types'
+import InfoTip from './InfoTip'
 import CompanyLogo, { guessDomain, guessSchoolDomain } from './CompanyLogo'
 import { formatSeniorityLabel } from '@/lib/normalize/seniority'
 import { currentRoleClassification, formatAxisLabel } from '@/lib/classification/current-role'
@@ -247,8 +248,8 @@ export default function ProfileDrawer({ person, experiences, education, signals,
                   <><span style={{ color: 'var(--fg-tertiary)' }}>Specialty</span><span style={{ color: 'var(--fg-primary)' }}>
                     {cls.specs.map(formatAxisLabel).join(', ')}
                     {cls.inheritedSpecs.length > 0 && (
-                      <span style={{ color: 'var(--fg-tertiary)', fontStyle: 'italic' }} title="Deterministic career fallback — inferred from prior roles (lower confidence)">
-                        {cls.specs.length > 0 ? ', ' : ''}{cls.inheritedSpecs.map(formatAxisLabel).join(', ')} ⓘ
+                      <span style={{ color: 'var(--fg-tertiary)', fontStyle: 'italic' }}>
+                        {cls.specs.length > 0 ? ', ' : ''}{cls.inheritedSpecs.map(formatAxisLabel).join(', ')} <InfoTip text="Inferred from prior roles — no specialty evidence in the current role." />
                       </span>
                     )}
                   </span></>
@@ -383,6 +384,30 @@ export default function ProfileDrawer({ person, experiences, education, signals,
             )
           })()}
 
+          {/* Profile Skills — person-level scraped skills (migration 098, Piece B).
+              Provenance tier: mentioned-on-profile — weakest of the three tiers
+              (evidenced-in-role / inherited-from-career / mentioned-on-profile).
+              Rendered muted + italic + ⓘ, same honesty pattern as inherited specialties. */}
+          {(person.skills_matched?.length ?? 0) > 0 && (
+            <div style={{ marginTop: 24 }}>
+              <div style={{ fontSize: 'var(--fs-11)', fontWeight: 'var(--fw-medium)', color: 'var(--fg-tertiary)', textTransform: 'uppercase', letterSpacing: 'var(--tr-eyebrow)', marginBottom: 12, fontFamily: 'var(--font-sans)' }}>
+                Profile Skills{' '}
+                <InfoTip text="From the candidate's LinkedIn skills section — not tied to a specific role. Weaker evidence than skills named in a role description." />
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {person.skills_matched!.map((skill, i) => (
+                  <span
+                    key={i}
+                    title="Mentioned on profile (LinkedIn skills section)"
+                    style={{ padding: '1px 6px', fontSize: 'var(--fs-11)', background: 'var(--bg-surface-raised)', color: 'var(--fg-tertiary)', fontStyle: 'italic', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-chip)', fontFamily: 'var(--font-sans)', lineHeight: '1.4' }}
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Work History */}
           {(() => {
             // All experiences in chronological order (most recent first)
@@ -435,7 +460,7 @@ export default function ProfileDrawer({ person, experiences, education, signals,
                               <div style={{ fontSize: '10px', letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: 600, color: 'var(--accent-strong)' }}>AI Classification{ver ? ` · ${ver}` : ''}</div>
                               {fn && fn.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>function: </span><span style={{ color: 'var(--fg-primary)' }}>{fn.map(clean).join(', ')}</span></div>}
                               {sp && sp.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>specialty: </span><span style={{ color: 'var(--fg-primary)' }}>{sp.map(clean).join(', ')}</span></div>}
-                              {inh && inh.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>inherited: </span><span style={{ color: 'var(--fg-tertiary)', fontStyle: 'italic' }} title="Deterministic career fallback — inferred from prior roles (lower confidence)">{inh.map(clean).join(', ')} ⓘ</span></div>}
+                              {inh && inh.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>inherited: </span><span style={{ color: 'var(--fg-tertiary)', fontStyle: 'italic' }}>{inh.map(clean).join(', ')} <InfoTip text="Inferred from prior roles — no specialty evidence in this role." /></span></div>}
                               {sk && sk.length > 0 && <div><span style={{ color: 'var(--fg-tertiary)' }}>skills: </span><span style={{ color: 'var(--fg-primary)' }}>{sk.map(clean).join(', ')}</span></div>}
                               {tn && <div><span style={{ color: 'var(--fg-tertiary)' }}>title: </span><span style={{ color: 'var(--fg-primary)' }}>{tn}</span></div>}
                             </div>

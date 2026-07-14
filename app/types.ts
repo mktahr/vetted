@@ -86,6 +86,13 @@ export interface Person {
   is_former_founder: boolean
   is_vc_backed_founder: boolean
   is_bootstrapped_founder: boolean
+  // Person-level scraped skills (taxonomy sub-PR 4 Piece B, migration 098).
+  // Provenance tier: mentioned-on-profile — weakest of evidenced-in-role /
+  // inherited-from-career / mentioned-on-profile. Badged in UI, never silent.
+  skills_scraped_raw?: string[] | null
+  skills_matched?: string[] | null
+  skills_matched_at?: string | null
+  skills_scraped_source?: string | null
   narrative_summary: string | null
   narrative_summary_generated_at: string | null
   clearance_level: ClearanceLevel

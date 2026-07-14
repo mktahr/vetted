@@ -55,6 +55,12 @@ import {
   writeBucketAssignment,
 } from '@/lib/scoring';
 import { processCandidateSignals } from '@/lib/signals';
+import {
+  buildSkillLookup,
+  matchSkillTags,
+  normalizeSkillToken,
+  type SkillDictEntry,
+} from '@/lib/skills/match';
 
 // ─── Shared ingest types (authoritative — re-exported by the route) ────────────
 
@@ -443,6 +449,54 @@ export async function writeCanonicalProfile(
       return { ok: false, reason: 'person_upsert_failed' };
     }
     personId = person.person_id;
+  }
+
+  // ── Step 4.5: Person-level scraped skills (taxonomy sub-PR 4, Piece B) ───
+  // Match canonical.skills_tags (LinkedIn skills section — discrete claimed-
+  // competency tags) against skills_dictionary via the deterministic whole-tag
+  // matcher. Person-level ONLY: never feeds the per-role classifier, never
+  // touches classification lifecycle columns, not read by scoring.
+  // NO-WIPE RULE: null/empty skills_tags leaves existing columns untouched —
+  // Crust v2 person-search payloads always carry skills_tags:null, and a bulk
+  // re-import must not erase extension-scraped skills. Non-empty payloads win
+  // as the latest snapshot. Failure here is non-fatal to the ingest.
+  if (Array.isArray(canonical.skills_tags) && canonical.skills_tags.length > 0) {
+    try {
+      const { data: skillRows, error: skillDictError } = await supabase
+        .from('skills_dictionary')
+        .select('canonical_name, aliases')
+        .eq('is_active', true);
+      if (skillDictError) throw new Error(skillDictError.message);
+      const lookup = buildSkillLookup((skillRows ?? []) as SkillDictEntry[]);
+      if (lookup.collisions.length > 0) {
+        // Should be prevented by the sync-reference gate; direct-DB drift only.
+        console.error('[ingest] skills_dictionary token collisions (fail-safe dropped):', lookup.collisions.join(', '));
+      }
+      const rawSeen = new Set<string>();
+      const rawDeduped: string[] = [];
+      for (const t of canonical.skills_tags) {
+        if (typeof t !== 'string') continue;
+        const key = normalizeSkillToken(t);
+        if (!key || rawSeen.has(key)) continue;
+        rawSeen.add(key);
+        rawDeduped.push(t.trim());
+      }
+      const { matched } = matchSkillTags(rawDeduped, lookup);
+      const { error: skillsWriteError } = await supabase
+        .from('people')
+        .update({
+          skills_scraped_raw: rawDeduped,
+          skills_matched: matched,
+          skills_matched_at: new Date().toISOString(),
+          skills_scraped_source: source,
+        })
+        .eq('person_id', personId);
+      if (skillsWriteError) {
+        console.error('[ingest] person-level skills write failed (non-fatal):', skillsWriteError.message);
+      }
+    } catch (err) {
+      console.error('[ingest] person-level skills matching failed (non-fatal):', err instanceof Error ? err.message : err);
+    }
   }
 
   // ── Classification invalidation (BEFORE the experience rewrite) ──────────
