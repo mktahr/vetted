@@ -326,6 +326,13 @@ PR 1 (the pipeline) shipped 2026-06-24 via PR [#10](https://github.com/mktahr/ve
 
 ## Pipelines
 
+### Crust API migration — ⚠ HARD DEADLINE 2026-09-30
+- **Status:** RECORD-ONLY (logged 2026-07-30); do not start — sequencing vs Piece A to be decided after the Piece A capture.
+- **What:** Crust is deprecating ALL `/screener/*` endpoints (company/people/post search, enrich, autocomplete) on **2026-09-30 — hard shutdown**. A migration guide exists (old→new endpoint map). New API: enrichment **3→1 credit**, search 0.03/result, ~2× faster, plus new-only features — **normalized job titles**, keyword/semantic search, batch APIs, rate-limit headers.
+- **Why it matters beyond maintenance:** material cost drop (enrich 3→1); normalized job titles may help the classifier/title axis; only path to future Crust features.
+- **Blast radius:** the ingest/enrich path — `projectConnection`'s enrich-blob gate ([lib/network/project-connection.ts](lib/network/project-connection.ts)), `write-canonical` re-ingest, plus any surviving legacy `/screener/*` callers ([lib/ingest/crust-api.ts](lib/ingest/crust-api.ts), [lib/ingest/mappers/crust.ts](lib/ingest/mappers/crust.ts) are documented as legacy — audit whether anything live still hits `/screener/*` vs the v2 paths). **Adjacent to Piece A's ingest work — the sequencing between the two needs a deliberate decision.**
+- **Trigger:** sequence decision after the Piece A capture; must land before 2026-09-30 regardless.
+
 ### Early-stage startup monitoring
 - **Status:** concept; not started
 - **Trigger:** when company-set freshness becomes a constraint
