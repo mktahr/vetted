@@ -54,3 +54,5 @@ reference/eval/*.csv
 reference/eval/*.log
 reference/eval/*.txt
 reference/eval/*.md
+# Browser captures (HAR files contain live session cookies — must NEVER enter git)
+reference/eval/*.har
