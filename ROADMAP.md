@@ -14,7 +14,7 @@ Active work tracking. For deferred features see [BACKLOG.md](BACKLOG.md). For sm
 
 ## Next Up (sequenced toward Aug 28 launch)
 
-**⚠ Hard external deadline → Crust API migration by 2026-09-30.** Crust shuts down all `/screener/*` endpoints on 2026-09-30. Full entry in [BACKLOG.md](BACKLOG.md) "Pipelines" (cost drop 3→1 credit on enrich, normalized job titles, blast radius = ingest/enrich path, adjacent to Piece A). Record-only for now — sequencing vs Piece A decided after the Piece A capture.
+**Deadline task (small) → Crust legacy dead-code cleanup by 2026-09-30.** Audit verdict (2026-07-31, accepted): live code is ALREADY on the surviving 2025-11-01 API — the `/screener/*` shutdown touches only dead code with zero live callers. ~Half-day cleanup, zero blast radius, **no Piece A dependency** — schedule anytime before 09-30. Full scope + the split-out opt-in "Crust enhancements" item (JTN/batch/contact-enrich) in [BACKLOG.md](BACKLOG.md) "Pipelines". **Active track = Piece A** (browser capture pending with Matt).
 
 **Active thread → Network Connections PR 2.** PR 1 pipeline + 2a drawer shipped 2026-06-24 ([#10](https://github.com/mktahr/vetted/pull/10), [#13](https://github.com/mktahr/vetted/pull/13)); PR 2b (enriched-connection search integration) merged 2026-06-29 ([#14](https://github.com/mktahr/vetted/pull/14)). PR 2 siblings:
 1. **Gated promotion** — ✅ built on `network-connections-gated-promotion` (migration 082; vetted-company auto-rule + manual override; safe demote guard). In PR / preview verification.

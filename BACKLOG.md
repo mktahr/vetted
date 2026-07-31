@@ -326,12 +326,17 @@ PR 1 (the pipeline) shipped 2026-06-24 via PR [#10](https://github.com/mktahr/ve
 
 ## Pipelines
 
-### Crust API migration — ⚠ HARD DEADLINE 2026-09-30
-- **Status:** RECORD-ONLY (logged 2026-07-30); do not start — sequencing vs Piece A to be decided after the Piece A capture.
-- **What:** Crust is deprecating ALL `/screener/*` endpoints (company/people/post search, enrich, autocomplete) on **2026-09-30 — hard shutdown**. A migration guide exists (old→new endpoint map). New API: enrichment **3→1 credit**, search 0.03/result, ~2× faster, plus new-only features — **normalized job titles**, keyword/semantic search, batch APIs, rate-limit headers.
-- **Why it matters beyond maintenance:** material cost drop (enrich 3→1); normalized job titles may help the classifier/title axis; only path to future Crust features.
-- **Blast radius:** the ingest/enrich path — `projectConnection`'s enrich-blob gate ([lib/network/project-connection.ts](lib/network/project-connection.ts)), `write-canonical` re-ingest, plus any surviving legacy `/screener/*` callers ([lib/ingest/crust-api.ts](lib/ingest/crust-api.ts), [lib/ingest/mappers/crust.ts](lib/ingest/mappers/crust.ts) are documented as legacy — audit whether anything live still hits `/screener/*` vs the v2 paths). **Adjacent to Piece A's ingest work — the sequencing between the two needs a deliberate decision.**
-- **Trigger:** sequence decision after the Piece A capture; must land before 2026-09-30 regardless.
+### Crust legacy dead-code cleanup — deadline 2026-09-30, ~half-day, zero blast radius
+- **Status:** scoped + verdict accepted 2026-07-31 (audit by Claude, confirmed against Crust docs + deprecation email — email names ONLY `/screener/*`). Schedule anytime before 2026-09-30. **No Piece A dependency — zero file overlap.**
+- **Confirmed scope (this is a cleanup, NOT a migration):** all live Crust callers are ALREADY on the surviving 2025-11-01 API with compliant `Bearer` + `x-api-version` headers — `lib/crust/api.ts` (`/person/search|enrich` + autocomplete) and all six direct company routes (`/company/identify|enrich` + autocomplete). The enrich→ingest→write-canonical path and `projectConnection`'s enrich-blob gate match the current documented schemas exactly — zero changes forced. The ONLY `/screener/*` reference in the codebase is dead code with zero live callers.
+- **The half-day task:** retire `fetchCrustPage` + `CRUST_SEARCH_URL` ([lib/ingest/crust-api.ts](lib/ingest/crust-api.ts) — note its `Token` auth = old scheme, proof of generation); retire the unused v1 mapper ([lib/ingest/mappers/crust.ts](lib/ingest/mappers/crust.ts) — barrel-exported, no live consumer); relocate `postIngest` (posts to OUR `/api/ingest`, not Crust — the only live import from crust-api.ts) out of the misleadingly-named file; sweep the "kept for reference" legacy descriptions in CLAUDE.md. Verify with build + an import/enrich smoke test.
+
+### Crust enhancements (opt-in, unscheduled — NOT deadline work)
+- **Status:** split from the migration entry 2026-07-31. New-only API capabilities we can adopt when useful; nothing breaks if we never do.
+- **Normalized job titles (JTN, beta)** — `basic_profile.normalized_title` `{department, sub_department, matched_title, similarity, confident}` now ships passively on every person record with `basic_profile`; raw title fields unchanged, our mappers ignore the new key. **Already accumulating for free** in the blobs we archive (`raw_ingest_events` payloads, `network_enriched_profiles.enriched_profile`) — mineable retroactively. ⚠ **The one piece with ingest/mapper adjacency:** adopting it into the title axis touches the crust-v2/enrich mappers — sequence against taxonomy work (title-axis / sub-PR 4 aggregation), not on its own.
+- **Batch APIs** (`/batch/person|company/search|enrich`, batch identify) — same per-unit pricing as singles; useful when import volume outgrows the streaming NDJSON flow.
+- **Contact enrich** (`/person/contact/enrich`) — new capability, no current use case; revisit with GTM/outreach features.
+- Current pricing (confirmed 2026-07-31): person enrich base 1 credit (1–7 by field group), search 0.03/result, identify + autocomplete free.
 
 ### Early-stage startup monitoring
 - **Status:** concept; not started
