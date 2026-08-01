@@ -35,8 +35,11 @@ export default function SendToAtsButton({ selectedIds }: { selectedIds: string[]
     return () => document.removeEventListener('mousedown', onDown)
   }, [open])
 
-  // A result message describes a PAST selection — drop it when the selection changes
-  useEffect(() => { setMessage(null) }, [selectedIds.length])
+  // A result message describes a PAST selection — drop it when the selection
+  // changes (keyed on contents, not count: swapping one person for another
+  // must also clear it)
+  const selectionKey = selectedIds.join(',')
+  useEffect(() => { setMessage(null) }, [selectionKey])
 
   async function toggleOpen() {
     setMessage(null)
