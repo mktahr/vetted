@@ -1275,6 +1275,8 @@ Required in `.env.local` and on Vercel:
 | `INGEST_SECRET` | `/api/ingest` auth + `/api/admin/import` forwarding |
 | `CRUSTDATA_API_KEY` | `/api/admin/import` + `/api/admin/import/preview` (Person Search v2, Bearer auth) |
 | `CRUST_DATA_API_KEY` | Legacy — old `/screener/persondb/search` integration (unused by live flow) |
+| `ATS_IMPORT_URL` | `/api/ats/*` routes — base URL of the vetted-ats app ("Send to ATS", 2026-08-01) |
+| `ATS_INGEST_SECRET` | `/api/ats/*` routes — the ATS's machine-caller secret (NOT Vetted's own `INGEST_SECRET`; server-side only) |
 
 ---
 

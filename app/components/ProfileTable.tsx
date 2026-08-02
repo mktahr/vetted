@@ -10,6 +10,7 @@ import { Person, SortField, SortDirection, CandidateBucket } from '../types'
 import ProfileDrawer, { DrawerExperience, DrawerEducation, DrawerSignal } from './ProfileDrawer'
 import { currentRoleClassification, formatAxisLabel } from '@/lib/classification/current-role'
 import AddToListMenu from './AddToListMenu'
+import SendToAtsButton from './SendToAtsButton'
 import InfoTip from './InfoTip'
 import TopNav from './TopNav'
 import { MultiSelectOption } from './MultiSelect'
@@ -1271,6 +1272,8 @@ export default function ProfileTable() {
           {selectedIds.size > 0 && (
             <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: 'var(--red-950)', border: '1px solid var(--red-800)', borderRadius: 'var(--r-card)' }}>
               <span style={{ fontSize: 'var(--fs-13)', color: 'var(--red-400)', fontWeight: 'var(--fw-medium)' }}>{selectedIds.size} selected</span>
+              {/* Only VISIBLE selected rows — filters applied after selecting must not smuggle hidden people into a send (codex finding) */}
+              <SendToAtsButton selectedIds={filteredPeople.filter(p => selectedIds.has(p.person_id)).map(p => p.person_id)} />
               <button onClick={handleBulkDelete} onBlur={() => setBulkDeleteConfirm(false)} disabled={bulkDeleting}
                 style={{ padding: '4px 12px', fontSize: 'var(--fs-13)', borderRadius: 'var(--r-button)', cursor: 'pointer', border: 'none',
                   background: bulkDeleteConfirm ? 'var(--red-600)' : 'transparent', color: bulkDeleteConfirm ? 'white' : 'var(--red-400)',
