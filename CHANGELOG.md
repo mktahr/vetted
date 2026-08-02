@@ -6,6 +6,26 @@ Updated automatically by the End-of-Session Protocol when Matt types "wrap sessi
 
 ---
 
+## 2026-08-02 — Piece A cancelled (proven), Crust "migration" downgraded to cleanup, Send-to-ATS sender shipped
+
+**Shipped**
+- **Send-to-ATS (Vetted sender side) — SHIPPED to main** (`4290314`, merge of the now-deleted `send-to-ats` branch). Bulk "Send to ATS" from the candidate table: reverse serializer (`lib/ats/canonical-from-person.ts`), two server routes (`app/api/ats/export`, `app/api/ats/jobs`), bulk-bar button + job picker (`app/components/SendToAtsButton.tsx`), BUGS.md no-auth accepted-risk entry. **Matt verified live end-to-end** — real candidates sent, landed in the ATS "Sourced" column.
+- **Step 0 closed** (from the 07-14 arc): Piece B person-skills + vocab-fork reconcile merged as PR #17 (`630c956`); all 129 candidates uniform at hash `83e9c32a`.
+
+**Decisions**
+- **Piece A (role-attributed skills) CANCELLED — with proof.** Role-attribution does not exist from any available source: Crust enrich (~99% of profiles) returns `skills.professional_network_skills` as a flat `string[]` with zero position linkage (verified 0/100 positions carry a skill field); Crust search returns no skills; LinkedIn voyager returns a flat name+index list (`positionUrnCount: 0`); the legacy association endpoints are 410 Gone; the per-role attributions on LinkedIn's `/details/skills/` page are SDUI display-layer only. **Migration 099 + the no-wipe ingest redesign are CANCELLED** — no data to populate them. Skills are profile-level-only, permanently; Piece B already captures that shape. Full closure logged in BACKLOG so this is never reinvestigated.
+- **Search-path skills gap = intentional no-fix.** `crust-v2` (search ingest) returns no skills; closing it needs an extra ~1-credit enrich call per person for marginal coverage gain. Not worth it. Logged in BACKLOG.
+- **Crust "API migration" is really a ~half-day dead-code cleanup**, not a pipeline rework. All live callers already on the 2025-11-01 API with compliant headers; the only `/screener/*` reference is dead code (zero live callers). Deadline 2026-09-30, no urgency. Opt-in "Crust enhancements" (JTN/batch/contact-enrich) split into a separate unscheduled backlog item.
+
+**Where we left off**
+- `main` = `4290314`, clean, in sync. Send-to-ATS sender shipped + live-verified. No branches in flight (`send-to-ats` merged and deleted).
+
+**Open questions** — none blocking.
+
+**Watch-outs**
+- Send-to-ATS spans TWO repos: `vetted` (sender, this repo) + `vetted-ats` (receiver, separate session). **Independent at deploy time — the only coupling is a shared env secret.** The receiver side shipped separately in the vetted-ats repo. Don't assume a change to one requires the other.
+- This repo can be acted on by a second concurrent session (the vetted-ats work operated on shared state today — a merge + branch delete appeared mid-session). Always `git fetch` and re-verify refs before reporting branch state.
+
 ## 2026-07-14 — Step 0 executed: vocab-fork reconcile (33c400c8 → 83e9c32a) + full reclassify + re-score
 
 **Shipped**
