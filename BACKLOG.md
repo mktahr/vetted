@@ -400,10 +400,11 @@ PR 1 (the pipeline) shipped 2026-06-24 via PR [#10](https://github.com/mktahr/ve
   - **Root cause:** LinkedIn stopped exposing skill↔position associations anywhere a data API can reach. This is a platform reality, not a mapper gap — our `crust-enrich.ts` already reads the complete flat list Crust sends; nothing is being discarded.
 - **The one real residual (separate item below):** the search-ingest path captures zero skills today (only enrich does). That's a profile-level COVERAGE gap, not a role-attribution question — see "Skills coverage on the search-ingest path".
 
-### Skills coverage on the search-ingest path (crust-v2 returns no skills)
-- **What:** `crust-v2.ts` (the person-SEARCH ingest path) sets `skills_tags: null` — candidates ingested via `/admin/import` search get no skills until/unless separately enriched. Only the `/person/enrich` path populates skills. This is the one legitimate coverage improvement surfaced by the Piece A investigation.
-- **Status:** surfaced 2026-08-02; coverage/cost tradeoff under evaluation before Matt decides build-now vs log. Fixing it likely requires an extra Crust enrich call per search-ingested person (credits) — NOT free, since search genuinely doesn't return skills. Quantify search-path share × per-person enrich cost before committing.
-- **Trigger:** Matt's decision pending the coverage/cost readout.
+### Skills coverage on the search-ingest path (crust-v2 returns no skills) — KNOWN MINOR GAP, INTENTIONALLY NOT FIXING
+- **Decision (2026-08-02, Matt):** not worth building. Cost outweighs coverage benefit — almost all candidates arrive via the enrich path and already carry skills; the search-only slice is marginal, and closing it would spend an extra Crust credit per person for negligible coverage gain. Leave as-is.
+- **What the gap is:** `crust-v2.ts` (the person-SEARCH ingest path) sets `skills_tags: null` — candidates ingested purely via `/admin/import` search get no skills. Only the `/person/enrich` path populates skills (search genuinely returns no skills field — proven, not a mapper omission).
+- **Why not fixable cheaply:** skills exist only in the enrich response, so giving a search-only person skills requires a separate `/person/enrich` call (~+1 credit/person vs ~0.03/search-result). No free Crust route. (The Chrome extension also yields flat skills at zero Crust cost for scraped profiles.)
+- **Revisit only if:** the acquisition mix shifts materially toward search-only ingest AND skills-axis search becomes a live ranking priority. Otherwise leave closed.
 
 ### DB-level atomic job claim for classify-pending (upgrade from app-layer lease)
 - **What:** upgrade the `classify-pending` job claim from the app-layer expiring lease to a **database-level claim** — a Postgres function using row-level locking (`SELECT … FOR UPDATE SKIP LOCKED`) for fully atomic job handout (claim + complete inside the DB).
